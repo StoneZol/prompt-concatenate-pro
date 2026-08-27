@@ -29,7 +29,8 @@ Working with a growing prompt library is less friction: find what you need faste
 - **Edit stack** can change slots in one text field (`Base, Scene, Character, …`)
 - UI copy uses **notes** instead of “description” for the optional memo field
 - Library manager: **Duplicate** on stacks and prompts (`Name` → `Name (2)`) to fork a version
-- ![Dublicate ref](../docs/screenshots/1.2.0/4.png)
+
+![Duplicate in library manager](../docs/screenshots/1.2.0/4.png)
 
 ---
 

@@ -29,9 +29,11 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 - **Join engine** — merges enabled groups with `, `, skips empty, normalizes commas and spacing
 - **Pin to sidebar** — each group's pos/neg appears in ComfyUI Inputs / Favorites (`Group | positive`, `Group | negative`)
 - **Duplicate pairs** — copy a group as `Title (2)` while Save/Load still use the base shelf (`Pose`)
-- **Layout presets (Stacks)** — save the current slot list + order; optional folder (category)
+- **Loaded pair tracking** — after Load, the card shows **Loaded · name**; **×** detaches the link; Save prefills name, collection, and notes
+- **Layout presets (Stacks)** — save the current slot list + order; optional folder; edit slots as comma-separated text in the manager
 - **Prompt pairs** — save/load pos+neg per **collection** (e.g. shelf named after the slot)
-- **Library manager** — rename, move, delete stacks & prompts; edit full prompt text in a centered editor
+- **Smart library search** — AND tokens; `shelf\keyword` filters a collection first; optional **Search in prompts** for body text
+- **Library manager** — rename, move, delete, edit, and **duplicate** stacks & prompts; prefs (Show empty / Search in prompts / Other collections) persist in SQLite
 - **Local SQLite** — `db/presets.sqlite`, auto-created on first use
 
 ---
@@ -59,7 +61,7 @@ No pip dependencies — Python 3.8+ stdlib + SQLite only.
 3. Connect **`str_pos`** → CLIP Text Encode (positive), **`str_neg`** as needed.
 4. **Save preset** — snapshot your current slot layout (names + order).
 5. On a group card: **Save pair** / **Load pair** — store or recall that block's prompts in a collection.
-6. **Manage library** — edit, move, or delete saved stacks and prompts.
+6. **Manage library** — edit, duplicate, move, or delete saved stacks and prompts.
 
 ### Save a layout preset
 
@@ -81,9 +83,15 @@ Search stacks by folder and apply the slot list back onto the node.
 
 ### Load a pair
 
-Browse the current collection (or other collections). Click the document icon to preview the full positive / negative before loading.
+Browse the current collection (or other collections). Search by name/notes, or use `shelf\keyword` to narrow a collection first. Toggle **Search in prompts** when you need hits inside positive/negative text. Click the document icon to preview before loading.
 
 ![Load pair with prompt preview](docs/screenshots/4.png)
+
+![Load pair search](docs/screenshots/1.2.0/1.png)
+
+After load, the group shows which library item is attached — Save will prefill that name and notes; **×** clears the link only.
+
+![Loaded pair chip](docs/screenshots/1.2.0/0.png)
 
 ---
 
@@ -102,7 +110,7 @@ Stores **slot names + order** only (empty pairs). Optional **folder**; default b
 ### Prompt pairs
 
 Saved from **Save pair** on a group card.  
-Stored in a **collection** (defaults to the group's title). Includes title, description, positive, negative.
+Stored in a **collection** (defaults to the group's title). Includes title, notes, positive, negative.
 
 ### Collections vs folders
 
@@ -130,18 +138,23 @@ Pin them from the node **Inputs** panel or **Favorites**. Edits sync both ways w
 
 **Manage library** (full-width button under Save / Load preset):
 
-- **Stacks** — layout presets by folder; rename folder, move stack to Uncategorised, delete
-- **Prompts** — pairs by collection; full editor for metadata + prompt text
+- **Stacks** — layout presets by folder; rename folder, move stack, delete, **duplicate** (`Name` → `Name (2)`), edit slots as `Base, Scene, …`
+- **Prompts** — pairs by collection; full editor for metadata + prompt text; **duplicate** to fork a version
 - **Show empty** — reveal empty folders / collections
-- Search on both tabs
+- **Search in prompts** — include positive/negative body in search (off by default)
+- Search on both tabs (`name or shelf\keyword`); toggle prefs persist in SQLite
 
 ![Library manager · Stacks](docs/screenshots/5.png)
 
 ![Library manager · Prompts](docs/screenshots/6.png)
 
-Edit a prompt in a centered dialog: name, collection, description stay fixed; positive / negative scroll independently.
+![Duplicate in library manager](docs/screenshots/1.2.0/4.png)
+
+Edit a prompt in a centered dialog: name, collection, notes stay fixed; positive / negative scroll independently.
 
 ![Edit prompt dialog](docs/screenshots/7.png)
+
+![Edit stack slots](docs/screenshots/1.2.0/2.png)
 
 ---
 
