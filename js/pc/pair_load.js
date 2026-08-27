@@ -135,10 +135,12 @@ function groupByCategory(presets) {
   return folders;
 }
 
-function paintList(list, presets, { query, others, currentCategory, onLoad }) {
+function paintList(list, presets, { query, others, currentCategory, onLoad, includeBody }) {
   hidePromptTip();
   const q = (query || "").trim().toLowerCase();
-  const matched = presets.filter((preset) => matchesPromptPreset(preset, query));
+  const matched = presets.filter((preset) =>
+    matchesPromptPreset(preset, query, { includeBody }),
+  );
   list.replaceChildren();
   if (!matched.length) {
     const empty = document.createElement("div");
@@ -209,11 +211,12 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
       let own = [];
       let all = null;
       let others = false;
+      let includeBody = false;
 
       const search = document.createElement("input");
       search.className = "pc-popup-input";
       search.type = "text";
-      search.placeholder = "name, tags, or Scene\\pov";
+      search.placeholder = "name, or Scene\\pov";
 
       const extra = document.createElement("div");
       extra.className = "pc-toggle-row";
@@ -230,6 +233,22 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
       extraLabel.textContent = "Other collections";
 
       extra.append(toggle, extraLabel);
+
+      const bodyRow = document.createElement("div");
+      bodyRow.className = "pc-toggle-row";
+
+      const bodyToggle = document.createElement("div");
+      bodyToggle.className = "pc-toggle";
+      bodyToggle.setAttribute("role", "switch");
+      bodyToggle.setAttribute("aria-checked", "false");
+      const bodyKnob = document.createElement("div");
+      bodyKnob.className = "pc-toggle-knob";
+      bodyToggle.appendChild(bodyKnob);
+
+      const bodyLabel = document.createElement("span");
+      bodyLabel.textContent = "Search in prompts";
+
+      bodyRow.append(bodyToggle, bodyLabel);
 
       const list = document.createElement("div");
       list.className = "pc-preset-list";
@@ -249,6 +268,7 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
           others,
           currentCategory: shelf,
           onLoad,
+          includeBody,
         });
         reposition();
       }
@@ -286,6 +306,14 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
         });
       });
 
+      bodyToggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        includeBody = !includeBody;
+        bodyToggle.classList.toggle("on", includeBody);
+        bodyToggle.setAttribute("aria-checked", includeBody ? "true" : "false");
+        paint();
+      });
+
       search.addEventListener("input", () => {
         const { hasShelfFilter } = parseSearchQuery(search.value);
         if (hasShelfFilter && !others) {
@@ -308,7 +336,7 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
           }
           own = result.presets || [];
           status.remove();
-          body.append(search, extra, list);
+          body.append(search, extra, bodyRow, list);
           paint();
           requestAnimationFrame(() => search.focus());
         })

@@ -41,10 +41,11 @@ function shelfLabel(name, emptyLabel = "Uncategorised") {
 }
 
 /**
- * Prompt pair: optional collection filter, then AND over name/desc/body.
- * Plain query (no `\`/`/`): AND over collection + name/desc/body.
+ * Prompt pair: optional collection filter, then AND over metadata.
+ * When includeBody is true, positive/negative also participate.
+ * Plain query (no `\`/`/`): AND over collection + name/desc (+ body).
  */
-export function matchesPromptPreset(preset, rawQuery) {
+export function matchesPromptPreset(preset, rawQuery, { includeBody = false } = {}) {
   const { shelf, tokens, hasShelfFilter } = parseSearchQuery(rawQuery);
   if (!hasShelfFilter && !tokens.length) return true;
 
@@ -54,8 +55,9 @@ export function matchesPromptPreset(preset, rawQuery) {
   if (!tokens.length) return true;
 
   const fields = hasShelfFilter
-    ? [preset?.title, preset?.description, preset?.positive, preset?.negative]
-    : [category, preset?.title, preset?.description, preset?.positive, preset?.negative];
+    ? [preset?.title, preset?.description]
+    : [category, preset?.title, preset?.description];
+  if (includeBody) fields.push(preset?.positive, preset?.negative);
 
   return includesAll(fields.join(" "), tokens);
 }

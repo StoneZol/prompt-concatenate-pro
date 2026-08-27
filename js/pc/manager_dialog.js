@@ -709,11 +709,13 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
   }
 }
 
-function paintPromptsTab(listEl, { presets, categories, showEmpty, query, openMap, reload }) {
+function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, query, openMap, reload }) {
   listEl.replaceChildren();
   const q = (query || "").trim();
 
-  const filtered = presets.filter((preset) => matchesPromptPreset(preset, query));
+  const filtered = presets.filter((preset) =>
+    matchesPromptPreset(preset, query, { includeBody }),
+  );
 
   const grouped = groupByFolder(filtered, "category");
   if (showEmpty) {
@@ -902,6 +904,23 @@ export function openManagerPopup({ anchor }) {
 
       emptyRow.append(emptyToggle, emptyLabel);
 
+      const bodyRow = document.createElement("div");
+      bodyRow.className = "pc-toggle-row";
+      bodyRow.style.display = "none";
+
+      const bodyToggle = document.createElement("div");
+      bodyToggle.className = "pc-toggle";
+      bodyToggle.setAttribute("role", "switch");
+      bodyToggle.setAttribute("aria-checked", "false");
+      const bodyKnob = document.createElement("div");
+      bodyKnob.className = "pc-toggle-knob";
+      bodyToggle.appendChild(bodyKnob);
+
+      const bodyLabel = document.createElement("span");
+      bodyLabel.textContent = "Search in prompts";
+
+      bodyRow.append(bodyToggle, bodyLabel);
+
       const status = document.createElement("div");
       status.className = "pc-popup-message";
       status.textContent = "Loading…";
@@ -909,10 +928,11 @@ export function openManagerPopup({ anchor }) {
       const list = document.createElement("div");
       list.className = "pc-preset-list pc-mgr-list";
 
-      body.append(tabs, search, emptyRow, status, list);
+      body.append(tabs, search, emptyRow, bodyRow, status, list);
 
       let mode = "stacks";
       let showEmpty = false;
+      let includeBody = false;
       let layouts = [];
       let presets = [];
       let folders = [];
@@ -925,7 +945,9 @@ export function openManagerPopup({ anchor }) {
         stacksTab.classList.toggle("active", mode === "stacks");
         promptsTab.classList.toggle("active", mode === "prompts");
         setTitle(mode === "stacks" ? "Library manager · Stacks" : "Library manager · Prompts");
-        search.placeholder = mode === "stacks" ? "name, slots, or Folder\\skin" : "name, tags, or Scene\\pov";
+        search.placeholder =
+          mode === "stacks" ? "name, slots, or Folder\\skin" : "name, or Scene\\pov";
+        bodyRow.style.display = mode === "prompts" ? "" : "none";
         paint();
       }
 
@@ -944,6 +966,7 @@ export function openManagerPopup({ anchor }) {
             presets,
             categories,
             showEmpty,
+            includeBody,
             query: search.value,
             openMap: promptsOpen,
             reload: loadPrompts,
@@ -1003,6 +1026,14 @@ export function openManagerPopup({ anchor }) {
         showEmpty = !showEmpty;
         emptyToggle.classList.toggle("on", showEmpty);
         emptyToggle.setAttribute("aria-checked", showEmpty ? "true" : "false");
+        paint();
+      });
+
+      bodyToggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        includeBody = !includeBody;
+        bodyToggle.classList.toggle("on", includeBody);
+        bodyToggle.setAttribute("aria-checked", includeBody ? "true" : "false");
         paint();
       });
 
