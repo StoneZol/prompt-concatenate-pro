@@ -35,11 +35,13 @@ export async function listLayouts() {
   return readJson(res);
 }
 
-export async function updateLayout({ id, name, description, folder, overwrite = false }) {
+export async function updateLayout({ id, name, description, folder, slots, overwrite = false }) {
+  const body = { id, name, description, folder, overwrite };
+  if (slots !== undefined) body.slots = slots;
   const res = await fetch(LAYOUTS_URL, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, name, description, folder, overwrite }),
+    body: JSON.stringify(body),
   });
   return readJson(res);
 }

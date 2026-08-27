@@ -109,6 +109,7 @@ async def update_layout(request):
             name=payload["name"] if "name" in payload else None,
             description=payload["description"] if "description" in payload else None,
             folder=payload["folder"] if "folder" in payload else None,
+            slots=payload["slots"] if "slots" in payload else None,
             overwrite=bool(payload.get("overwrite")),
         )
     except Exception as exc:

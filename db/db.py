@@ -426,6 +426,7 @@ def update_layout(
     name: Optional[str] = None,
     description: Optional[str] = None,
     folder: Optional[str] = None,
+    slots: Optional[List] = None,
     overwrite: bool = False,
 ) -> Dict:
     with _lock:
@@ -440,9 +441,13 @@ def update_layout(
             next_name = row["name"] if name is None else (name or "").strip()
             next_desc = row["description"] if description is None else (description or "").strip()
             next_folder_id = row["folder_id"]
+            next_slots = _parse_slots(row["slots"]) if slots is None else _parse_slots(slots)
             if not next_name:
                 conn.rollback()
                 return {"ok": False, "error": "Name is required"}
+            if slots is not None and not next_slots:
+                conn.rollback()
+                return {"ok": False, "error": "Add at least one slot"}
 
             if name is not None and next_name.casefold() != (row["name"] or "").casefold():
                 existing = conn.execute(
@@ -461,13 +466,18 @@ def update_layout(
             conn.execute(
                 """
                 UPDATE layouts
-                SET name = ?, description = ?, folder_id = ?, updated_at = datetime('now')
+                SET name = ?, description = ?, folder_id = ?, slots = ?, updated_at = datetime('now')
                 WHERE id = ?
                 """,
-                (next_name, next_desc, next_folder_id, int(layout_id)),
+                (next_name, next_desc, next_folder_id, json.dumps(next_slots), int(layout_id)),
             )
             conn.commit()
-            return {"ok": True, "id": int(layout_id), "name": next_name}
+            return {
+                "ok": True,
+                "id": int(layout_id),
+                "name": next_name,
+                "slots": next_slots,
+            }
         except Exception:
             conn.rollback()
             raise

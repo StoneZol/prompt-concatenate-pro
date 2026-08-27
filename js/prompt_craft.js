@@ -343,7 +343,15 @@ app.registerExtension({
             onRename: (name) => groupTitleError(groups, name, group.id),
             onReorder: reorderGroup,
             onDrop: dropGroup,
-            onSavePair: (anchor) => openSavePairPopup({ anchor, group }),
+            onSavePair: (anchor) =>
+              openSavePairPopup({
+                anchor,
+                group,
+                onSaved: (name) => {
+                  card.setLoadedTitle(name, group.loadedCategory);
+                  persist();
+                },
+              }),
             onLoadPair: (anchor) => {
               openLoadPairPopup({
                 anchor,
@@ -352,8 +360,12 @@ app.registerExtension({
                   const apply = () => {
                     group.positive = preset.positive || "";
                     group.negative = preset.negative || "";
+                    group.loadedTitle = (preset.title || "").trim();
+                    group.loadedCategory = (preset.category || "").trim();
+                    group.loadedDescription = (preset.description || "").trim();
                     card.setField("positive", group.positive);
                     card.setField("negative", group.negative);
+                    card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
                     writeShadow(group, "positive", group.positive);
                     writeShadow(group, "negative", group.negative);
                     persist();
@@ -414,6 +426,9 @@ app.registerExtension({
           title: name,
           positive: source.positive || "",
           negative: source.negative || "",
+          loadedTitle: (source.loadedTitle || "").trim(),
+          loadedCategory: (source.loadedCategory || "").trim(),
+          loadedDescription: (source.loadedDescription || "").trim(),
           enabled: source.enabled !== false,
           collapsed: false,
           ...stampLabels(name),

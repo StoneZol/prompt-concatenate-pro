@@ -1,4 +1,4 @@
-import { CHEVRON_ICON_SVG, EDIT_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
+import { CHEVRON_ICON_SVG, COPY_ICON_SVG, EDIT_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
 import { openConfirmPopup, openInputPopup, openPopup } from "./popup.js";
 import { hidePromptTip } from "./preview_tip.js";
 import {
@@ -12,12 +12,15 @@ import {
   listPresets,
   renameCategory,
   renameLayoutFolder,
+  saveLayout,
+  savePreset,
   updateLayout,
   updatePreset,
   shelfNames,
 } from "./api.js";
 import { emptyShelfMatchesSearch, matchesLayoutPreset, matchesPromptPreset } from "./search.js";
 import { getUiPref, setUiPref, ensureUiPrefs } from "./prefs.js";
+import { nextDuplicateName } from "./titles.js";
 
 const UNCATEGORISED = "Uncategorised";
 
@@ -221,7 +224,7 @@ function folderExpanded(name, { query, openMap }) {
   return false;
 }
 
-function makeItemRow(item, { name, meta, onEdit, onDelete }) {
+function makeItemRow(item, { name, meta, onEdit, onDuplicate, onDelete }) {
   const row = document.createElement("div");
   row.className = "pc-mgr-item";
 
@@ -242,13 +245,26 @@ function makeItemRow(item, { name, meta, onEdit, onDelete }) {
 
   const actions = document.createElement("div");
   actions.className = "pc-mgr-item-actions";
-  actions.append(
-    makeIconBtn("pc-mgr-icon-btn", "Edit", EDIT_ICON_SVG, onEdit),
-    makeIconBtn("pc-mgr-icon-btn danger", "Delete", TRASH_ICON_SVG, onDelete),
-  );
+  const buttons = [makeIconBtn("pc-mgr-icon-btn", "Edit", EDIT_ICON_SVG, onEdit)];
+  if (onDuplicate) {
+    buttons.push(makeIconBtn("pc-mgr-icon-btn", "Duplicate", COPY_ICON_SVG, onDuplicate));
+  }
+  buttons.push(makeIconBtn("pc-mgr-icon-btn danger", "Delete", TRASH_ICON_SVG, onDelete));
+  actions.append(...buttons);
 
   row.append(info, actions);
   return row;
+}
+
+function showMgrError(anchor, title, message) {
+  mgrConfirm({
+    anchor,
+    title,
+    message: message || "Request failed",
+    confirmLabel: "OK",
+    showCancel: false,
+    danger: false,
+  });
 }
 
 function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
@@ -280,10 +296,19 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
 
       folderRow.append(folder, pickBtn);
 
+      const slots = document.createElement("textarea");
+      slots.className = "pc-popup-textarea";
+      slots.placeholder = "slots, comma-separated";
+      slots.rows = 3;
+      slots.value = (layout.slots || [])
+        .map((slot) => String(slot || "").trim())
+        .filter(Boolean)
+        .join(", ");
+
       const desc = document.createElement("textarea");
       desc.className = "pc-popup-textarea";
-      desc.placeholder = "description (optional)";
-      desc.rows = 3;
+      desc.placeholder = "notes (optional)";
+      desc.rows = 2;
       desc.value = layout.description || "";
 
       const errorEl = document.createElement("div");
@@ -323,11 +348,24 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
         });
       });
 
+      function parseSlotsText(text) {
+        return String(text || "")
+          .split(",")
+          .map((part) => part.trim())
+          .filter(Boolean);
+      }
+
       async function submit() {
         const nextName = title.value.trim();
+        const nextSlots = parseSlotsText(slots.value);
         if (!nextName) {
           errorEl.textContent = "Name is required";
           title.focus();
+          return;
+        }
+        if (!nextSlots.length) {
+          errorEl.textContent = "Add at least one slot";
+          slots.focus();
           return;
         }
         confirm.disabled = true;
@@ -337,6 +375,7 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
             name: nextName,
             description: desc.value.trim(),
             folder: folder.value.trim(),
+            slots: nextSlots,
             overwrite,
           });
           if (result.conflicts?.length) {
@@ -372,7 +411,7 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
       });
 
       actions.appendChild(confirm);
-      body.append(title, folderRow, desc, errorEl, actions);
+      body.append(title, folderRow, slots, desc, errorEl, actions);
       requestAnimationFrame(() => title.focus());
     },
   });
@@ -427,7 +466,7 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
 
       const desc = document.createElement("textarea");
       desc.className = "pc-popup-textarea";
-      desc.placeholder = "description (optional)";
+      desc.placeholder = "notes (optional)";
       desc.rows = 3;
       desc.value = preset.description || "";
 
@@ -671,6 +710,23 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
                 onSaved: reload,
               });
             },
+            onDuplicate: async (btn) => {
+              const name = nextDuplicateName(
+                layouts.map((item) => item.name),
+                layout.name || "Untitled",
+              );
+              const result = await saveLayout({
+                name,
+                description: layout.description || "",
+                slots: layout.slots || [],
+                folder: layout.folder || "",
+              });
+              if (!result.ok) {
+                showMgrError(btn, "Duplicate stack", result.error);
+                return;
+              }
+              reload();
+            },
             onDelete: (btn) => {
               mgrConfirm({
                 anchor: btn,
@@ -681,14 +737,7 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
                 onConfirm: async () => {
                   const result = await deleteLayout(layout.id);
                   if (!result.ok) {
-                    mgrConfirm({
-                      anchor: btn,
-                      title: "Delete stack",
-                      message: result.error || "Delete failed",
-                      confirmLabel: "OK",
-                      showCancel: false,
-                      danger: false,
-                    });
+                    showMgrError(btn, "Delete stack", result.error);
                     return;
                   }
                   reload();
@@ -815,6 +864,29 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
                 onSaved: reload,
               });
             },
+            onDuplicate: async (btn) => {
+              const siblings = (presets || []).filter(
+                (item) =>
+                  (item.category || "").trim().toLowerCase() ===
+                  (preset.category || "").trim().toLowerCase(),
+              );
+              const name = nextDuplicateName(
+                siblings.map((item) => item.title),
+                preset.title || "Untitled",
+              );
+              const result = await savePreset({
+                category: preset.category || categoryName,
+                title: name,
+                description: preset.description || "",
+                positive: preset.positive || "",
+                negative: preset.negative || "",
+              });
+              if (!result.ok) {
+                showMgrError(btn, "Duplicate prompt", result.error);
+                return;
+              }
+              reload();
+            },
             onDelete: (btn) => {
               mgrConfirm({
                 anchor: btn,
@@ -825,14 +897,7 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
                 onConfirm: async () => {
                   const result = await deletePreset(preset.id);
                   if (!result.ok) {
-                    mgrConfirm({
-                      anchor: btn,
-                      title: "Delete prompt",
-                      message: result.error || "Delete failed",
-                      confirmLabel: "OK",
-                      showCancel: false,
-                      danger: false,
-                    });
+                    showMgrError(btn, "Delete prompt", result.error);
                     return;
                   }
                   reload();

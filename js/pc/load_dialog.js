@@ -61,7 +61,7 @@ function makePresetCard(layout, { onLoad }) {
     function applyCollapsed() {
       const collapsed = card.classList.contains("desc-collapsed");
       desc.textContent = collapsed ? preview : description;
-      collapseBtn.title = collapsed ? "Expand description" : "Collapse description";
+      collapseBtn.title = collapsed ? "Expand notes" : "Collapse notes";
       collapseBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
     }
 
