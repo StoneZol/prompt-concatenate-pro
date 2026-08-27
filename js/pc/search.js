@@ -35,6 +35,23 @@ function includesAll(haystack, tokens) {
   return tokens.every((token) => h.includes(token));
 }
 
+/**
+ * Empty folder/collection visibility while Show empty is on.
+ * With an active query, the shelf name itself must match — don't leak unrelated empties.
+ */
+export function emptyShelfMatchesSearch(name, rawQuery) {
+  const { shelf, tokens, hasShelfFilter } = parseSearchQuery(rawQuery);
+  if (!hasShelfFilter && !tokens.length) return true;
+
+  const label = String(name || "").toLowerCase();
+  if (hasShelfFilter) {
+    if (shelf && !label.includes(shelf)) return false;
+    // Content tokens imply we care about items inside; empty shelves stay hidden.
+    return tokens.length === 0;
+  }
+  return includesAll(label, tokens);
+}
+
 function shelfLabel(name, emptyLabel = "Uncategorised") {
   const trimmed = String(name || "").trim();
   return trimmed || emptyLabel;

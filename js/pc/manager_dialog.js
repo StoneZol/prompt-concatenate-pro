@@ -16,7 +16,7 @@ import {
   updatePreset,
   shelfNames,
 } from "./api.js";
-import { matchesLayoutPreset, matchesPromptPreset, parseSearchQuery } from "./search.js";
+import { emptyShelfMatchesSearch, matchesLayoutPreset, matchesPromptPreset } from "./search.js";
 
 const UNCATEGORISED = "Uncategorised";
 
@@ -566,21 +566,13 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
     }
   }
 
-  const shelfQuery = parseSearchQuery(query);
-
   const names = [...grouped.keys()]
     .filter((name) => {
       const items = grouped.get(name) || [];
       if (items.length) return true;
       if (!showEmpty) return false;
-      if (
-        shelfQuery.hasShelfFilter &&
-        shelfQuery.shelf &&
-        !name.toLowerCase().includes(shelfQuery.shelf)
-      ) {
-        return false;
-      }
-      return name.toLowerCase() !== UNCATEGORISED.toLowerCase();
+      if (name.toLowerCase() === UNCATEGORISED.toLowerCase()) return false;
+      return emptyShelfMatchesSearch(name, query);
     })
     .sort((a, b) => {
       const aUncat = a.toLowerCase() === UNCATEGORISED.toLowerCase();
@@ -726,21 +718,12 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
     }
   }
 
-  const shelfQuery = parseSearchQuery(query);
-
   const names = [...grouped.keys()]
     .filter((name) => {
       const items = grouped.get(name) || [];
       if (items.length) return true;
       if (!showEmpty) return false;
-      if (
-        shelfQuery.hasShelfFilter &&
-        shelfQuery.shelf &&
-        !name.toLowerCase().includes(shelfQuery.shelf)
-      ) {
-        return false;
-      }
-      return true;
+      return emptyShelfMatchesSearch(name, query);
     })
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
