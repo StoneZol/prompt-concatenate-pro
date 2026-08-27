@@ -16,6 +16,7 @@ import {
   updatePreset,
   shelfNames,
 } from "./api.js";
+import { matchesLayoutPreset, matchesPromptPreset, parseSearchQuery } from "./search.js";
 
 const UNCATEGORISED = "Uncategorised";
 
@@ -550,19 +551,11 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
 
 function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, reload }) {
   listEl.replaceChildren();
-  const q = query.trim().toLowerCase();
+  const q = (query || "").trim();
 
-  const filtered = layouts.filter((layout) => {
-    const haystack = [
-      layout.name,
-      layout.description,
-      layout.folder,
-      ...(layout.slots || []),
-    ]
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(q);
-  });
+  const filtered = layouts.filter((layout) =>
+    matchesLayoutPreset(layout, query, { emptyFolder: UNCATEGORISED }),
+  );
 
   const grouped = groupByFolder(filtered, "folder");
   if (showEmpty) {
@@ -573,11 +566,20 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
     }
   }
 
+  const shelfQuery = parseSearchQuery(query);
+
   const names = [...grouped.keys()]
     .filter((name) => {
       const items = grouped.get(name) || [];
       if (items.length) return true;
       if (!showEmpty) return false;
+      if (
+        shelfQuery.hasShelfFilter &&
+        shelfQuery.shelf &&
+        !name.toLowerCase().includes(shelfQuery.shelf)
+      ) {
+        return false;
+      }
       return name.toLowerCase() !== UNCATEGORISED.toLowerCase();
     })
     .sort((a, b) => {
@@ -709,20 +711,9 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
 
 function paintPromptsTab(listEl, { presets, categories, showEmpty, query, openMap, reload }) {
   listEl.replaceChildren();
-  const q = query.trim().toLowerCase();
+  const q = (query || "").trim();
 
-  const filtered = presets.filter((preset) => {
-    const haystack = [
-      preset.title,
-      preset.description,
-      preset.category,
-      preset.positive,
-      preset.negative,
-    ]
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(q);
-  });
+  const filtered = presets.filter((preset) => matchesPromptPreset(preset, query));
 
   const grouped = groupByFolder(filtered, "category");
   if (showEmpty) {
@@ -733,11 +724,21 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, query, openMa
     }
   }
 
+  const shelfQuery = parseSearchQuery(query);
+
   const names = [...grouped.keys()]
     .filter((name) => {
       const items = grouped.get(name) || [];
       if (items.length) return true;
-      return showEmpty;
+      if (!showEmpty) return false;
+      if (
+        shelfQuery.hasShelfFilter &&
+        shelfQuery.shelf &&
+        !name.toLowerCase().includes(shelfQuery.shelf)
+      ) {
+        return false;
+      }
+      return true;
     })
     .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
@@ -864,7 +865,7 @@ export function openManagerPopup({ anchor }) {
     title: "Library manager",
     width: 360,
     onClose: hidePromptTip,
-    render(body, { setTitle }) {
+    render(body, { setTitle, reposition }) {
       const tabs = document.createElement("div");
       tabs.className = "pc-mgr-tabs";
 
@@ -924,7 +925,7 @@ export function openManagerPopup({ anchor }) {
         stacksTab.classList.toggle("active", mode === "stacks");
         promptsTab.classList.toggle("active", mode === "prompts");
         setTitle(mode === "stacks" ? "Library manager · Stacks" : "Library manager · Prompts");
-        search.placeholder = mode === "stacks" ? "search stacks" : "search prompts";
+        search.placeholder = mode === "stacks" ? "name, slots, or Folder\\skin" : "name, tags, or Scene\\pov";
         paint();
       }
 
@@ -938,16 +939,17 @@ export function openManagerPopup({ anchor }) {
             openMap: stacksOpen,
             reload: loadStacks,
           });
-          return;
+        } else {
+          paintPromptsTab(list, {
+            presets,
+            categories,
+            showEmpty,
+            query: search.value,
+            openMap: promptsOpen,
+            reload: loadPrompts,
+          });
         }
-        paintPromptsTab(list, {
-          presets,
-          categories,
-          showEmpty,
-          query: search.value,
-          openMap: promptsOpen,
-          reload: loadPrompts,
-        });
+        reposition();
       }
 
       async function loadStacks() {

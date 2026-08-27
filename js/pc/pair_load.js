@@ -2,6 +2,7 @@ import { CHEVRON_ICON_SVG, LOAD_ICON_SVG, TEXT_ICON_SVG } from "./icons.js";
 import { openConfirmPopup, openPopup } from "./popup.js";
 import { listPresets } from "./api.js";
 import { bindPromptTip, hidePromptTip } from "./preview_tip.js";
+import { matchesPromptPreset, parseSearchQuery } from "./search.js";
 
 const DESC_PREVIEW_CHARS = 60;
 
@@ -123,20 +124,6 @@ function makeFolder({ title, presets, expanded, onLoad }) {
   return folder;
 }
 
-function matchesPreset(preset, query) {
-  if (!query) return true;
-  const haystack = [
-    preset.title || "",
-    preset.description || "",
-    preset.positive || "",
-    preset.negative || "",
-    preset.category || "",
-  ]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(query);
-}
-
 function groupByCategory(presets) {
   const folders = new Map();
   for (const preset of presets) {
@@ -151,7 +138,7 @@ function groupByCategory(presets) {
 function paintList(list, presets, { query, others, currentCategory, onLoad }) {
   hidePromptTip();
   const q = (query || "").trim().toLowerCase();
-  const matched = presets.filter((preset) => matchesPreset(preset, q));
+  const matched = presets.filter((preset) => matchesPromptPreset(preset, query));
   list.replaceChildren();
   if (!matched.length) {
     const empty = document.createElement("div");
@@ -213,7 +200,7 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
     title: shelf ? `Load pair · ${shelf}` : "Load pair",
     width: 340,
     onClose: hidePromptTip,
-    render(body, { close }) {
+    render(body, { close, reposition }) {
       const status = document.createElement("div");
       status.className = "pc-popup-message";
       status.textContent = "Loading…";
@@ -226,7 +213,7 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
       const search = document.createElement("input");
       search.className = "pc-popup-input";
       search.type = "text";
-      search.placeholder = "search prompts";
+      search.placeholder = "name, tags, or Scene\\pov";
 
       const extra = document.createElement("div");
       extra.className = "pc-toggle-row";
@@ -263,6 +250,7 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
           currentCategory: shelf,
           onLoad,
         });
+        reposition();
       }
 
       async function enableOthers() {
@@ -294,25 +282,39 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
         enableOthers().catch((err) => {
           status.textContent = err?.message || "Failed to load prompts";
           if (!status.isConnected) body.prepend(status);
+          reposition();
         });
       });
 
-      search.addEventListener("input", paint);
+      search.addEventListener("input", () => {
+        const { hasShelfFilter } = parseSearchQuery(search.value);
+        if (hasShelfFilter && !others) {
+          enableOthers().catch((err) => {
+            status.textContent = err?.message || "Failed to load prompts";
+            if (!status.isConnected) body.prepend(status);
+            reposition();
+          });
+          return;
+        }
+        paint();
+      });
 
       listPresets({ category: shelf })
         .then((result) => {
           if (!result.ok) {
             status.textContent = result.error || "Failed to load prompts";
+            reposition();
             return;
           }
           own = result.presets || [];
           status.remove();
-          paint();
           body.append(search, extra, list);
+          paint();
           requestAnimationFrame(() => search.focus());
         })
         .catch((err) => {
           status.textContent = err?.message || "Failed to load prompts";
+          reposition();
         });
     },
   });
