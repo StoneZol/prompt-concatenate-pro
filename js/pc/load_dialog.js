@@ -1,6 +1,7 @@
 import { CHEVRON_ICON_SVG, LOAD_ICON_SVG } from "./icons.js";
 import { openConfirmPopup, openPopup } from "./popup.js";
 import { listLayouts } from "./api.js";
+import { matchesLayoutPreset } from "./search.js";
 
 const DESC_PREVIEW_CHARS = 60;
 const UNCATEGORISED = "Uncategorised";
@@ -60,7 +61,7 @@ function makePresetCard(layout, { onLoad }) {
     function applyCollapsed() {
       const collapsed = card.classList.contains("desc-collapsed");
       desc.textContent = collapsed ? preview : description;
-      collapseBtn.title = collapsed ? "Expand description" : "Collapse description";
+      collapseBtn.title = collapsed ? "Expand notes" : "Collapse notes";
       collapseBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
     }
 
@@ -138,22 +139,12 @@ function makeFolder({ title, layouts, expanded, onLoad }) {
 }
 
 function matchesLayout(layout, query) {
-  if (!query) return true;
-  const slots = (layout.slots || []).join(" ");
-  const haystack = [
-    layout.name || "",
-    layout.description || "",
-    layout.folder || UNCATEGORISED,
-    slots,
-  ]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(query);
+  return matchesLayoutPreset(layout, query, { emptyFolder: UNCATEGORISED });
 }
 
 function paintPresetList(list, layouts, query, onLoad) {
-  const q = (query || "").trim().toLowerCase();
-  const matched = layouts.filter((layout) => matchesLayout(layout, q));
+  const q = (query || "").trim();
+  const matched = layouts.filter((layout) => matchesLayout(layout, query));
   list.replaceChildren();
   if (!matched.length) {
     const empty = document.createElement("div");
@@ -193,7 +184,7 @@ export function openLoadPresetPopup({ anchor, onPick }) {
     anchor,
     title: "Load preset",
     width: 340,
-    render(body, { close }) {
+    render(body, { close, reposition }) {
       const status = document.createElement("div");
       status.className = "pc-popup-message";
       status.textContent = "Loading…";
@@ -204,10 +195,12 @@ export function openLoadPresetPopup({ anchor, onPick }) {
           const layouts = result.layouts || [];
           if (!result.ok) {
             status.textContent = result.error || "Failed to load presets";
+            reposition();
             return;
           }
           if (!layouts.length) {
             status.textContent = "No saved presets yet.";
+            reposition();
             return;
           }
           status.remove();
@@ -215,7 +208,7 @@ export function openLoadPresetPopup({ anchor, onPick }) {
           const search = document.createElement("input");
           search.className = "pc-popup-input";
           search.type = "text";
-          search.placeholder = "search presets";
+          search.placeholder = "name or folder\\slot";
 
           const list = document.createElement("div");
           list.className = "pc-preset-list";
@@ -227,14 +220,17 @@ export function openLoadPresetPopup({ anchor, onPick }) {
 
           search.addEventListener("input", () => {
             paintPresetList(list, layouts, search.value, onLoad);
+            reposition();
           });
 
           paintPresetList(list, layouts, "", onLoad);
           body.append(search, list);
+          reposition();
           requestAnimationFrame(() => search.focus());
         })
         .catch((err) => {
           status.textContent = err?.message || "Failed to load presets";
+          reposition();
         });
     },
   });

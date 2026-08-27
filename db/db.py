@@ -72,6 +72,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
             updated_at TEXT NOT NULL DEFAULT (datetime('now')),
             UNIQUE(name)
         );
+
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
         """
     )
     if _table_columns(conn, "layouts") and "folder_id" not in _table_columns(conn, "layouts"):
@@ -421,6 +426,7 @@ def update_layout(
     name: Optional[str] = None,
     description: Optional[str] = None,
     folder: Optional[str] = None,
+    slots: Optional[List] = None,
     overwrite: bool = False,
 ) -> Dict:
     with _lock:
@@ -435,9 +441,13 @@ def update_layout(
             next_name = row["name"] if name is None else (name or "").strip()
             next_desc = row["description"] if description is None else (description or "").strip()
             next_folder_id = row["folder_id"]
+            next_slots = _parse_slots(row["slots"]) if slots is None else _parse_slots(slots)
             if not next_name:
                 conn.rollback()
                 return {"ok": False, "error": "Name is required"}
+            if slots is not None and not next_slots:
+                conn.rollback()
+                return {"ok": False, "error": "Add at least one slot"}
 
             if name is not None and next_name.casefold() != (row["name"] or "").casefold():
                 existing = conn.execute(
@@ -456,13 +466,18 @@ def update_layout(
             conn.execute(
                 """
                 UPDATE layouts
-                SET name = ?, description = ?, folder_id = ?, updated_at = datetime('now')
+                SET name = ?, description = ?, folder_id = ?, slots = ?, updated_at = datetime('now')
                 WHERE id = ?
                 """,
-                (next_name, next_desc, next_folder_id, int(layout_id)),
+                (next_name, next_desc, next_folder_id, json.dumps(next_slots), int(layout_id)),
             )
             conn.commit()
-            return {"ok": True, "id": int(layout_id), "name": next_name}
+            return {
+                "ok": True,
+                "id": int(layout_id),
+                "name": next_name,
+                "slots": next_slots,
+            }
         except Exception:
             conn.rollback()
             raise
@@ -712,6 +727,81 @@ def delete_category(name: str) -> Dict:
             conn.execute("DELETE FROM categories WHERE id = ?", (int(row["id"]),))
             conn.commit()
             return {"ok": True, "deleted": int(count)}
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+UI_PREF_KEYS = ("otherCollections", "showEmpty", "searchInPrompts")
+UI_PREF_DEFAULTS = {
+    "otherCollections": False,
+    "showEmpty": False,
+    "searchInPrompts": False,
+}
+_UI_PREFS_ROW = "ui_prefs"
+
+
+def _normalize_ui_prefs(raw) -> Dict:
+    prefs = dict(UI_PREF_DEFAULTS)
+    if not isinstance(raw, dict):
+        return prefs
+    for key in UI_PREF_KEYS:
+        if key in raw:
+            prefs[key] = bool(raw[key])
+    return prefs
+
+
+def get_ui_prefs() -> Dict:
+    with _lock:
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                (_UI_PREFS_ROW,),
+            ).fetchone()
+            raw = {}
+            if row and row["value"]:
+                try:
+                    raw = json.loads(row["value"])
+                except Exception:
+                    raw = {}
+            return {"ok": True, "prefs": _normalize_ui_prefs(raw)}
+        finally:
+            conn.close()
+
+
+def set_ui_prefs(patch: Optional[Dict] = None) -> Dict:
+    incoming = patch if isinstance(patch, dict) else {}
+    with _lock:
+        conn = _connect()
+        try:
+            conn.execute("BEGIN")
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                (_UI_PREFS_ROW,),
+            ).fetchone()
+            raw = {}
+            if row and row["value"]:
+                try:
+                    raw = json.loads(row["value"])
+                except Exception:
+                    raw = {}
+            prefs = _normalize_ui_prefs(raw)
+            for key in UI_PREF_KEYS:
+                if key in incoming:
+                    prefs[key] = bool(incoming[key])
+            payload = json.dumps(prefs)
+            conn.execute(
+                """
+                INSERT INTO settings (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (_UI_PREFS_ROW, payload),
+            )
+            conn.commit()
+            return {"ok": True, "prefs": prefs}
         except Exception:
             conn.rollback()
             raise

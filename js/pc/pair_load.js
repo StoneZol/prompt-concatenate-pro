@@ -2,6 +2,8 @@ import { CHEVRON_ICON_SVG, LOAD_ICON_SVG, TEXT_ICON_SVG } from "./icons.js";
 import { openConfirmPopup, openPopup } from "./popup.js";
 import { listPresets } from "./api.js";
 import { bindPromptTip, hidePromptTip } from "./preview_tip.js";
+import { getUiPref, setUiPref, ensureUiPrefs } from "./prefs.js";
+import { matchesPromptPreset, parseSearchQuery } from "./search.js";
 
 const DESC_PREVIEW_CHARS = 60;
 
@@ -63,7 +65,7 @@ function makePromptCard(preset, { onLoad }) {
     function applyCollapsed() {
       const collapsed = card.classList.contains("desc-collapsed");
       desc.textContent = collapsed ? short : description;
-      collapseBtn.title = collapsed ? "Expand description" : "Collapse description";
+      collapseBtn.title = collapsed ? "Expand notes" : "Collapse notes";
       collapseBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
     }
 
@@ -123,20 +125,6 @@ function makeFolder({ title, presets, expanded, onLoad }) {
   return folder;
 }
 
-function matchesPreset(preset, query) {
-  if (!query) return true;
-  const haystack = [
-    preset.title || "",
-    preset.description || "",
-    preset.positive || "",
-    preset.negative || "",
-    preset.category || "",
-  ]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(query);
-}
-
 function groupByCategory(presets) {
   const folders = new Map();
   for (const preset of presets) {
@@ -148,10 +136,12 @@ function groupByCategory(presets) {
   return folders;
 }
 
-function paintList(list, presets, { query, others, currentCategory, onLoad }) {
+function paintList(list, presets, { query, others, currentCategory, onLoad, includeBody }) {
   hidePromptTip();
   const q = (query || "").trim().toLowerCase();
-  const matched = presets.filter((preset) => matchesPreset(preset, q));
+  const matched = presets.filter((preset) =>
+    matchesPromptPreset(preset, query, { includeBody }),
+  );
   list.replaceChildren();
   if (!matched.length) {
     const empty = document.createElement("div");
@@ -195,7 +185,7 @@ function paintList(list, presets, { query, others, currentCategory, onLoad }) {
   }
 }
 
-export function openLoadPairPopup({ anchor, category, onPick }) {
+export async function openLoadPairPopup({ anchor, category, onPick }) {
   const shelf = (category || "").trim();
   if (!shelf) {
     openConfirmPopup({
@@ -208,12 +198,13 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
     });
     return;
   }
+  await ensureUiPrefs();
   return openPopup({
     anchor,
     title: shelf ? `Load pair · ${shelf}` : "Load pair",
     width: 340,
     onClose: hidePromptTip,
-    render(body, { close }) {
+    render(body, { close, reposition }) {
       const status = document.createElement("div");
       status.className = "pc-popup-message";
       status.textContent = "Loading…";
@@ -221,20 +212,21 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
 
       let own = [];
       let all = null;
-      let others = false;
+      let others = Boolean(getUiPref("otherCollections"));
+      let includeBody = Boolean(getUiPref("searchInPrompts"));
 
       const search = document.createElement("input");
       search.className = "pc-popup-input";
       search.type = "text";
-      search.placeholder = "search prompts";
+      search.placeholder = "name or shelf\\keyword";
 
       const extra = document.createElement("div");
       extra.className = "pc-toggle-row";
 
       const toggle = document.createElement("div");
-      toggle.className = "pc-toggle";
+      toggle.className = "pc-toggle" + (others ? " on" : "");
       toggle.setAttribute("role", "switch");
-      toggle.setAttribute("aria-checked", "false");
+      toggle.setAttribute("aria-checked", others ? "true" : "false");
       const knob = document.createElement("div");
       knob.className = "pc-toggle-knob";
       toggle.appendChild(knob);
@@ -243,6 +235,22 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
       extraLabel.textContent = "Other collections";
 
       extra.append(toggle, extraLabel);
+
+      const bodyRow = document.createElement("div");
+      bodyRow.className = "pc-toggle-row";
+
+      const bodyToggle = document.createElement("div");
+      bodyToggle.className = "pc-toggle" + (includeBody ? " on" : "");
+      bodyToggle.setAttribute("role", "switch");
+      bodyToggle.setAttribute("aria-checked", includeBody ? "true" : "false");
+      const bodyKnob = document.createElement("div");
+      bodyKnob.className = "pc-toggle-knob";
+      bodyToggle.appendChild(bodyKnob);
+
+      const bodyLabel = document.createElement("span");
+      bodyLabel.textContent = "Search in prompts";
+
+      bodyRow.append(bodyToggle, bodyLabel);
 
       const list = document.createElement("div");
       list.className = "pc-preset-list";
@@ -262,10 +270,12 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
           others,
           currentCategory: shelf,
           onLoad,
+          includeBody,
         });
+        reposition();
       }
 
-      async function enableOthers() {
+      async function enableOthers({ persist = true } = {}) {
         if (!all) {
           extraLabel.textContent = "Loading…";
           const result = await listPresets();
@@ -279,6 +289,7 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
         toggle.classList.add("on");
         toggle.setAttribute("aria-checked", "true");
         extraLabel.textContent = "Other collections";
+        if (persist) setUiPref("otherCollections", true);
         paint();
       }
 
@@ -288,31 +299,68 @@ export function openLoadPairPopup({ anchor, category, onPick }) {
           others = false;
           toggle.classList.remove("on");
           toggle.setAttribute("aria-checked", "false");
+          setUiPref("otherCollections", false);
           paint();
           return;
         }
         enableOthers().catch((err) => {
           status.textContent = err?.message || "Failed to load prompts";
           if (!status.isConnected) body.prepend(status);
+          reposition();
         });
       });
 
-      search.addEventListener("input", paint);
+      bodyToggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        includeBody = !includeBody;
+        bodyToggle.classList.toggle("on", includeBody);
+        bodyToggle.setAttribute("aria-checked", includeBody ? "true" : "false");
+        setUiPref("searchInPrompts", includeBody);
+        paint();
+      });
+
+      search.addEventListener("input", () => {
+        const { hasShelfFilter } = parseSearchQuery(search.value);
+        if (hasShelfFilter && !others) {
+          enableOthers({ persist: false }).catch((err) => {
+            status.textContent = err?.message || "Failed to load prompts";
+            if (!status.isConnected) body.prepend(status);
+            reposition();
+          });
+          return;
+        }
+        paint();
+      });
 
       listPresets({ category: shelf })
-        .then((result) => {
+        .then(async (result) => {
           if (!result.ok) {
             status.textContent = result.error || "Failed to load prompts";
+            reposition();
             return;
           }
           own = result.presets || [];
           status.remove();
-          paint();
-          body.append(search, extra, list);
+          body.append(search, extra, bodyRow, list);
+          if (others) {
+            try {
+              await enableOthers({ persist: false });
+            } catch (err) {
+              others = false;
+              toggle.classList.remove("on");
+              toggle.setAttribute("aria-checked", "false");
+              status.textContent = err?.message || "Failed to load prompts";
+              body.prepend(status);
+              paint();
+            }
+          } else {
+            paint();
+          }
           requestAnimationFrame(() => search.focus());
         })
         .catch((err) => {
           status.textContent = err?.message || "Failed to load prompts";
+          reposition();
         });
     },
   });

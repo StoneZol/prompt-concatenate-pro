@@ -1,4 +1,4 @@
-import { CHEVRON_ICON_SVG, COPY_ICON_SVG, GRIP_ICON_SVG, LOAD_ICON_SVG, SAVE_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
+import { CHEVRON_ICON_SVG, CLOSE_ICON_SVG, COPY_ICON_SVG, GRIP_ICON_SVG, LOAD_ICON_SVG, SAVE_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
 import { openConfirmPopup } from "./popup.js";
 
 function isEnabled(group) {
@@ -225,11 +225,46 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
 
   toolbar.append(savePairBtn, loadPairBtn, spacer, removeBtn);
 
+  const loadedRow = document.createElement("div");
+  loadedRow.className = "pc-loaded-row";
+
+  const loadedLabel = document.createElement("span");
+  loadedLabel.className = "pc-loaded-label";
+
+  const clearLoadedBtn = document.createElement("button");
+  clearLoadedBtn.type = "button";
+  clearLoadedBtn.className = "pc-loaded-clear";
+  clearLoadedBtn.title = "Detach loaded name";
+  clearLoadedBtn.innerHTML = CLOSE_ICON_SVG;
+  clearLoadedBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    group.loadedTitle = "";
+    group.loadedCategory = "";
+    group.loadedDescription = "";
+    paintLoaded();
+    onChange?.();
+  });
+
+  loadedRow.append(loadedLabel, clearLoadedBtn);
+
+  function paintLoaded() {
+    const name = (group.loadedTitle || "").trim();
+    if (!name) {
+      loadedRow.hidden = true;
+      loadedLabel.textContent = "";
+      return;
+    }
+    loadedRow.hidden = false;
+    loadedLabel.textContent = name;
+    loadedLabel.title = `Loaded: ${name}`;
+  }
+
   const pos = makeField(group, "positive", "positive", { onChange, onPrompt });
   const neg = makeField(group, "negative", "negative", { onChange, onPrompt });
 
-  body.append(toolbar, pos.wrap, neg.wrap);
+  body.append(toolbar, loadedRow, pos.wrap, neg.wrap);
   card.append(head, body);
+  paintLoaded();
   applyCollapsed();
   applyEnabled();
 
@@ -259,6 +294,11 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
       const area = key === "positive" ? pos.area : neg.area;
       if (!area || area.value === value) return;
       area.value = value ?? "";
+    },
+    setLoadedTitle(value, category = "") {
+      group.loadedTitle = (value || "").trim();
+      if (arguments.length > 1) group.loadedCategory = (category || "").trim();
+      paintLoaded();
     },
   };
 }

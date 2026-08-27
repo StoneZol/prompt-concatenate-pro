@@ -63,10 +63,13 @@ function openCategoryPicker({ anchor, categories, current, onPick, onClose }) {
   });
 }
 
-export function openSavePairPopup({ anchor, group }) {
+export function openSavePairPopup({ anchor, group, onSaved }) {
   const defaultCategory = baseShelfName(group?.title);
   const positive = group?.positive || "";
   const negative = group?.negative || "";
+  const loadedTitle = (group?.loadedTitle || "").trim();
+  const loadedCategory = (group?.loadedCategory || "").trim();
+  const loadedDescription = (group?.loadedDescription || "").trim();
 
   if (!defaultCategory) {
     openConfirmPopup({
@@ -101,6 +104,7 @@ export function openSavePairPopup({ anchor, group }) {
       title.className = "pc-popup-input";
       title.type = "text";
       title.placeholder = "prompt name";
+      title.value = loadedTitle;
 
       const categoryRow = document.createElement("div");
       categoryRow.className = "pc-save-folder-row";
@@ -109,7 +113,7 @@ export function openSavePairPopup({ anchor, group }) {
       category.className = "pc-popup-input";
       category.type = "text";
       category.placeholder = "collection";
-      category.value = defaultCategory;
+      category.value = loadedCategory || defaultCategory;
 
       const pickBtn = document.createElement("button");
       pickBtn.type = "button";
@@ -120,8 +124,9 @@ export function openSavePairPopup({ anchor, group }) {
 
       const desc = document.createElement("textarea");
       desc.className = "pc-popup-textarea";
-      desc.placeholder = "description (optional)";
+      desc.placeholder = "notes (optional)";
       desc.rows = 3;
+      desc.value = loadedDescription;
 
       const errorEl = document.createElement("div");
       errorEl.className = "pc-popup-error";
@@ -203,6 +208,10 @@ export function openSavePairPopup({ anchor, group }) {
             errorEl.textContent = result.error || "Save failed";
             return;
           }
+          group.loadedTitle = name;
+          group.loadedCategory = shelf;
+          group.loadedDescription = desc.value.trim();
+          onSaved?.(name);
           close();
         } catch (err) {
           errorEl.textContent = err?.message || "Save failed";

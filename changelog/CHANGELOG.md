@@ -6,6 +6,34 @@ Format: newest first.
 
 ---
 
+## [1.2.0] — 2026-08-27
+
+### Library search, loaded pairs, and simpler stack edits
+
+Working with a growing prompt library is less friction: find what you need faster, keep track of what you loaded, and tweak stacks without a full overwrite dance.
+
+![Loaded pair chip on a group card](../docs/screenshots/1.2.0/0.png)
+
+- After **Load pair**, the group shows **Loaded · name** with an **×** to detach (prompt text stays)
+- **Save pair** prefills name, collection, and **notes** from the loaded source
+- Load / manager search: AND tokens; optional `shelf\keyword` (or `/`) filters collections first
+- **Search in prompts** toggle (off by default) — body text only when you ask for it
+- **Other collections**, **Show empty**, and **Search in prompts** preferences persist in SQLite
+- Empty shelves no longer leak into search results when **Show empty** is on
+- Load dialogs stay on screen (reposition after content loads; flip above the button if needed)
+
+![Load pair search with notes](../docs/screenshots/1.2.0/1.png)
+
+![Edit stack: slots as comma-separated text](../docs/screenshots/1.2.0/2.png)
+
+- **Edit stack** can change slots in one text field (`Base, Scene, Character, …`)
+- UI copy uses **notes** instead of “description” for the optional memo field
+- Library manager: **Duplicate** on stacks and prompts (`Name` → `Name (2)`) to fork a version
+
+![Duplicate in library manager](../docs/screenshots/1.2.0/4.png)
+
+---
+
 ## [1.1.1] — 2026-08-16
 
 ### Library manager folders stay readable

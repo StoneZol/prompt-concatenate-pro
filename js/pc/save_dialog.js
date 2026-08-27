@@ -111,7 +111,7 @@ export function openSavePresetsPopup({ anchor, groups }) {
 
       const desc = document.createElement("textarea");
       desc.className = "pc-popup-textarea";
-      desc.placeholder = "description (optional)";
+      desc.placeholder = "notes (optional)";
       desc.rows = 3;
 
       const errorEl = document.createElement("div");

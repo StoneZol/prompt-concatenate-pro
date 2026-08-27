@@ -35,11 +35,13 @@ export async function listLayouts() {
   return readJson(res);
 }
 
-export async function updateLayout({ id, name, description, folder, overwrite = false }) {
+export async function updateLayout({ id, name, description, folder, slots, overwrite = false }) {
+  const body = { id, name, description, folder, overwrite };
+  if (slots !== undefined) body.slots = slots;
   const res = await fetch(LAYOUTS_URL, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, name, description, folder, overwrite }),
+    body: JSON.stringify(body),
   });
   return readJson(res);
 }
@@ -135,6 +137,22 @@ export async function renameCategory({ name, newName }) {
 export async function deleteCategory(name) {
   const res = await fetch(`${CATEGORIES_URL}?name=${encodeURIComponent(name)}`, {
     method: "DELETE",
+  });
+  return readJson(res);
+}
+
+const PREFS_URL = "/prompt_craft/prefs";
+
+export async function getUiPrefs() {
+  const res = await fetch(PREFS_URL);
+  return readJson(res);
+}
+
+export async function updateUiPrefs(patch) {
+  const res = await fetch(PREFS_URL, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch || {}),
   });
   return readJson(res);
 }

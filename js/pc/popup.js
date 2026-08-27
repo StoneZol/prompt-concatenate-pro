@@ -18,6 +18,7 @@ const CSS = `
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   font-family: inherit;
   font-size: 12px;
+  overflow: hidden;
 }
 
 .pc-popup-nested {
@@ -81,6 +82,7 @@ const CSS = `
 }
 
 .pc-popup-body {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -677,24 +679,27 @@ function placePopup(el, { anchor, position, centered }) {
         y = anchorRect.bottom + gap;
     }
 
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-    el.style.visibility = "hidden";
-    document.body.appendChild(el);
+    if (!el.isConnected) {
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        el.style.visibility = "hidden";
+        document.body.appendChild(el);
+    }
 
     const box = el.getBoundingClientRect();
     if (centered) {
         x = (window.innerWidth - box.width) / 2;
         const anchorY = window.innerHeight * 0.4;
         y = anchorY - box.height / 2;
-        const maxBottom = window.innerHeight - margin;
-        if (y + box.height > maxBottom)
-            y = maxBottom - box.height;
-        if (y < margin) y = margin;
     } else if (anchorRect) {
         x =
             anchorRect.left +
             (anchorRect.width - box.width) / 2;
+        const below = anchorRect.bottom + gap;
+        const above = anchorRect.top - box.height - gap;
+        const fitsBelow =
+            below + box.height <= window.innerHeight - margin;
+        y = !fitsBelow && above >= margin ? above : below;
     }
     const maxX = window.innerWidth - box.width - margin;
     const maxY = window.innerHeight - box.height - margin;
@@ -811,6 +816,10 @@ export function openPopup(opts) {
     const api = {
         close,
         root,
+        reposition() {
+            if (closed || !root.isConnected) return;
+            placePopup(root, opts);
+        },
         setTitle(text) {
             titleEl.style.display = text ? "" : "none";
             titleEl.textContent = text || "";

@@ -405,6 +405,60 @@ const CSS = `
   color: #e07070;
 }
 
+.pc-loaded-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+  padding: 0 2px;
+  color: var(--descrip-text, #aaa);
+  font-size: 11px;
+}
+
+.pc-loaded-row[hidden] {
+  display: none !important;
+}
+
+.pc-loaded-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-loaded-label::before {
+  content: "Loaded · ";
+  color: var(--descrip-text, #777);
+}
+
+.pc-loaded-clear {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--descrip-text, #888);
+  cursor: pointer;
+}
+
+.pc-loaded-clear:hover {
+  color: var(--input-text, #ddd);
+  background: var(--comfy-input-bg, #2a2a2e);
+  border-color: var(--border-color, #444);
+}
+
+.pc-loaded-clear svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
 .pc-textarea {
   min-height: 72px;
   padding: 6px 8px;

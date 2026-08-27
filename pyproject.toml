@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-prompt-craft"
 description = "Stop wrestling with megaprompts. Stack modular blocks (skin, light, outfit…) into clean strPos/strNeg, pin fields to the sidebar, and reuse prompts from a built-in SQLite library — layouts, pairs, and a full manager included."
-version = "1.1.2"
+version = "1.2.0"
 license = { file = "LICENSE" }
 requires-python = ">=3.8"
 dependencies = []
