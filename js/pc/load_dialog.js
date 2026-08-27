@@ -208,7 +208,7 @@ export function openLoadPresetPopup({ anchor, onPick }) {
           const search = document.createElement("input");
           search.className = "pc-popup-input";
           search.type = "text";
-          search.placeholder = "name, slots, or Folder\\skin";
+          search.placeholder = "name or folder\\slot";
 
           const list = document.createElement("div");
           list.className = "pc-preset-list";

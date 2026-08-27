@@ -138,3 +138,19 @@ export async function deleteCategory(name) {
   });
   return readJson(res);
 }
+
+const PREFS_URL = "/prompt_craft/prefs";
+
+export async function getUiPrefs() {
+  const res = await fetch(PREFS_URL);
+  return readJson(res);
+}
+
+export async function updateUiPrefs(patch) {
+  const res = await fetch(PREFS_URL, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch || {}),
+  });
+  return readJson(res);
+}

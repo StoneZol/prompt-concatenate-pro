@@ -4,6 +4,7 @@ from .db import (
     delete_layout,
     delete_layout_folder,
     delete_preset,
+    get_ui_prefs,
     init_db,
     list_categories,
     list_layout_folders,
@@ -13,6 +14,7 @@ from .db import (
     rename_layout_folder,
     save_layout,
     save_preset,
+    set_ui_prefs,
     update_layout,
     update_preset,
 )
@@ -23,6 +25,7 @@ __all__ = [
     "delete_layout",
     "delete_layout_folder",
     "delete_preset",
+    "get_ui_prefs",
     "init_db",
     "list_categories",
     "list_layout_folders",
@@ -32,6 +35,7 @@ __all__ = [
     "rename_layout_folder",
     "save_layout",
     "save_preset",
+    "set_ui_prefs",
     "update_layout",
     "update_preset",
 ]

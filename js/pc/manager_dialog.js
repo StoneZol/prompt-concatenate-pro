@@ -17,6 +17,7 @@ import {
   shelfNames,
 } from "./api.js";
 import { emptyShelfMatchesSearch, matchesLayoutPreset, matchesPromptPreset } from "./search.js";
+import { getUiPref, setUiPref, ensureUiPrefs } from "./prefs.js";
 
 const UNCATEGORISED = "Uncategorised";
 
@@ -844,7 +845,8 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
   }
 }
 
-export function openManagerPopup({ anchor }) {
+export async function openManagerPopup({ anchor }) {
+  await ensureUiPrefs();
   return openPopup({
     anchor,
     title: "Library manager",
@@ -871,13 +873,16 @@ export function openManagerPopup({ anchor }) {
       search.type = "text";
       search.placeholder = "search";
 
+      const showEmptyPref = Boolean(getUiPref("showEmpty"));
+      const searchInPromptsPref = Boolean(getUiPref("searchInPrompts"));
+
       const emptyRow = document.createElement("div");
       emptyRow.className = "pc-toggle-row";
 
       const emptyToggle = document.createElement("div");
-      emptyToggle.className = "pc-toggle";
+      emptyToggle.className = "pc-toggle" + (showEmptyPref ? " on" : "");
       emptyToggle.setAttribute("role", "switch");
-      emptyToggle.setAttribute("aria-checked", "false");
+      emptyToggle.setAttribute("aria-checked", showEmptyPref ? "true" : "false");
       const emptyKnob = document.createElement("div");
       emptyKnob.className = "pc-toggle-knob";
       emptyToggle.appendChild(emptyKnob);
@@ -892,9 +897,9 @@ export function openManagerPopup({ anchor }) {
       bodyRow.style.display = "none";
 
       const bodyToggle = document.createElement("div");
-      bodyToggle.className = "pc-toggle";
+      bodyToggle.className = "pc-toggle" + (searchInPromptsPref ? " on" : "");
       bodyToggle.setAttribute("role", "switch");
-      bodyToggle.setAttribute("aria-checked", "false");
+      bodyToggle.setAttribute("aria-checked", searchInPromptsPref ? "true" : "false");
       const bodyKnob = document.createElement("div");
       bodyKnob.className = "pc-toggle-knob";
       bodyToggle.appendChild(bodyKnob);
@@ -914,8 +919,8 @@ export function openManagerPopup({ anchor }) {
       body.append(tabs, search, emptyRow, bodyRow, status, list);
 
       let mode = "stacks";
-      let showEmpty = false;
-      let includeBody = false;
+      let showEmpty = showEmptyPref;
+      let includeBody = searchInPromptsPref;
       let layouts = [];
       let presets = [];
       let folders = [];
@@ -929,7 +934,7 @@ export function openManagerPopup({ anchor }) {
         promptsTab.classList.toggle("active", mode === "prompts");
         setTitle(mode === "stacks" ? "Library manager · Stacks" : "Library manager · Prompts");
         search.placeholder =
-          mode === "stacks" ? "name, slots, or Folder\\skin" : "name, or Scene\\pov";
+          mode === "stacks" ? "name or folder\\slot" : "name or shelf\\keyword";
         bodyRow.style.display = mode === "prompts" ? "" : "none";
         paint();
       }
@@ -1009,6 +1014,7 @@ export function openManagerPopup({ anchor }) {
         showEmpty = !showEmpty;
         emptyToggle.classList.toggle("on", showEmpty);
         emptyToggle.setAttribute("aria-checked", showEmpty ? "true" : "false");
+        setUiPref("showEmpty", showEmpty);
         paint();
       });
 
@@ -1017,6 +1023,7 @@ export function openManagerPopup({ anchor }) {
         includeBody = !includeBody;
         bodyToggle.classList.toggle("on", includeBody);
         bodyToggle.setAttribute("aria-checked", includeBody ? "true" : "false");
+        setUiPref("searchInPrompts", includeBody);
         paint();
       });
 

@@ -10,6 +10,7 @@ LIST_ROUTE = "/prompt_craft/layouts"
 FOLDERS_ROUTE = "/prompt_craft/layout_folders"
 PRESETS_ROUTE = "/prompt_craft/presets"
 CATEGORIES_ROUTE = "/prompt_craft/categories"
+PREFS_ROUTE = "/prompt_craft/prefs"
 
 db.init_db()
 
@@ -213,6 +214,30 @@ async def delete_category(request):
     return web.json_response(result, status=status)
 
 
+async def get_prefs(request):
+    try:
+        result = db.get_ui_prefs()
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    return web.json_response(result)
+
+
+async def update_prefs(request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+
+    if not isinstance(payload, dict):
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+
+    try:
+        result = db.set_ui_prefs(payload)
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    return web.json_response(result)
+
+
 _existing = {getattr(route, "path", None) for route in PromptServer.instance.routes}
 if SAVE_ROUTE not in _existing:
     PromptServer.instance.routes.post(SAVE_ROUTE)(save_layout)
@@ -232,3 +257,6 @@ if CATEGORIES_ROUTE not in _existing:
     PromptServer.instance.routes.get(CATEGORIES_ROUTE)(list_categories)
     PromptServer.instance.routes.patch(CATEGORIES_ROUTE)(update_category)
     PromptServer.instance.routes.delete(CATEGORIES_ROUTE)(delete_category)
+if PREFS_ROUTE not in _existing:
+    PromptServer.instance.routes.get(PREFS_ROUTE)(get_prefs)
+    PromptServer.instance.routes.patch(PREFS_ROUTE)(update_prefs)

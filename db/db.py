@@ -72,6 +72,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
             updated_at TEXT NOT NULL DEFAULT (datetime('now')),
             UNIQUE(name)
         );
+
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
         """
     )
     if _table_columns(conn, "layouts") and "folder_id" not in _table_columns(conn, "layouts"):
@@ -712,6 +717,81 @@ def delete_category(name: str) -> Dict:
             conn.execute("DELETE FROM categories WHERE id = ?", (int(row["id"]),))
             conn.commit()
             return {"ok": True, "deleted": int(count)}
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+UI_PREF_KEYS = ("otherCollections", "showEmpty", "searchInPrompts")
+UI_PREF_DEFAULTS = {
+    "otherCollections": False,
+    "showEmpty": False,
+    "searchInPrompts": False,
+}
+_UI_PREFS_ROW = "ui_prefs"
+
+
+def _normalize_ui_prefs(raw) -> Dict:
+    prefs = dict(UI_PREF_DEFAULTS)
+    if not isinstance(raw, dict):
+        return prefs
+    for key in UI_PREF_KEYS:
+        if key in raw:
+            prefs[key] = bool(raw[key])
+    return prefs
+
+
+def get_ui_prefs() -> Dict:
+    with _lock:
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                (_UI_PREFS_ROW,),
+            ).fetchone()
+            raw = {}
+            if row and row["value"]:
+                try:
+                    raw = json.loads(row["value"])
+                except Exception:
+                    raw = {}
+            return {"ok": True, "prefs": _normalize_ui_prefs(raw)}
+        finally:
+            conn.close()
+
+
+def set_ui_prefs(patch: Optional[Dict] = None) -> Dict:
+    incoming = patch if isinstance(patch, dict) else {}
+    with _lock:
+        conn = _connect()
+        try:
+            conn.execute("BEGIN")
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                (_UI_PREFS_ROW,),
+            ).fetchone()
+            raw = {}
+            if row and row["value"]:
+                try:
+                    raw = json.loads(row["value"])
+                except Exception:
+                    raw = {}
+            prefs = _normalize_ui_prefs(raw)
+            for key in UI_PREF_KEYS:
+                if key in incoming:
+                    prefs[key] = bool(incoming[key])
+            payload = json.dumps(prefs)
+            conn.execute(
+                """
+                INSERT INTO settings (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (_UI_PREFS_ROW, payload),
+            )
+            conn.commit()
+            return {"ok": True, "prefs": prefs}
         except Exception:
             conn.rollback()
             raise
