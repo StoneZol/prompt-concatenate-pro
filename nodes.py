@@ -42,15 +42,6 @@ def _parse_blocks(raw) -> list:
     return data if isinstance(data, list) else []
 
 
-def _encode_conditioning(clip, text: str):
-    """Same CONDITIONING shape as stock CLIPTextEncode."""
-    tokens = clip.tokenize(text or "")
-    if hasattr(clip, "encode_from_tokens_scheduled"):
-        return clip.encode_from_tokens_scheduled(tokens)
-    cond, pooled = clip.encode_from_tokens(tokens, return_pooled=True)
-    return [[cond, {"pooled_output": pooled}]]
-
-
 class PromptCraft:
     @classmethod
     def INPUT_TYPES(cls):
@@ -66,6 +57,8 @@ class PromptCraft:
     RETURN_NAMES = ("str_pos", "str_neg")
     FUNCTION = "craft"
     CATEGORY = "Prompt Concatenate Pro"
+    # Still run when STRING links were temporarily dropped for PNG meta materialize.
+    OUTPUT_NODE = True
 
     @classmethod
     def IS_CHANGED(cls, blocks_data, **kwargs):
@@ -90,67 +83,10 @@ class PromptCraft:
         return (str_pos, str_neg)
 
 
-class PromptCraftCLIPEncode:
-    """Dual CLIP encode.
-
-    Wire feed: ``str_pos`` / ``str_neg`` (links — execute).
-    Meta literals: hidden ``text`` / ``negative`` (PNG ``prompt``; ``text`` =
-    CLIPTextEncode-compatible name for scanners). JS copies from PromptCraft.
-    """
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "clip": ("CLIP",),
-                "str_pos": ("STRING", {"forceInput": True, "default": ""}),
-                "str_neg": ("STRING", {"forceInput": True, "default": ""}),
-            },
-            "hidden": {
-                "text": ("STRING", {"default": ""}),
-                "negative": ("STRING", {"default": ""}),
-                "unique_id": "UNIQUE_ID",
-                "extra_pnginfo": "EXTRA_PNGINFO",
-            },
-        }
-
-    RETURN_TYPES = ("CONDITIONING", "CONDITIONING")
-    RETURN_NAMES = ("positive", "negative")
-    FUNCTION = "encode"
-    CATEGORY = "Prompt Concatenate Pro"
-
-    def encode(
-        self,
-        clip,
-        str_pos,
-        str_neg,
-        text="",
-        negative="",
-        unique_id=None,
-        extra_pnginfo=None,
-    ):
-        pos_text = str_pos or text or ""
-        neg_text = str_neg or negative or ""
-        pos_cond = _encode_conditioning(clip, pos_text)
-        neg_cond = _encode_conditioning(clip, neg_text)
-
-        if isinstance(extra_pnginfo, dict):
-            extra_pnginfo["prompt_concatenate_pro"] = {
-                "positive": pos_text,
-                "negative": neg_text,
-                "node_id": str(unique_id) if unique_id is not None else "",
-            }
-            extra_pnginfo["parameters"] = f"{pos_text}\nNegative prompt: {neg_text}"
-
-        return (pos_cond, neg_cond)
-
-
 NODE_CLASS_MAPPINGS = {
     "PromptCraft": PromptCraft,
-    "PromptCraftCLIPEncode": PromptCraftCLIPEncode,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "PromptCraft": "Prompt Concatenate Pro",
-    "PromptCraftCLIPEncode": "Prompt CLIP Encode",
 }

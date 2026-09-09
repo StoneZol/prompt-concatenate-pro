@@ -34,7 +34,7 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 - **Prompt pairs** — save/load pos+neg per **collection** (e.g. shelf named after the slot)
 - **Smart library search** — AND tokens; `shelf\keyword` filters a collection first; optional **Search in prompts** for body text
 - **Library manager** — rename, move, delete, edit, and **duplicate** stacks & prompts; prefs (Show empty / Search in prompts / Other collections) persist in SQLite
-- **Prompt CLIP Encode** — `CLIP` + wired `str_pos`/`str_neg` → CONDITIONING; PNG `prompt` also gets a stock-shaped pair of `CLIP Text Encode (Prompt)` nodes with literal `text` (for meta readers)
+- **PNG-friendly prompts** — on queue, joined text is written into stock **CLIP Text Encode** `text` (as if typed); wires restore after. Uses official `beforeQueued` / `afterQueued` only.
 - **Local SQLite** — `db/presets.sqlite`, auto-created on first use
 
 ---
@@ -59,7 +59,7 @@ No pip dependencies — Python 3.8+ stdlib + SQLite only.
 
 1. Add **Prompt Concatenate Pro** to your graph.
 2. **Add group** — name it (`skin`, `lighting`, …), fill positive / negative.
-3. Connect **`str_pos`** → CLIP Text Encode (positive), **`str_neg`** as needed.
+3. Connect **`str_pos`** / **`str_neg`** to two stock **CLIP Text Encode (Prompt)** nodes (positive / negative). On queue the joined text is written into their `text` fields for PNG metadata.
 4. **Save preset** — snapshot your current slot layout (names + order).
 5. On a group card: **Save pair** / **Load pair** — store or recall that block's prompts in a collection.
 6. **Manage library** — edit, duplicate, move, or delete saved stacks and prompts.

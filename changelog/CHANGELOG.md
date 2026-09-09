@@ -6,6 +6,16 @@ Format: newest first.
 
 ---
 
+## [1.3.0] — 2026-09-09
+
+### PNG prompts that look like stock CLIP
+
+Joined `str_pos` / `str_neg` now land in image metadata the way Comfy readers expect — as literal `text` on two stock **CLIP Text Encode (Prompt)** nodes.
+
+- On queue, Prompt Concatenate Pro writes the joined prompts into connected CLIP `text` widgets (as if typed), then restores the wires after queue
+- Uses only official widget hooks (`beforeQueued` / `afterQueued`) — no `graphToPrompt` hijack
+- Wire **`str_pos`** / **`str_neg`** → positive / negative **CLIP Text Encode**; KSampler stays on those CLIP nodes
+
 ## [1.2.0] — 2026-08-27
 
 ### Library search, loaded pairs, and simpler stack edits

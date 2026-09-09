@@ -1,10 +1,7 @@
 import { craftOutput } from "./join.js";
 
-export const ENCODE_CLASS = "PromptCraftCLIPEncode";
-export const CRAFT_CLASS = "PromptCraft";
-
-/** Literals in API prompt — `text` matches CLIPTextEncode scanners. */
-const META_KEYS = ["text", "negative"];
+/** Stock CLIP text sockets we materialize into. */
+const CLIP_TEXT_NAMES = new Set(["text", "text_g", "text_l"]);
 
 function parseGroups(raw) {
   try {
@@ -20,223 +17,114 @@ function craftFromNode(craftNode) {
   return craftOutput(parseGroups(raw));
 }
 
-function isClass(node, className) {
-  return node?.comfyClass === className || node?.type === className;
+function setClipTextWidget(node, value) {
+  const widget =
+    node.widgets?.find((w) => w.name === "text") ||
+    node.widgets?.find((w) => w.name === "text_g") ||
+    node.widgets?.find((w) => CLIP_TEXT_NAMES.has(w.name));
+  if (!widget) return false;
+  widget.value = value ?? "";
+  return true;
 }
 
-/** Hide on canvas/panel but keep value in API prompt JSON. */
-export function hideMetaLiteralWidget(widget) {
-  if (!widget) return;
-  widget.hidden = true;
-  widget.computeSize = () => [0, -4];
-  widget.draw = () => {};
-  widget.mouse = () => false;
-  widget.computeLayoutSize = () => ({ minHeight: 0, maxHeight: 0, minWidth: 0 });
-  widget.serialize = true;
-  widget.options = {
-    ...(widget.options || {}),
-    hidden: true,
-    serialize: true,
-    multiline: true,
+function materializeTarget(origin, originSlot, target, targetSlot, text) {
+  const input = target?.inputs?.[targetSlot];
+  if (!target || !input || !CLIP_TEXT_NAMES.has(input.name)) return null;
+
+  setClipTextWidget(target, text);
+  target.disconnectInput?.(targetSlot);
+  return {
+    originId: origin.id,
+    originSlot,
+    targetId: target.id,
+    targetSlot,
   };
-  const el = widget.element || widget.inputEl || widget.textEl || widget.domElement;
-  if (el?.style) {
-    el.style.display = "none";
-    el.style.pointerEvents = "none";
-  }
 }
-
-function setMeta(encodeNode, str_pos, str_neg) {
-  for (const widget of encodeNode.widgets || []) {
-    if (widget.name === "text" && widget.value !== str_pos) widget.value = str_pos;
-    if (widget.name === "negative" && widget.value !== str_neg) widget.value = str_neg;
-  }
-}
-
-function resolveOrigin(graph, linkId) {
-  let id = linkId;
-  for (let i = 0; i < 16; i++) {
-    if (id == null) return null;
-    const link = graph.links?.[id];
-    if (!link) return null;
-    const origin = graph.getNodeById?.(link.origin_id) ?? graph._nodes_by_id?.[link.origin_id];
-    if (!origin) return null;
-    if (isClass(origin, CRAFT_CLASS)) return origin;
-    if (origin.type === "Reroute" || origin.comfyClass === "Reroute") {
-      const input = origin.inputs?.[0];
-      id = input?.link;
-      continue;
-    }
-    return null;
-  }
-  return null;
-}
-
-function craftUpstream(encodeNode) {
-  const graph = encodeNode.graph;
-  if (!graph) return null;
-  for (const name of ["str_pos", "str_neg"]) {
-    const input = encodeNode.inputs?.find((i) => i.name === name);
-    if (input?.link == null) continue;
-    const craft = resolveOrigin(graph, input.link);
-    if (craft) return craft;
-  }
-  return null;
-}
-
-/** Copy joined prompts from linked PromptCraft into hidden meta widgets. */
-export function syncEncodeNode(encodeNode) {
-  if (!encodeNode || !isClass(encodeNode, ENCODE_CLASS)) return;
-  const craft = craftUpstream(encodeNode);
-  if (!craft) return;
-  const { str_pos, str_neg } = craftFromNode(craft);
-  setMeta(encodeNode, str_pos, str_neg);
-}
-
-/** After PromptCraft edits — push to every encode that feeds from this node. */
-export function syncDownstreamEncodes(craftNode) {
-  if (!craftNode || !isClass(craftNode, CRAFT_CLASS)) return;
-  const graph = craftNode.graph;
-  if (!graph) return;
-
-  const seen = new Set();
-  for (const output of craftNode.outputs || []) {
-    for (const linkId of output.links || []) {
-      const link = graph.links?.[linkId];
-      if (!link) continue;
-      let target = graph.getNodeById?.(link.target_id) ?? graph._nodes_by_id?.[link.target_id];
-      if (target && (target.type === "Reroute" || target.comfyClass === "Reroute")) {
-        const out = target.outputs?.[0];
-        for (const rid of out?.links || []) {
-          const rl = graph.links?.[rid];
-          if (!rl) continue;
-          target = graph.getNodeById?.(rl.target_id) ?? graph._nodes_by_id?.[rl.target_id];
-          if (target && isClass(target, ENCODE_CLASS) && !seen.has(target.id)) {
-            seen.add(target.id);
-            syncEncodeNode(target);
-          }
-        }
-        continue;
-      }
-      if (target && isClass(target, ENCODE_CLASS) && !seen.has(target.id)) {
-        seen.add(target.id);
-        syncEncodeNode(target);
-      }
-    }
-  }
-}
-
-const STOCK_CLIP_TITLE = "CLIP Text Encode (Prompt)";
 
 /**
- * Emit a stock-looking CLIPTextEncode pair and point sampler conditioning at them.
- * Readers then see the same shape as the default Comfy positive/negative CLIP nodes.
- * Canvas graph is unchanged; only the API `prompt` payload is adapted.
+ * Copy join into downstream CLIP `text` widgets and drop STRING links for serialize.
+ * API prompt then looks like the user typed into stock CLIP Text Encode.
  */
-export function injectClipEncodeMirrors(prompt) {
-  const output = prompt?.output;
-  if (!output || typeof output !== "object") return prompt;
+function materializeSlot(craftNode, outputSlot, text) {
+  const graph = craftNode.graph;
+  const output = craftNode.outputs?.[outputSlot];
+  if (!graph || !output?.links?.length) return [];
 
-  for (const [id, node] of Object.entries(output)) {
-    if (node?.class_type !== ENCODE_CLASS) continue;
-    const inputs = node.inputs;
-    if (!inputs) continue;
+  const pending = [];
+  for (const linkId of [...(output.links || [])]) {
+    const link = graph.links?.[linkId];
+    if (!link) continue;
+    let target = graph.getNodeById?.(link.target_id) ?? graph._nodes_by_id?.[link.target_id];
+    let targetSlot = link.target_slot;
 
-    const pos =
-      typeof inputs.text === "string"
-        ? inputs.text
-        : typeof inputs.positive === "string"
-          ? inputs.positive
-          : null;
-    const neg = typeof inputs.negative === "string" ? inputs.negative : null;
-    if (pos == null && neg == null) continue;
-
-    if (pos != null) inputs.text = pos;
-
-    const clip = Array.isArray(inputs.clip) ? inputs.clip : undefined;
-    const posKey = `pc_meta_${id}_pos`;
-    const negKey = `pc_meta_${id}_neg`;
-
-    if (pos != null) {
-      output[posKey] = {
-        inputs: clip ? { text: pos, clip } : { text: pos },
-        class_type: "CLIPTextEncode",
-        _meta: { title: STOCK_CLIP_TITLE },
-      };
-    }
-    if (neg != null) {
-      output[negKey] = {
-        inputs: clip ? { text: neg, clip } : { text: neg },
-        class_type: "CLIPTextEncode",
-        _meta: { title: STOCK_CLIP_TITLE },
-      };
-    }
-
-    // KSampler / etc. → stock pair (same as default two CLIP Text Encode nodes).
-    const idStr = String(id);
-    for (const other of Object.values(output)) {
-      const oin = other?.inputs;
-      if (!oin) continue;
-      if (pos != null && Array.isArray(oin.positive) && String(oin.positive[0]) === idStr) {
-        oin.positive = [posKey, 0];
+    if (target && (target.type === "Reroute" || target.comfyClass === "Reroute")) {
+      const rerouteOut = target.outputs?.[0];
+      for (const rid of [...(rerouteOut?.links || [])]) {
+        const rl = graph.links?.[rid];
+        if (!rl) continue;
+        const dest = graph.getNodeById?.(rl.target_id) ?? graph._nodes_by_id?.[rl.target_id];
+        const spec = materializeTarget(target, 0, dest, rl.target_slot, text);
+        if (spec) pending.push(spec);
       }
-      if (neg != null && Array.isArray(oin.negative) && String(oin.negative[0]) === idStr) {
-        oin.negative = [negKey, 0];
-      }
+      continue;
     }
+
+    const spec = materializeTarget(craftNode, outputSlot, target, targetSlot, text);
+    if (spec) pending.push(spec);
   }
-  return prompt;
+  return pending;
 }
 
-export function installEncodeMetaSync(app) {
-  if (app.__pcEncodeMetaSync) return;
-  app.__pcEncodeMetaSync = true;
+function reconnectAll(graph, pending) {
+  if (!graph || !pending?.length) return;
+  for (const spec of pending) {
+    const origin =
+      graph.getNodeById?.(spec.originId) ?? graph._nodes_by_id?.[spec.originId];
+    const target =
+      graph.getNodeById?.(spec.targetId) ?? graph._nodes_by_id?.[spec.targetId];
+    if (!origin || !target) continue;
+    try {
+      origin.connect?.(spec.originSlot, target, spec.targetSlot);
+    } catch (err) {
+      console.warn("[PromptConcatenatePro] reconnect after queue failed", err);
+    }
+  }
+}
 
-  app.registerExtension({
-    name: "PromptConcatenatePro.EncodeMeta",
+/**
+ * Official widget hooks only — no app.graphToPrompt hijack.
+ * beforeQueued: write joined prompts into stock CLIP text widgets, disconnect.
+ * afterQueued: restore wires.
+ */
+export function attachPromptMaterializeHooks(node, dataWidget) {
+  if (!node || !dataWidget || dataWidget.__pcMaterializeHooked) return;
+  dataWidget.__pcMaterializeHooked = true;
 
-    async beforeRegisterNodeDef(nodeType, nodeData) {
-      if (nodeData.name !== ENCODE_CLASS) return;
+  const prevBefore = dataWidget.beforeQueued;
+  const prevAfter = dataWidget.afterQueued;
 
-      const onNodeCreated = nodeType.prototype.onNodeCreated;
-      nodeType.prototype.onNodeCreated = function () {
-        const r = onNodeCreated?.apply(this, arguments);
-        for (const name of META_KEYS) {
-          let widget = this.widgets?.find((w) => w.name === name);
-          if (!widget) {
-            widget = this.addWidget("text", name, "", () => {}, { multiline: true });
-          }
-          hideMetaLiteralWidget(widget);
-          widget.beforeQueued = () => {
-            syncEncodeNode(this);
-          };
-        }
-        syncEncodeNode(this);
-        return r;
-      };
+  const restore = () => {
+    if (node.__pcReconnectTimer) {
+      clearTimeout(node.__pcReconnectTimer);
+      node.__pcReconnectTimer = null;
+    }
+    reconnectAll(node.graph, node.__pcReconnect);
+    node.__pcReconnect = null;
+  };
 
-      const onConnectionsChange = nodeType.prototype.onConnectionsChange;
-      nodeType.prototype.onConnectionsChange = function () {
-        const r = onConnectionsChange?.apply(this, arguments);
-        syncEncodeNode(this);
-        return r;
-      };
-    },
+  dataWidget.beforeQueued = function () {
+    prevBefore?.apply(this, arguments);
+    const { str_pos, str_neg } = craftFromNode(node);
+    node.__pcReconnect = [
+      ...materializeSlot(node, 0, str_pos),
+      ...materializeSlot(node, 1, str_neg),
+    ];
+    if (node.__pcReconnectTimer) clearTimeout(node.__pcReconnectTimer);
+    node.__pcReconnectTimer = setTimeout(restore, 5000);
+  };
 
-    async setup() {
-      if (app.__pcEncodeMetaPromptHook) return;
-      app.__pcEncodeMetaPromptHook = true;
-      const original = app.graphToPrompt?.bind(app);
-      if (typeof original !== "function") return;
-      app.graphToPrompt = async function (...args) {
-        const result = await original(...args);
-        try {
-          injectClipEncodeMirrors(result);
-        } catch (err) {
-          console.warn("[PromptConcatenatePro] clip meta mirrors failed", err);
-        }
-        return result;
-      };
-    },
-  });
+  dataWidget.afterQueued = function () {
+    restore();
+    prevAfter?.apply(this, arguments);
+  };
 }
