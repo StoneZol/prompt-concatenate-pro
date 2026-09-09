@@ -17,9 +17,11 @@ import {
 } from "./pc/shadow_fields.js";
 import { craftOutput, isJoinDebugEnabled } from "./pc/join.js";
 import { baseShelfName, nextDuplicateTitle } from "./pc/titles.js";
+import { installEncodeMetaSync, syncDownstreamEncodes } from "./pc/metadata.js";
 
 const config = await loadConfig();
 injectStyles(config.style_id);
+installEncodeMetaSync(app);
 
 const MIN_NODE_WIDTH = 400;
 const SOCKET_ROWS_HEIGHT = 56;
@@ -157,6 +159,7 @@ app.registerExtension({
         dataWidget.value = JSON.stringify(groups);
         node.setDirtyCanvas(true, true);
         scheduleJoinDebugLog();
+        syncDownstreamEncodes(node);
       }
 
       let joinDebugTimer = null;

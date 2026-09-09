@@ -34,6 +34,7 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 - **Prompt pairs** — save/load pos+neg per **collection** (e.g. shelf named after the slot)
 - **Smart library search** — AND tokens; `shelf\keyword` filters a collection first; optional **Search in prompts** for body text
 - **Library manager** — rename, move, delete, edit, and **duplicate** stacks & prompts; prefs (Show empty / Search in prompts / Other collections) persist in SQLite
+- **Prompt CLIP Encode** — `CLIP` + wired `str_pos`/`str_neg` → CONDITIONING; PNG `prompt` also gets a stock-shaped pair of `CLIP Text Encode (Prompt)` nodes with literal `text` (for meta readers)
 - **Local SQLite** — `db/presets.sqlite`, auto-created on first use
 
 ---
