@@ -48,6 +48,8 @@ class PromptCraft:
         return {
             "hidden": {
                 "blocks_data": ("STRING", {"default": "[]"}),
+                "unique_id": "UNIQUE_ID",
+                "extra_pnginfo": "EXTRA_PNGINFO",
             },
         }
 
@@ -55,12 +57,14 @@ class PromptCraft:
     RETURN_NAMES = ("str_pos", "str_neg")
     FUNCTION = "craft"
     CATEGORY = "Prompt Concatenate Pro"
+    # Still run when STRING links were temporarily dropped for PNG meta materialize.
+    OUTPUT_NODE = True
 
     @classmethod
     def IS_CHANGED(cls, blocks_data, **kwargs):
         return blocks_data
 
-    def craft(self, blocks_data, **kwargs):
+    def craft(self, blocks_data, unique_id=None, extra_pnginfo=None, **kwargs):
         blocks = _parse_blocks(blocks_data)
         positives = [block.get("positive", "") for block in blocks if block.get("enabled", True) is not False]
         negatives = [block.get("negative", "") for block in blocks if block.get("enabled", True) is not False]
@@ -68,6 +72,14 @@ class PromptCraft:
         str_neg = _join_fields(negatives, DEFAULT_SEPARATOR)
         print(f"[PromptConcatenatePro] str_pos ({len(str_pos)}): {str_pos!r}")
         print(f"[PromptConcatenatePro] str_neg ({len(str_neg)}): {str_neg!r}")
+
+        if isinstance(extra_pnginfo, dict):
+            extra_pnginfo["prompt_concatenate_pro"] = {
+                "positive": str_pos,
+                "negative": str_neg,
+                "node_id": str(unique_id) if unique_id is not None else "",
+            }
+
         return (str_pos, str_neg)
 
 

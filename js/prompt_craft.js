@@ -17,6 +17,7 @@ import {
 } from "./pc/shadow_fields.js";
 import { craftOutput, isJoinDebugEnabled } from "./pc/join.js";
 import { baseShelfName, nextDuplicateTitle } from "./pc/titles.js";
+import { attachPromptMaterializeHooks } from "./pc/metadata.js";
 
 const config = await loadConfig();
 injectStyles(config.style_id);
@@ -108,6 +109,7 @@ app.registerExtension({
       }
       hideDataWidget(dataWidget);
       dataWidget.type = "";
+      attachPromptMaterializeHooks(node, dataWidget);
 
       let groups = parseGroups(dataWidget?.value);
       const cards = new Map();
