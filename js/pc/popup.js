@@ -215,7 +215,7 @@ const CSS = `
 }
 
 .pc-settings-row {
-  padding: 4px 2px 8px;
+  padding: 4px 2px;
   font-size: 12px;
   color: var(--input-text, #ddd);
 }
@@ -223,14 +223,27 @@ const CSS = `
 .pc-settings-label {
   flex: 1 1 auto;
   line-height: 1.35;
+  min-width: 0;
 }
 
-.pc-settings-hint {
-  padding: 0 2px 4px;
-  color: var(--descrip-text, #aaa);
+.pc-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0 4px;
+}
+
+.pc-settings-footer {
+  margin-top: 10px;
+  padding: 8px 2px 2px;
+  border-top: 1px solid var(--border-color, #444);
+  color: var(--descrip-text, #888);
   font-size: 11px;
   line-height: 1.45;
-  white-space: pre-wrap;
+}
+
+.pc-info-tip {
+  max-width: min(380px, calc(100vw - 16px));
 }
 
 .pc-preset-peek {

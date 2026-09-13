@@ -79,13 +79,44 @@ export function showPromptTip(anchor, { positive = "", negative = "" } = {}) {
     tip.append(label, text);
   }
 
+  mountTip(tip, anchor);
+}
+
+/** Generic help tip (settings, etc.) — same float/toggle pattern as prompt peek. */
+export function showInfoTip(anchor, { title = "", text = "" } = {}) {
+  hidePromptTip();
+  if (!anchor) return;
+  const body = String(text || "").trim();
+  if (!body) return;
+
+  const tip = document.createElement("div");
+  tip.className = "pc-prompt-tip pc-info-tip";
+  tip.addEventListener("pointerdown", (e) => e.stopPropagation());
+  tip.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
+
+  const heading = String(title || "").trim();
+  if (heading) {
+    const label = document.createElement("div");
+    label.className = "pc-prompt-tip-label";
+    label.textContent = heading;
+    tip.appendChild(label);
+  }
+
+  const textEl = document.createElement("div");
+  textEl.className = "pc-prompt-tip-text";
+  textEl.textContent = body;
+  tip.appendChild(textEl);
+
+  mountTip(tip, anchor);
+}
+
+function mountTip(tip, anchor) {
   document.body.appendChild(tip);
   activeTip = tip;
   activeAnchor = anchor;
   placeTip(tip, anchor);
   window.addEventListener("resize", onViewportChange);
   document.addEventListener("pointerdown", onDocDown, true);
-  // window capture runs before popup's document listener, so Escape closes tip first.
   window.addEventListener("keydown", onKey, true);
 }
 
@@ -100,5 +131,19 @@ export function bindPromptTip(btn, getPair) {
     }
     const pair = typeof getPair === "function" ? getPair() : getPair;
     showPromptTip(btn, pair || {});
+  });
+}
+
+export function bindInfoTip(btn, getInfo) {
+  btn.addEventListener("pointerdown", (e) => e.stopPropagation());
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (activeTip && activeAnchor === btn) {
+      hidePromptTip();
+      return;
+    }
+    const info = typeof getInfo === "function" ? getInfo() : getInfo;
+    showInfoTip(btn, info || {});
   });
 }
