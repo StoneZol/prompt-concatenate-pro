@@ -10,11 +10,19 @@ Format: newest first.
 
 ### PNG prompts that look like stock CLIP
 
-Joined `str_pos` / `str_neg` now land in image metadata the way Comfy readers expect — as literal `text` on two stock **CLIP Text Encode (Prompt)** nodes.
+Joined `str_pos` / `str_neg` can land in image metadata the way Comfy readers expect — as literal `text` on two stock **CLIP Text Encode (Prompt)** nodes.
 
-- On queue, Prompt Concatenate Pro writes the joined prompts into connected CLIP `text` widgets (as if typed), then restores the wires after queue
+- **Settings** on the node: toggle **Embed prompts in CLIP for PNG meta** (SQLite pref `embedClipMeta`, **off** by default)
+- When on: before queue, joined text is written into connected CLIP `text` widgets, then wires restore after queue
 - Uses only official widget hooks (`beforeQueued` / `afterQueued`) — no `graphToPrompt` hijack
 - Wire **`str_pos`** / **`str_neg`** → positive / negative **CLIP Text Encode**; KSampler stays on those CLIP nodes
+- Off keeps the graph linked so workflows opened from PNGs do not lose Concatenate Pro → CLIP connections
+
+### Removed
+
+- **Prompt CLIP Encode** (dual encode helper) — it needed fragile prompt mirroring to look like stock CLIP in PNG meta. Prefer two stock CLIP Text Encode nodes instead. Existing workflows that used this node need to reconnect.
+
+---
 
 ## [1.2.0] — 2026-08-27
 

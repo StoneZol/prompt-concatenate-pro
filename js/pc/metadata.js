@@ -1,4 +1,5 @@
 import { craftOutput } from "./join.js";
+import { ensureUiPrefs, getUiPref } from "./prefs.js";
 
 /** Stock CLIP text sockets we materialize into. */
 const CLIP_TEXT_NAMES = new Set(["text", "text_g", "text_l"]);
@@ -93,12 +94,15 @@ function reconnectAll(graph, pending) {
 
 /**
  * Official widget hooks only — no app.graphToPrompt hijack.
- * beforeQueued: write joined prompts into stock CLIP text widgets, disconnect.
- * afterQueued: restore wires.
+ * When pref embedClipMeta is on: beforeQueued writes joined prompts into stock
+ * CLIP text widgets and disconnects; afterQueued restores wires.
+ * Default off — keeps graph linked for workflows loaded from PNGs.
  */
 export function attachPromptMaterializeHooks(node, dataWidget) {
   if (!node || !dataWidget || dataWidget.__pcMaterializeHooked) return;
   dataWidget.__pcMaterializeHooked = true;
+
+  ensureUiPrefs();
 
   const prevBefore = dataWidget.beforeQueued;
   const prevAfter = dataWidget.afterQueued;
@@ -114,6 +118,7 @@ export function attachPromptMaterializeHooks(node, dataWidget) {
 
   dataWidget.beforeQueued = function () {
     prevBefore?.apply(this, arguments);
+    if (!getUiPref("embedClipMeta")) return;
     const { str_pos, str_neg } = craftFromNode(node);
     node.__pcReconnect = [
       ...materializeSlot(node, 0, str_pos),

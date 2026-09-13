@@ -214,6 +214,25 @@ const CSS = `
   user-select: none;
 }
 
+.pc-settings-row {
+  padding: 4px 2px 8px;
+  font-size: 12px;
+  color: var(--input-text, #ddd);
+}
+
+.pc-settings-label {
+  flex: 1 1 auto;
+  line-height: 1.35;
+}
+
+.pc-settings-hint {
+  padding: 0 2px 4px;
+  color: var(--descrip-text, #aaa);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .pc-preset-peek {
   flex: 0 0 28px;
   width: 28px;

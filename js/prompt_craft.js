@@ -9,6 +9,7 @@ import { confirmReplaceGroups, openLoadPresetPopup } from "./pc/load_dialog.js";
 import { openSavePairPopup } from "./pc/pair_save.js";
 import { confirmReplacePair, openLoadPairPopup } from "./pc/pair_load.js";
 import { openManagerPopup } from "./pc/manager_dialog.js";
+import { openSettingsPopup } from "./pc/settings_dialog.js";
 import {
   createShadowString,
   hideOnCanvasKeepInPanel,
@@ -18,9 +19,11 @@ import {
 import { craftOutput, isJoinDebugEnabled } from "./pc/join.js";
 import { baseShelfName, nextDuplicateTitle } from "./pc/titles.js";
 import { attachPromptMaterializeHooks } from "./pc/metadata.js";
+import { ensureUiPrefs } from "./pc/prefs.js";
 
 const config = await loadConfig();
 injectStyles(config.style_id);
+ensureUiPrefs();
 
 const MIN_NODE_WIDTH = 400;
 const SOCKET_ROWS_HEIGHT = 56;
@@ -148,7 +151,16 @@ app.registerExtension({
       managerBtn.className = "pc-manage-btn";
       managerBtn.textContent = "Manage library";
 
-      header.append(addBtn, libraryRow, managerBtn);
+      const settingsBtn = document.createElement("button");
+      settingsBtn.type = "button";
+      settingsBtn.className = "pc-settings-btn";
+      settingsBtn.textContent = "Settings";
+
+      const toolsRow = document.createElement("div");
+      toolsRow.className = "pc-header-row";
+      toolsRow.append(managerBtn, settingsBtn);
+
+      header.append(addBtn, libraryRow, toolsRow);
 
       const groupsWrap = document.createElement("div");
       groupsWrap.className = "pc-groups";
@@ -515,6 +527,11 @@ app.registerExtension({
       managerBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         openManagerPopup({ anchor: managerBtn });
+      });
+
+      settingsBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openSettingsPopup({ anchor: settingsBtn });
       });
 
       const onResize = node.onResize;
