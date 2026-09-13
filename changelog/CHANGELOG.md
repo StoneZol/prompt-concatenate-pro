@@ -17,6 +17,8 @@ Joined `str_pos` / `str_neg` can land in image metadata the way Comfy readers ex
 - Uses only official widget hooks (`beforeQueued` / `afterQueued`) — no `graphToPrompt` hijack
 - Wire **`str_pos`** / **`str_neg`** → positive / negative **CLIP Text Encode**; KSampler stays on those CLIP nodes
 - Off keeps the graph linked so workflows opened from PNGs do not lose Concatenate Pro → CLIP connections
+- **Load pair**: **+** appends the pair to the end of the cell (join with `, `); clears the Loaded chip because the cell is no longer a single preset. Load icon still replaces (with confirm if not empty)
+- Load / peek icons refreshed: replace uses **file-up**, prompt preview uses **info**
 
 ### Removed
 

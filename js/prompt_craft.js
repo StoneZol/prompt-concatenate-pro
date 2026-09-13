@@ -16,7 +16,7 @@ import {
   isShadowFieldName,
   parseShadowFieldName,
 } from "./pc/shadow_fields.js";
-import { craftOutput, isJoinDebugEnabled } from "./pc/join.js";
+import { craftOutput, isJoinDebugEnabled, joinFields } from "./pc/join.js";
 import { baseShelfName, nextDuplicateTitle } from "./pc/titles.js";
 import { attachPromptMaterializeHooks } from "./pc/metadata.js";
 import { ensureUiPrefs } from "./pc/prefs.js";
@@ -389,6 +389,20 @@ app.registerExtension({
                     return;
                   }
                   apply();
+                },
+                onAppend: (preset) => {
+                  group.positive = joinFields([group.positive, preset.positive]);
+                  group.negative = joinFields([group.negative, preset.negative]);
+                  // Cell is a mix — clear Loaded chip so Save isn't tied to one pair.
+                  group.loadedTitle = "";
+                  group.loadedCategory = "";
+                  group.loadedDescription = "";
+                  card.setField("positive", group.positive);
+                  card.setField("negative", group.negative);
+                  card.setLoadedTitle("");
+                  writeShadow(group, "positive", group.positive);
+                  writeShadow(group, "negative", group.negative);
+                  persist();
                 },
               });
             },

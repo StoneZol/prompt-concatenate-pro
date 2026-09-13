@@ -639,6 +639,7 @@ const CSS = `
 }
 
 .pc-preset-load,
+.pc-preset-append,
 .pc-preset-collapse {
   flex: 0 0 28px;
   width: 28px;
@@ -655,6 +656,7 @@ const CSS = `
 }
 
 .pc-preset-load:hover,
+.pc-preset-append:hover,
 .pc-preset-collapse:hover {
   color: var(--input-text, #ddd);
   background: var(--comfy-menu-bg, #1e1e1e);
@@ -662,6 +664,7 @@ const CSS = `
 }
 
 .pc-preset-load svg,
+.pc-preset-append svg,
 .pc-preset-collapse svg {
   width: 14px;
   height: 14px;
