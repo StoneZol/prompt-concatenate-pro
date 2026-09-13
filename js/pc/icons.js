@@ -19,9 +19,9 @@ export const SAVE_ICON_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/
   <path d="M8 20v-7h8v7"/>
 </svg>`;
 
-export const LOAD_ICON_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M4 20h16V8H4z"/>
-  <path d="M4 8l4-4h5l2 2h5v2"/>
+export const LOAD_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-up">
+<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/>
+<path d="M12 12v6"/><path d="m15 15-3-3-3 3"/>
 </svg>`;
 
 export const GRIP_ICON_SVG = `<svg viewBox="0 0 10 16" xmlns="http://www.w3.org/2000/svg">
@@ -30,10 +30,9 @@ export const GRIP_ICON_SVG = `<svg viewBox="0 0 10 16" xmlns="http://www.w3.org/
   <circle cx="2" cy="14" r="1.4"/><circle cx="8" cy="14" r="1.4"/>
 </svg>`;
 
-export const TEXT_ICON_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-  <path d="M14 2v6h6"/>
-  <path d="M8 13h8M8 17h5"/>
+export const TEXT_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-info">
+<circle cx="12" cy="12" r="10"/>
+<path d="M12 16v-4"/><path d="M12 8h.01"/>
 </svg>`;
 
 export const EDIT_ICON_SVG = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

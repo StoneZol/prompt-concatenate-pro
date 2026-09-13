@@ -55,7 +55,8 @@ const CSS = `
 .pc-add-btn,
 .pc-save-btn,
 .pc-load-btn,
-.pc-manage-btn {
+.pc-manage-btn,
+.pc-settings-btn {
   flex: 1 1 0;
   flex-shrink: 0;
   width: auto;
@@ -89,22 +90,23 @@ const CSS = `
   color: var(--input-text, #ddd);
 }
 
-.pc-manage-btn {
-  width: 100%;
+.pc-manage-btn,
+.pc-settings-btn {
   height: 26px;
   min-height: 26px;
-  padding: 0 14px;
+  padding: 0 10px;
   border: 1px solid #5a5080;
   background: #2f2b3d;
   color: #e0dce8;
-  font-size: 13px;
+  font-size: 12px;
   letter-spacing: 0.01em;
 }
 
 .pc-add-btn:hover,
 .pc-save-btn:hover,
 .pc-load-btn:hover,
-.pc-manage-btn:hover {
+.pc-manage-btn:hover,
+.pc-settings-btn:hover {
   filter: brightness(1.15);
 }
 
@@ -432,7 +434,8 @@ const CSS = `
   color: var(--descrip-text, #777);
 }
 
-.pc-loaded-clear {
+.pc-loaded-clear,
+.pc-loaded-notes {
   flex: 0 0 22px;
   width: 22px;
   height: 22px;
@@ -447,13 +450,19 @@ const CSS = `
   cursor: pointer;
 }
 
-.pc-loaded-clear:hover {
+.pc-loaded-notes[hidden] {
+  display: none !important;
+}
+
+.pc-loaded-clear:hover,
+.pc-loaded-notes:hover {
   color: var(--input-text, #ddd);
   background: var(--comfy-input-bg, #2a2a2e);
   border-color: var(--border-color, #444);
 }
 
-.pc-loaded-clear svg {
+.pc-loaded-clear svg,
+.pc-loaded-notes svg {
   width: 12px;
   height: 12px;
   display: block;

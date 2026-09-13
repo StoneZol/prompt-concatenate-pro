@@ -214,6 +214,38 @@ const CSS = `
   user-select: none;
 }
 
+.pc-settings-row {
+  padding: 4px 2px;
+  font-size: 12px;
+  color: var(--input-text, #ddd);
+}
+
+.pc-settings-label {
+  flex: 1 1 auto;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.pc-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0 4px;
+}
+
+.pc-settings-footer {
+  margin-top: 10px;
+  padding: 8px 2px 2px;
+  border-top: 1px solid var(--border-color, #444);
+  color: var(--descrip-text, #888);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.pc-info-tip {
+  max-width: min(380px, calc(100vw - 16px));
+}
+
 .pc-preset-peek {
   flex: 0 0 28px;
   width: 28px;
@@ -620,6 +652,7 @@ const CSS = `
 }
 
 .pc-preset-load,
+.pc-preset-append,
 .pc-preset-collapse {
   flex: 0 0 28px;
   width: 28px;
@@ -636,6 +669,7 @@ const CSS = `
 }
 
 .pc-preset-load:hover,
+.pc-preset-append:hover,
 .pc-preset-collapse:hover {
   color: var(--input-text, #ddd);
   background: var(--comfy-menu-bg, #1e1e1e);
@@ -643,6 +677,7 @@ const CSS = `
 }
 
 .pc-preset-load svg,
+.pc-preset-append svg,
 .pc-preset-collapse svg {
   width: 14px;
   height: 14px;

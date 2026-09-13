@@ -6,6 +6,8 @@ const DEFAULTS = {
   otherCollections: false,
   showEmpty: false,
   searchInPrompts: false,
+  /** Write joined prompts into stock CLIP text + detach wires on queue (PNG meta). */
+  embedClipMeta: false,
 };
 
 let cache = { ...DEFAULTS };

@@ -6,15 +6,44 @@ Format: newest first.
 
 ---
 
+## [1.4.0] — 2026-09-13
+
+### Settings, append load, and notes at a glance
+
+Everyday library use gets less friction: optional PNG meta is behind a toggle, you can append pairs instead of only replacing, and saved notes are one click away on the Loaded row.
+
+![Settings: Embed prompts in CLIP for PNG meta](../docs/screenshots/1.4.0/0.png)
+
+- **Settings** on the node: **Embed prompts in CLIP for PNG meta** (SQLite `embedClipMeta`, **off** by default)
+- When the toggle is on: before queue, joined text is written into stock CLIP `text` widgets; wires restore after (workflows from PNGs stay linked when off)
+
+![Load pair actions: preview, replace, append](../docs/screenshots/1.4.0/1.png)
+
+- **Load pair**: **+** appends the pair to the end of the cell (join with `, `); clears the Loaded chip (cell is no longer a single preset)
+- Load / file-up still **replaces** (confirm if the cell is not empty)
+- Icons refreshed: replace = **file-up**, prompt / notes preview = **info**
+
+![Loaded row: view notes](../docs/screenshots/1.4.0/2.png)
+
+- **Loaded** row: **info** opens saved **notes** when present — no need to open Save just to read a seed or memo
+
+---
+
 ## [1.3.0] — 2026-09-09
 
 ### PNG prompts that look like stock CLIP
 
-Joined `str_pos` / `str_neg` now land in image metadata the way Comfy readers expect — as literal `text` on two stock **CLIP Text Encode (Prompt)** nodes.
+Joined `str_pos` / `str_neg` can land in image metadata the way Comfy readers expect — as literal `text` on two stock **CLIP Text Encode (Prompt)** nodes.
 
-- On queue, Prompt Concatenate Pro writes the joined prompts into connected CLIP `text` widgets (as if typed), then restores the wires after queue
+- On queue (when enabled), Prompt Concatenate Pro writes joined prompts into connected CLIP `text` widgets, then restores the wires
 - Uses only official widget hooks (`beforeQueued` / `afterQueued`) — no `graphToPrompt` hijack
 - Wire **`str_pos`** / **`str_neg`** → positive / negative **CLIP Text Encode**; KSampler stays on those CLIP nodes
+
+### Removed
+
+- **Prompt CLIP Encode** (dual encode helper) — it needed fragile prompt mirroring to look like stock CLIP in PNG meta. Prefer two stock CLIP Text Encode nodes instead. Existing workflows that used this node need to reconnect.
+
+---
 
 ## [1.2.0] — 2026-08-27
 

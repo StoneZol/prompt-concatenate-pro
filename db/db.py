@@ -734,11 +734,12 @@ def delete_category(name: str) -> Dict:
             conn.close()
 
 
-UI_PREF_KEYS = ("otherCollections", "showEmpty", "searchInPrompts")
+UI_PREF_KEYS = ("otherCollections", "showEmpty", "searchInPrompts", "embedClipMeta")
 UI_PREF_DEFAULTS = {
     "otherCollections": False,
     "showEmpty": False,
     "searchInPrompts": False,
+    "embedClipMeta": False,
 }
 _UI_PREFS_ROW = "ui_prefs"
 
