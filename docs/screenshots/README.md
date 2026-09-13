@@ -13,6 +13,14 @@ Used by the main [README](../../README.md) and [changelog](../../changelog/CHANG
 | `6.png` | Library manager · Prompts |
 | `7.png` | Edit prompt dialog |
 
+## 1.4.0
+
+| File | Content |
+|------|---------|
+| `1.4.0/0.png` | Settings — Embed prompts in CLIP + info tip |
+| `1.4.0/1.png` | Load pair actions — preview, replace, append |
+| `1.4.0/2.png` | Loaded row — view notes |
+
 ## 1.2.0
 
 | File | Content |
