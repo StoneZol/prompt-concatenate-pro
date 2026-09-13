@@ -19,6 +19,7 @@ Joined `str_pos` / `str_neg` can land in image metadata the way Comfy readers ex
 - Off keeps the graph linked so workflows opened from PNGs do not lose Concatenate Pro → CLIP connections
 - **Load pair**: **+** appends the pair to the end of the cell (join with `, `); clears the Loaded chip because the cell is no longer a single preset. Load icon still replaces (with confirm if not empty)
 - Load / peek icons refreshed: replace uses **file-up**, prompt preview uses **info**
+- **Loaded** row: info button opens saved **notes** (when present) without going through Save
 
 ### Removed
 

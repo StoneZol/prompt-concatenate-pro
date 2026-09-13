@@ -1,5 +1,6 @@
-import { CHEVRON_ICON_SVG, CLOSE_ICON_SVG, COPY_ICON_SVG, GRIP_ICON_SVG, LOAD_ICON_SVG, SAVE_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
+import { CHEVRON_ICON_SVG, CLOSE_ICON_SVG, COPY_ICON_SVG, GRIP_ICON_SVG, LOAD_ICON_SVG, SAVE_ICON_SVG, TEXT_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
 import { openConfirmPopup } from "./popup.js";
+import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
 
 function isEnabled(group) {
   return group.enabled !== false;
@@ -231,6 +232,17 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   const loadedLabel = document.createElement("span");
   loadedLabel.className = "pc-loaded-label";
 
+  const notesBtn = document.createElement("button");
+  notesBtn.type = "button";
+  notesBtn.className = "pc-loaded-notes";
+  notesBtn.title = "View notes";
+  notesBtn.innerHTML = TEXT_ICON_SVG;
+  notesBtn.hidden = true;
+  bindInfoTip(notesBtn, () => ({
+    title: "Notes",
+    text: (group.loadedDescription || "").trim(),
+  }));
+
   const clearLoadedBtn = document.createElement("button");
   clearLoadedBtn.type = "button";
   clearLoadedBtn.className = "pc-loaded-clear";
@@ -238,6 +250,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   clearLoadedBtn.innerHTML = CLOSE_ICON_SVG;
   clearLoadedBtn.addEventListener("click", (e) => {
     e.stopPropagation();
+    hidePromptTip();
     group.loadedTitle = "";
     group.loadedCategory = "";
     group.loadedDescription = "";
@@ -245,18 +258,21 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     onChange?.();
   });
 
-  loadedRow.append(loadedLabel, clearLoadedBtn);
+  loadedRow.append(loadedLabel, notesBtn, clearLoadedBtn);
 
   function paintLoaded() {
     const name = (group.loadedTitle || "").trim();
+    const notes = (group.loadedDescription || "").trim();
     if (!name) {
       loadedRow.hidden = true;
       loadedLabel.textContent = "";
+      notesBtn.hidden = true;
       return;
     }
     loadedRow.hidden = false;
     loadedLabel.textContent = name;
     loadedLabel.title = `Loaded: ${name}`;
+    notesBtn.hidden = !notes;
   }
 
   const pos = makeField(group, "positive", "positive", { onChange, onPrompt });

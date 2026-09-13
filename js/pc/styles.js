@@ -434,7 +434,8 @@ const CSS = `
   color: var(--descrip-text, #777);
 }
 
-.pc-loaded-clear {
+.pc-loaded-clear,
+.pc-loaded-notes {
   flex: 0 0 22px;
   width: 22px;
   height: 22px;
@@ -449,13 +450,19 @@ const CSS = `
   cursor: pointer;
 }
 
-.pc-loaded-clear:hover {
+.pc-loaded-notes[hidden] {
+  display: none !important;
+}
+
+.pc-loaded-clear:hover,
+.pc-loaded-notes:hover {
   color: var(--input-text, #ddd);
   background: var(--comfy-input-bg, #2a2a2e);
   border-color: var(--border-color, #444);
 }
 
-.pc-loaded-clear svg {
+.pc-loaded-clear svg,
+.pc-loaded-notes svg {
   width: 12px;
   height: 12px;
   display: block;
