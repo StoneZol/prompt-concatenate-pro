@@ -435,7 +435,8 @@ const CSS = `
 }
 
 .pc-loaded-clear,
-.pc-loaded-notes {
+.pc-loaded-notes,
+.pc-loaded-reset {
   flex: 0 0 22px;
   width: 22px;
   height: 22px;
@@ -455,14 +456,16 @@ const CSS = `
 }
 
 .pc-loaded-clear:hover,
-.pc-loaded-notes:hover {
+.pc-loaded-notes:hover,
+.pc-loaded-reset:hover {
   color: var(--input-text, #ddd);
   background: var(--comfy-input-bg, #2a2a2e);
   border-color: var(--border-color, #444);
 }
 
 .pc-loaded-clear svg,
-.pc-loaded-notes svg {
+.pc-loaded-notes svg,
+.pc-loaded-reset svg {
   width: 12px;
   height: 12px;
   display: block;

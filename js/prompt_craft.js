@@ -3,13 +3,14 @@ import { loadConfig } from "./pc/config.js";
 import { injectStyles } from "./pc/styles.js";
 import { PLUS_ICON_SVG, SAVE_ICON_SVG, LOAD_ICON_SVG } from "./pc/icons.js";
 import { makeGroupCard } from "./pc/group_card.js";
-import { openInputPopup } from "./pc/popup.js";
+import { openConfirmPopup, openInputPopup } from "./pc/popup.js";
 import { openSavePresetsPopup } from "./pc/save_dialog.js";
 import { confirmReplaceGroups, openLoadPresetPopup } from "./pc/load_dialog.js";
 import { openSavePairPopup } from "./pc/pair_save.js";
 import { confirmReplacePair, openLoadPairPopup } from "./pc/pair_load.js";
 import { openManagerPopup } from "./pc/manager_dialog.js";
 import { openSettingsPopup } from "./pc/settings_dialog.js";
+import { listPresets } from "./pc/api.js";
 import {
   createShadowString,
   hideOnCanvasKeepInPanel,
@@ -405,6 +406,49 @@ app.registerExtension({
                   persist();
                 },
               });
+            },
+            onReloadLoaded: async (anchor) => {
+              const title = (group.loadedTitle || "").trim();
+              const category = (group.loadedCategory || "").trim();
+              if (!title) return;
+              const result = await listPresets({ category });
+              if (!result.ok) {
+                openConfirmPopup({
+                  anchor,
+                  title: "Reload pair",
+                  message: result.error || "Failed to load prompts",
+                  confirmLabel: "OK",
+                  showCancel: false,
+                  danger: false,
+                });
+                return;
+              }
+              const key = title.toLowerCase();
+              const preset = (result.presets || []).find(
+                (item) => (item.title || "").trim().toLowerCase() === key,
+              );
+              if (!preset) {
+                openConfirmPopup({
+                  anchor,
+                  title: "Reload pair",
+                  message: "Saved pair not found. It may have been renamed or deleted.",
+                  confirmLabel: "OK",
+                  showCancel: false,
+                  danger: false,
+                });
+                return;
+              }
+              group.positive = preset.positive || "";
+              group.negative = preset.negative || "";
+              group.loadedTitle = (preset.title || "").trim();
+              group.loadedCategory = (preset.category || "").trim();
+              group.loadedDescription = (preset.description || "").trim();
+              card.setField("positive", group.positive);
+              card.setField("negative", group.negative);
+              card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
+              writeShadow(group, "positive", group.positive);
+              writeShadow(group, "negative", group.negative);
+              persist();
             },
             onDuplicate: () => duplicateGroup(group),
           });

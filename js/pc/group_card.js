@@ -1,4 +1,4 @@
-import { CHEVRON_ICON_SVG, CLOSE_ICON_SVG, COPY_ICON_SVG, GRIP_ICON_SVG, LOAD_ICON_SVG, SAVE_ICON_SVG, TEXT_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
+import { CHEVRON_ICON_SVG, CLOSE_ICON_SVG, COPY_ICON_SVG, GRIP_ICON_SVG, LOAD_ICON_SVG, RESET_ICON_SVG, SAVE_ICON_SVG, TEXT_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
 import { openConfirmPopup } from "./popup.js";
 import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
 
@@ -29,7 +29,7 @@ function makeField(group, key, labelText, { onChange, onPrompt }) {
   return { wrap, area };
 }
 
-export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, onRename, onReorder, onDrop, onSavePair, onLoadPair, onDuplicate }) {
+export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, onRename, onReorder, onDrop, onSavePair, onLoadPair, onReloadLoaded, onDuplicate }) {
   const card = document.createElement("div");
   card.className = "pc-group";
   card.dataset.groupId = group.id;
@@ -243,6 +243,17 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     text: (group.loadedDescription || "").trim(),
   }));
 
+  const resetBtn = document.createElement("button");
+  resetBtn.type = "button";
+  resetBtn.className = "pc-loaded-reset";
+  resetBtn.title = "Reload last saved pair";
+  resetBtn.innerHTML = RESET_ICON_SVG;
+  resetBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    hidePromptTip();
+    onReloadLoaded?.(resetBtn);
+  });
+
   const clearLoadedBtn = document.createElement("button");
   clearLoadedBtn.type = "button";
   clearLoadedBtn.className = "pc-loaded-clear";
@@ -258,7 +269,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     onChange?.();
   });
 
-  loadedRow.append(loadedLabel, notesBtn, clearLoadedBtn);
+  loadedRow.append(loadedLabel, notesBtn, resetBtn, clearLoadedBtn);
 
   function paintLoaded() {
     const name = (group.loadedTitle || "").trim();
