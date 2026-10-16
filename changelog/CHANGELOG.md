@@ -6,6 +6,20 @@ Format: newest first.
 
 ---
 
+## [1.5.0] — 2026-10-16
+
+### Reload the loaded pair
+
+Edited a loaded pair and want the library version back? No need to open Load again.
+
+![Loaded row: reload next to detach](../docs/screenshots/1.5.0/0.png)
+
+- **Loaded** row: **reload** fetches the pair from the library by name/shelf and restores positive / negative / notes
+- No local snapshot — always the last saved copy in SQLite
+- If the pair was renamed or deleted, a short alert explains why reload failed
+
+---
+
 ## [1.4.0] — 2026-09-13
 
 ### Settings, append load, and notes at a glance

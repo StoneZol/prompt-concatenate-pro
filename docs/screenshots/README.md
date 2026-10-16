@@ -13,6 +13,12 @@ Used by the main [README](../../README.md) and [changelog](../../changelog/CHANG
 | `6.png` | Library manager · Prompts |
 | `7.png` | Edit prompt dialog |
 
+## 1.5.0
+
+| File | Content |
+|------|---------|
+| `1.5.0/0.png` | Loaded row — reload next to detach |
+
 ## 1.4.0
 
 | File | Content |
