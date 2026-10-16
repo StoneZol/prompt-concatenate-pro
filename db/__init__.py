@@ -1,3 +1,4 @@
+from . import autocomplete
 from .db import (
     UNCATEGORISED_NAME,
     delete_category,
@@ -10,6 +11,8 @@ from .db import (
     list_layout_folders,
     list_layouts,
     list_presets,
+    list_presets_for_autocomplete,
+    rebuild_autocomplete_from_library,
     rename_category,
     rename_layout_folder,
     save_layout,
@@ -21,6 +24,7 @@ from .db import (
 
 __all__ = [
     "UNCATEGORISED_NAME",
+    "autocomplete",
     "delete_category",
     "delete_layout",
     "delete_layout_folder",
@@ -31,6 +35,8 @@ __all__ = [
     "list_layout_folders",
     "list_layouts",
     "list_presets",
+    "list_presets_for_autocomplete",
+    "rebuild_autocomplete_from_library",
     "rename_category",
     "rename_layout_folder",
     "save_layout",

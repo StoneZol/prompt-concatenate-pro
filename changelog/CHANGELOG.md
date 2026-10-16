@@ -6,6 +6,23 @@ Format: newest first.
 
 ---
 
+## [1.6.0] — 2026-10-17
+
+### Prompt autocomplete (experimental)
+
+Suggest tags/phrases from **your** library while editing positive / negative — not from an external tag DB.
+
+- **Settings**: toggle **Prompt autocomplete** (off by default) with an `experimental` badge
+- When enabled: Library manager gets a **Suggest** tab — segments grouped by letter (collapsible); search expands matching groups; add / delete / **Rebuild from library**
+- Dictionaries live under `db/autocomplete/{pos,neg}/` — one SQLite file per first letter (dynamic)
+- Segments split on `,` and newlines; `(tag:1.2)` weights stripped on ingest
+- VS Code-style popup at the caret: arrows to move, **Tab** to accept, **Esc** to close (Enter still inserts a newline)
+- Scrollable suggestion list (max height); lookup stays inside the letter bucket
+- If nothing matches: popup offers the typed segment with **Tab to save** into the dictionary
+- Saving or updating a pair also feeds the dictionaries
+
+---
+
 ## [1.5.0] — 2026-10-16
 
 ### Reload the loaded pair

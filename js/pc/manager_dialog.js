@@ -20,6 +20,8 @@ import {
 } from "./api.js";
 import { emptyShelfMatchesSearch, matchesLayoutPreset, matchesPromptPreset } from "./search.js";
 import { getUiPref, setUiPref, ensureUiPrefs } from "./prefs.js";
+import { bindPromptAutocomplete } from "./autocomplete.js";
+import { mountAutocompletePanel } from "./autocomplete_manager.js";
 import { nextDuplicateName } from "./titles.js";
 
 const UNCATEGORISED = "Uncategorised";
@@ -430,6 +432,7 @@ function makePromptField(labelText, kind, value) {
   area.placeholder = labelText;
   area.rows = 4;
   area.value = value || "";
+  bindPromptAutocomplete(area, kind);
 
   wrap.append(label, area);
   return { wrap, area };
@@ -912,10 +915,11 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
 
 export async function openManagerPopup({ anchor }) {
   await ensureUiPrefs();
+  const acEnabled = Boolean(getUiPref("promptAutocomplete"));
   return openPopup({
     anchor,
     title: "Library manager",
-    width: 360,
+    width: acEnabled ? 380 : 360,
     onClose: hidePromptTip,
     render(body, { setTitle, reposition }) {
       const tabs = document.createElement("div");
@@ -932,6 +936,16 @@ export async function openManagerPopup({ anchor }) {
       promptsTab.textContent = "Prompts";
 
       tabs.append(stacksTab, promptsTab);
+
+      let suggestTab = null;
+      if (acEnabled) {
+        suggestTab = document.createElement("button");
+        suggestTab.type = "button";
+        suggestTab.className = "pc-mgr-tab";
+        suggestTab.textContent = "Suggest";
+        suggestTab.title = "Autocomplete dictionary (experimental)";
+        tabs.appendChild(suggestTab);
+      }
 
       const search = document.createElement("input");
       search.className = "pc-popup-input";
@@ -990,14 +1004,41 @@ export async function openManagerPopup({ anchor }) {
       let presets = [];
       let folders = [];
       let categories = [];
+      let acPanel = null;
       const stacksOpen = new Map();
       const promptsOpen = new Map();
+
+      const titles = {
+        stacks: "Library manager · Stacks",
+        prompts: "Library manager · Prompts",
+        suggest: "Library manager · Suggest",
+      };
 
       function setActiveTab(next) {
         mode = next;
         stacksTab.classList.toggle("active", mode === "stacks");
         promptsTab.classList.toggle("active", mode === "prompts");
-        setTitle(mode === "stacks" ? "Library manager · Stacks" : "Library manager · Prompts");
+        suggestTab?.classList.toggle("active", mode === "suggest");
+        setTitle(titles[mode] || "Library manager");
+
+        if (mode === "suggest") {
+          // Same content slot as Stacks/Prompts — full replace, not a panel under them.
+          search.style.display = "none";
+          emptyRow.style.display = "none";
+          bodyRow.style.display = "none";
+          status.style.display = "none";
+          list.classList.add("pc-mgr-list-suggest");
+          list.replaceChildren();
+          acPanel = mountAutocompletePanel(list, { reposition });
+          reposition();
+          return;
+        }
+
+        acPanel = null;
+        list.classList.remove("pc-mgr-list-suggest");
+        search.style.display = "";
+        emptyRow.style.display = "";
+        status.style.display = "none";
         search.placeholder =
           mode === "stacks" ? "name or folder\\slot" : "name or shelf\\keyword";
         bodyRow.style.display = mode === "prompts" ? "" : "none";
@@ -1005,6 +1046,7 @@ export async function openManagerPopup({ anchor }) {
       }
 
       function paint() {
+        if (mode === "suggest") return;
         if (mode === "stacks") {
           paintStacksTab(list, {
             layouts,
@@ -1070,6 +1112,12 @@ export async function openManagerPopup({ anchor }) {
         setActiveTab("prompts");
         if (!presets.length) loadPrompts();
         else paint();
+      });
+
+      suggestTab?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (mode === "suggest") return;
+        setActiveTab("suggest");
       });
 
       search.addEventListener("input", paint);

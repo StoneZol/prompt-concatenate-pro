@@ -1,6 +1,7 @@
 import { CHEVRON_ICON_SVG, CLOSE_ICON_SVG, COPY_ICON_SVG, GRIP_ICON_SVG, LOAD_ICON_SVG, RESET_ICON_SVG, SAVE_ICON_SVG, TEXT_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
 import { openConfirmPopup } from "./popup.js";
 import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
+import { bindPromptAutocomplete } from "./autocomplete.js";
 
 function isEnabled(group) {
   return group.enabled !== false;
@@ -24,6 +25,7 @@ function makeField(group, key, labelText, { onChange, onPrompt }) {
     onPrompt?.(key, area.value);
     onChange?.();
   });
+  bindPromptAutocomplete(area, key);
 
   wrap.append(label, area);
   return { wrap, area };

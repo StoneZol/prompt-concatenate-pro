@@ -316,7 +316,7 @@ def save_preset(
                     (category_id, name, note, pos, neg),
                 )
             conn.commit()
-            return {
+            result = {
                 "ok": True,
                 "title": name,
                 "category": shelf,
@@ -326,6 +326,9 @@ def save_preset(
             raise
         finally:
             conn.close()
+
+    _safe_ingest_pair(pos, neg)
+    return result
 
 
 def list_presets(category: str = "") -> Dict:
@@ -642,12 +645,22 @@ def update_preset(
                 (category_id, next_title, next_desc, next_pos, next_neg, int(preset_id)),
             )
             conn.commit()
-            return {"ok": True, "id": int(preset_id), "title": next_title, "category": shelf}
+            result = {
+                "ok": True,
+                "id": int(preset_id),
+                "title": next_title,
+                "category": shelf,
+            }
+            saved_pos = next_pos
+            saved_neg = next_neg
         except Exception:
             conn.rollback()
             raise
         finally:
             conn.close()
+
+    _safe_ingest_pair(saved_pos, saved_neg)
+    return result
 
 
 def delete_preset(preset_id: int) -> Dict:
@@ -734,13 +747,74 @@ def delete_category(name: str) -> Dict:
             conn.close()
 
 
-UI_PREF_KEYS = ("otherCollections", "showEmpty", "searchInPrompts", "embedClipMeta")
+UI_PREF_KEYS = (
+    "otherCollections",
+    "showEmpty",
+    "searchInPrompts",
+    "embedClipMeta",
+    "promptAutocomplete",
+)
 UI_PREF_DEFAULTS = {
     "otherCollections": False,
     "showEmpty": False,
     "searchInPrompts": False,
     "embedClipMeta": False,
+    "promptAutocomplete": False,
 }
+
+
+def _safe_ingest_pair(positive: str = "", negative: str = "") -> None:
+    try:
+        from . import autocomplete as ac
+
+        ac.ingest_pair(positive or "", negative or "")
+    except Exception:
+        # Autocomplete must never break library saves.
+        pass
+
+
+def list_presets_for_autocomplete() -> List[Dict]:
+    """Lightweight rows for dictionary rebuild progress."""
+    with _lock:
+        conn = _connect()
+        try:
+            rows = conn.execute(
+                """
+                SELECT
+                    presets.title,
+                    presets.positive,
+                    presets.negative,
+                    categories.name AS category
+                FROM presets
+                JOIN categories ON categories.id = presets.category_id
+                ORDER BY categories.name COLLATE NOCASE, presets.title COLLATE NOCASE
+                """
+            ).fetchall()
+            return [
+                {
+                    "title": row["title"] or "",
+                    "category": row["category"] or "",
+                    "positive": row["positive"] or "",
+                    "negative": row["negative"] or "",
+                }
+                for row in rows
+            ]
+        finally:
+            conn.close()
+
+
+def rebuild_autocomplete_from_library() -> Dict:
+    """Scan all saved pairs into pos/neg letter-bucket dictionaries."""
+    rows = list_presets_for_autocomplete()
+    pairs = [(row["positive"], row["negative"]) for row in rows]
+
+    from . import autocomplete as ac
+
+    result = ac.rebuild_from_presets(pairs)
+    result["presets"] = len(pairs)
+    return result
+
+
 _UI_PREFS_ROW = "ui_prefs"
 
 

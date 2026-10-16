@@ -156,3 +156,114 @@ export async function updateUiPrefs(patch) {
   });
   return readJson(res);
 }
+
+const AUTOCOMPLETE_URL = "/prompt_craft/autocomplete";
+
+export async function autocompleteLookup(side, prefix, limit = 20) {
+  const qs = new URLSearchParams({
+    side: side || "pos",
+    prefix: prefix || "",
+    limit: String(limit),
+  });
+  const res = await fetch(`${AUTOCOMPLETE_URL}?${qs}`);
+  return readJson(res);
+}
+
+export async function autocompleteList(side, bucket = "", limit = 500) {
+  const qs = new URLSearchParams({
+    side: side || "pos",
+    limit: String(limit),
+  });
+  if (bucket) qs.set("bucket", bucket);
+  const res = await fetch(`${AUTOCOMPLETE_URL}/list?${qs}`);
+  return readJson(res);
+}
+
+export async function autocompleteBuckets(side) {
+  const qs = new URLSearchParams({ side: side || "pos" });
+  const res = await fetch(`${AUTOCOMPLETE_URL}/buckets?${qs}`);
+  return readJson(res);
+}
+
+export async function autocompleteAction(payload) {
+  const res = await fetch(AUTOCOMPLETE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+  return readJson(res);
+}
+
+/**
+ * Rebuild dictionaries with streamed progress (NDJSON).
+ * onProgress({ current, total, percent, label, phase })
+ */
+export async function rebuildAutocomplete(onProgress) {
+  const res = await fetch(AUTOCOMPLETE_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "rebuild" }),
+  });
+
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  if (!res.body || !ct.includes("ndjson")) {
+    const data = await readJson(res);
+    if (data.ok) {
+      onProgress?.({
+        phase: "done",
+        current: data.presets || 0,
+        total: data.presets || 0,
+        percent: 100,
+      });
+    }
+    return data;
+  }
+
+  if (!res.ok) {
+    return { ok: false, error: `Request failed (HTTP ${res.status})` };
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let last = { ok: true, presets: 0 };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      let msg;
+      try {
+        msg = JSON.parse(trimmed);
+      } catch {
+        continue;
+      }
+      if (msg.ok === false) return msg;
+      if (msg.phase === "start" || msg.phase === "progress") {
+        onProgress?.(msg);
+      }
+      if (msg.phase === "done") {
+        last = msg;
+        onProgress?.(msg);
+      }
+    }
+  }
+
+  if (buffer.trim()) {
+    try {
+      const msg = JSON.parse(buffer.trim());
+      if (msg.ok === false) return msg;
+      if (msg.phase === "done") last = msg;
+      onProgress?.(msg);
+    } catch {
+      /* ignore trailing junk */
+    }
+  }
+
+  return last;
+}

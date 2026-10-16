@@ -492,6 +492,77 @@ const CSS = `
   overflow: hidden !important;
   pointer-events: none !important;
 }
+
+.pc-ac-popup {
+  position: fixed;
+  z-index: 10050;
+  box-sizing: border-box;
+  max-height: 240px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #555);
+  background: var(--comfy-menu-bg, #1e1e22);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  scrollbar-width: thin;
+}
+
+.pc-ac-item {
+  display: block;
+  flex: 0 0 auto;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--input-text, #ddd);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pc-ac-item:hover,
+.pc-ac-item.selected {
+  background: #3a3450;
+  color: #f0ecff;
+}
+
+.pc-ac-item-create {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  white-space: normal;
+}
+
+.pc-ac-item-main {
+  font-size: 12px;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.pc-ac-item-hint {
+  font-size: 10px;
+  color: var(--descrip-text, #888);
+  letter-spacing: 0.02em;
+}
+
+.pc-ac-item-create.selected .pc-ac-item-hint,
+.pc-ac-item-create:hover .pc-ac-item-hint {
+  color: #c8c0e0;
+}
 `;
 
 export function injectStyles(styleId) {

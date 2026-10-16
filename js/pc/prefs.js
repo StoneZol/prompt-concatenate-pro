@@ -8,6 +8,8 @@ const DEFAULTS = {
   searchInPrompts: false,
   /** Write joined prompts into stock CLIP text + detach wires on queue (PNG meta). */
   embedClipMeta: false,
+  /** Experimental: suggest segments from saved pairs / autocomplete dict. */
+  promptAutocomplete: false,
 };
 
 let cache = { ...DEFAULTS };
