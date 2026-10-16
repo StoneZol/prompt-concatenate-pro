@@ -6,6 +6,19 @@ Format: newest first.
 
 ---
 
+## [1.6.1] — 2026-10-17
+
+### Loaded stack chip
+
+After **Load preset**, the header shows which layout is attached — same idea as the pair **Loaded** row.
+
+- Chip: **Loaded stack ·** name (+ folder); notes peek when present
+- **Reload** pulls the layout from the library again; **×** detaches the name only
+- **Save preset** prefills name / folder / notes from the loaded stack
+- Chip clears when you add, remove, or duplicate a group (slot structure changed)
+
+---
+
 ## [1.6.0] — 2026-10-17
 
 ### Prompt autocomplete (experimental)

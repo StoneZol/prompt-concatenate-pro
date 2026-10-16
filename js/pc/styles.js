@@ -434,6 +434,10 @@ const CSS = `
   color: var(--descrip-text, #777);
 }
 
+.pc-loaded-label.pc-loaded-stack::before {
+  content: "Loaded stack · ";
+}
+
 .pc-loaded-clear,
 .pc-loaded-notes,
 .pc-loaded-reset {

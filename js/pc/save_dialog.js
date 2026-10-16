@@ -63,7 +63,7 @@ function openFolderPicker({ anchor, folders, current, onPick, onClose }) {
   });
 }
 
-export function openSavePresetsPopup({ anchor, groups }) {
+export function openSavePresetsPopup({ anchor, groups, loadedStack, onSaved }) {
   const slots = (groups || [])
     .map((group) => (group.title || "").trim())
     .filter(Boolean);
@@ -93,6 +93,7 @@ export function openSavePresetsPopup({ anchor, groups }) {
       title.className = "pc-popup-input";
       title.type = "text";
       title.placeholder = "preset name";
+      title.value = (loadedStack?.title || "").trim();
 
       const folderRow = document.createElement("div");
       folderRow.className = "pc-save-folder-row";
@@ -101,6 +102,7 @@ export function openSavePresetsPopup({ anchor, groups }) {
       folder.className = "pc-popup-input";
       folder.type = "text";
       folder.placeholder = "Uncategorised";
+      folder.value = (loadedStack?.folder || "").trim();
 
       const pickBtn = document.createElement("button");
       pickBtn.type = "button";
@@ -113,6 +115,7 @@ export function openSavePresetsPopup({ anchor, groups }) {
       desc.className = "pc-popup-textarea";
       desc.placeholder = "notes (optional)";
       desc.rows = 3;
+      desc.value = (loadedStack?.description || "").trim();
 
       const errorEl = document.createElement("div");
       errorEl.className = "pc-popup-error";
@@ -186,6 +189,11 @@ export function openSavePresetsPopup({ anchor, groups }) {
             errorEl.textContent = result.error || "Save failed";
             return;
           }
+          onSaved?.({
+            title: name,
+            folder: folder.value.trim(),
+            description: desc.value.trim(),
+          });
           close();
         } catch (err) {
           errorEl.textContent = err?.message || "Save failed";

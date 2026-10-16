@@ -39,7 +39,11 @@ def _parse_blocks(raw) -> list:
         data = json.loads(raw) if isinstance(raw, str) else raw
     except Exception:
         return []
-    return data if isinstance(data, list) else []
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict) and isinstance(data.get("groups"), list):
+        return data["groups"]
+    return []
 
 
 class PromptCraft:
