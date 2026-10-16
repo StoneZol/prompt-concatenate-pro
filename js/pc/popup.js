@@ -160,6 +160,7 @@ const CSS = `
   padding: 2px 4px 0;
   line-height: 1.4;
   color: var(--input-text, #ddd);
+  white-space: pre-wrap;
 }
 
 .pc-save-row {
@@ -445,6 +446,54 @@ const CSS = `
   min-width: 28px;
   padding: 0 8px;
   height: 26px;
+}
+
+.pc-ac-replace-list {
+  max-height: 220px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 4px;
+  padding: 2px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.pc-ac-replace-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--comfy-input-bg, #2a2a2e);
+}
+
+.pc-ac-replace-shelf {
+  font-size: 10px;
+  color: var(--descrip-text, #888);
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-ac-replace-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pc-ac-replace-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--input-text, #ddd);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pc-info-tip {

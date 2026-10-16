@@ -61,7 +61,7 @@ export function makeBusyLine({ className = "" } = {}) {
       if (message) {
         text.textContent = message;
       } else if (stage === "write") {
-        // 46 = letter buckets being flushed, not pairs.
+        // Letter buckets being flushed, not pairs.
         text.textContent = `Writing buckets… ${current || 0}/${total || 0} (${pct}%)`;
       } else if (total != null) {
         text.textContent = `Parsing pairs… ${current || 0}/${total} (${pct}%)`;

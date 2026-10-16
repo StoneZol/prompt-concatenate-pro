@@ -357,6 +357,18 @@ async def autocomplete_mutate(request):
                 payload.get("positive") or "",
                 payload.get("negative") or "",
             )
+        elif action == "rename_preview":
+            result = db.find_presets_with_segment(
+                payload.get("side") or "pos",
+                payload.get("old_text") or payload.get("text") or "",
+            )
+        elif action == "rename":
+            result = db.rename_autocomplete_segment(
+                payload.get("side") or "pos",
+                payload.get("old_text") or "",
+                payload.get("new_text") or "",
+                replace_in_presets=bool(payload.get("replace_in_presets")),
+            )
         else:
             return web.json_response({"ok": False, "error": "Unknown action"}, status=400)
     except ValueError as exc:

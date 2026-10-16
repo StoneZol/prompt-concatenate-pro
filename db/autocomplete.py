@@ -143,14 +143,24 @@ def _connect_bucket(side: str, bucket: str) -> sqlite3.Connection:
     return conn
 
 
-def _flush_counts(side: str, bucket: str, counts: Dict[str, int]) -> Tuple[int, int]:
-    """Write aggregated segment counts into one bucket file (one open + one txn)."""
+def _flush_counts(
+    side: str,
+    bucket: str,
+    counts: Dict[str, int],
+    *,
+    skip_existing: bool = True,
+) -> Tuple[int, int]:
+    """
+    Write aggregated segments into one bucket file (one open + one txn).
+    skip_existing=True (default): if present — skip (keeps manual adds, no count bump).
+    Returns (added, skipped).
+    """
     if not counts:
         return 0, 0
     key = _normalize_side(side)
     now = int(time.time())
     added = 0
-    updated = 0
+    skipped = 0
     with _lock_for(key, bucket):
         conn = _connect_bucket(key, bucket)
         try:
@@ -158,35 +168,66 @@ def _flush_counts(side: str, bucket: str, counts: Dict[str, int]) -> Tuple[int, 
             for text, n in counts.items():
                 inc = max(1, int(n))
                 row = conn.execute(
-                    "SELECT id, use_count FROM segments WHERE text = ? COLLATE NOCASE",
+                    "SELECT id FROM segments WHERE text = ? COLLATE NOCASE",
                     (text,),
                 ).fetchone()
                 if row:
+                    if skip_existing:
+                        skipped += 1
+                        continue
                     conn.execute(
                         """
                         UPDATE segments
                         SET use_count = ?, updated_at = ?, text = ?
                         WHERE id = ?
                         """,
-                        (int(row["use_count"]) + inc, now, text, int(row["id"])),
-                    )
-                    updated += 1
-                else:
-                    conn.execute(
-                        """
-                        INSERT INTO segments (text, use_count, updated_at)
-                        VALUES (?, ?, ?)
-                        """,
-                        (text, inc, now),
+                        (inc, now, text, int(row["id"])),
                     )
                     added += 1
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO segments (text, use_count, updated_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (text, inc, now),
+                )
+                added += 1
             conn.commit()
         except Exception:
             conn.rollback()
             raise
         finally:
             conn.close()
-    return added, updated
+    return added, skipped
+
+
+def clear_all_dictionaries() -> Dict:
+    """Delete pos/neg bucket sqlite files (and WAL sidecars)."""
+    removed = 0
+    for side in SIDES:
+        directory = _side_dir(side)
+        if not os.path.isdir(directory):
+            continue
+        for name in os.listdir(directory):
+            path = os.path.join(directory, name)
+            if not os.path.isfile(path):
+                continue
+            if not (
+                name.endswith(".sqlite")
+                or name.endswith(".sqlite-wal")
+                or name.endswith(".sqlite-shm")
+                or name.endswith(".sqlite-journal")
+            ):
+                continue
+            try:
+                os.remove(path)
+                removed += 1
+            except OSError:
+                pass
+    with _bucket_locks_guard:
+        _bucket_locks.clear()
+    return {"ok": True, "removed": removed}
 
 
 def ingest_segments(side: str, segments: Sequence[str]) -> Dict:
@@ -199,13 +240,13 @@ def ingest_segments(side: str, segments: Sequence[str]) -> Dict:
         by_bucket[bucket_key(seg)][seg] += 1
 
     added = 0
-    updated = 0
+    skipped = 0
     for bucket, counts in by_bucket.items():
-        a, u = _flush_counts(key, bucket, counts)
+        a, s = _flush_counts(key, bucket, counts, skip_existing=True)
         added += a
-        updated += u
+        skipped += s
 
-    return {"ok": True, "side": key, "added": added, "updated": updated}
+    return {"ok": True, "side": key, "added": added, "skipped": skipped}
 
 
 def ingest_prompt(side: str, prompt: str) -> Dict:
@@ -286,6 +327,132 @@ def delete_segment(side: str, text: str) -> Dict:
             return {"ok": True, "side": key, "text": seg}
         finally:
             conn.close()
+
+
+def prompt_contains_segment(prompt: str, segment: str) -> bool:
+    needle = normalize_segment(segment)
+    if not needle:
+        return False
+    return needle in split_prompt_segments(prompt or "")
+
+
+def _retarget_token(raw: str, new_text: str) -> str:
+    """Keep parentheses / :weight wrappers, replace the phrase."""
+    text = (raw or "").strip()
+    layers = 0
+    while True:
+        match = _WRAP_RE.match(text)
+        if not match:
+            break
+        text = match.group(1).strip()
+        layers += 1
+    weight = ""
+    weight_match = _WEIGHT_SUFFIX_RE.search(text)
+    if weight_match:
+        weight = weight_match.group(0)
+    result = f"{new_text}{weight}"
+    for _ in range(layers):
+        result = f"({result})"
+    return result
+
+
+def replace_segment_in_prompt(prompt: str, old: str, new: str) -> Tuple[str, int]:
+    """Replace whole comma/newline segments only (this side's tokens)."""
+    old_n = normalize_segment(old)
+    new_n = normalize_segment(new)
+    if not old_n or not new_n or old_n == new_n:
+        return prompt or "", 0
+
+    parts = re.split(r"([,\n]+)", prompt or "")
+    out: List[str] = []
+    hits = 0
+    for part in parts:
+        if not part:
+            continue
+        if re.fullmatch(r"[,\n]+", part):
+            out.append(part)
+            continue
+        match = re.match(r"^(\s*)([\s\S]*?)(\s*)$", part)
+        if not match:
+            out.append(part)
+            continue
+        lead, core, trail = match.group(1), match.group(2), match.group(3)
+        if core and normalize_segment(core) == old_n:
+            out.append(f"{lead}{_retarget_token(core, new_n)}{trail}")
+            hits += 1
+        else:
+            out.append(part)
+    return "".join(out), hits
+
+
+def _read_use_count(side: str, seg: str) -> Optional[int]:
+    key = _normalize_side(side)
+    bucket = bucket_key(seg)
+    path = _bucket_path(key, bucket)
+    if not os.path.isfile(path):
+        return None
+    with _lock_for(key, bucket):
+        conn = _connect_bucket(key, bucket)
+        try:
+            row = conn.execute(
+                "SELECT use_count FROM segments WHERE text = ? COLLATE NOCASE",
+                (seg,),
+            ).fetchone()
+            return int(row["use_count"]) if row else None
+        finally:
+            conn.close()
+
+
+def rename_segment(side: str, old_text: str, new_text: str) -> Dict:
+    """Rename in one side dictionary only (pos XOR neg)."""
+    key = _normalize_side(side)
+    old_n = normalize_segment(old_text)
+    new_n = normalize_segment(new_text)
+    if not old_n:
+        return {"ok": False, "error": "Original segment is empty"}
+    if len(new_n) < MIN_SEGMENT_LEN:
+        return {"ok": False, "error": f"Segment too short (min {MIN_SEGMENT_LEN})"}
+    if old_n == new_n:
+        return {"ok": True, "side": key, "old": old_n, "new": new_n, "changed": False}
+
+    use_count = _read_use_count(key, old_n)
+    if use_count is None:
+        return {"ok": False, "error": "Not found in dictionary"}
+
+    deleted = delete_segment(key, old_n)
+    if not deleted.get("ok"):
+        return deleted
+
+    # If target already exists — keep it; old row is already removed.
+    existing = _read_use_count(key, new_n)
+    if existing is None:
+        now = int(time.time())
+        bucket = bucket_key(new_n)
+        with _lock_for(key, bucket):
+            conn = _connect_bucket(key, bucket)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO segments (text, use_count, updated_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (new_n, use_count, now),
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+
+    return {
+        "ok": True,
+        "side": key,
+        "old": old_n,
+        "new": new_n,
+        "changed": True,
+        "merged": existing is not None,
+    }
 
 
 def list_segments(side: str, bucket: str = "", limit: int = 500) -> Dict:
@@ -377,6 +544,7 @@ def iter_rebuild_events(rows: Sequence[Dict]) -> Iterator[Dict]:
         "total": pair_total,
         "presets": pair_total,
         "unit": "pairs",
+        "percent": 0,
     }
 
     pos_acc: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -429,8 +597,9 @@ def iter_rebuild_events(rows: Sequence[Dict]) -> Iterator[Dict]:
 
     def _job(item: Tuple[str, str, Dict[str, int]]) -> Tuple[str, str, int, int]:
         side, bucket, counts = item
-        added, updated = _flush_counts(side, bucket, counts)
-        return side, bucket, added, updated
+        # Never wipe: keep manual adds; only insert segments that are not present yet.
+        added, skipped = _flush_counts(side, bucket, counts, skip_existing=True)
+        return side, bucket, added, skipped
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(_job, job): job for job in jobs}

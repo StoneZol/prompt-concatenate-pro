@@ -563,6 +563,27 @@ const CSS = `
 .pc-ac-item-create:hover .pc-ac-item-hint {
   color: #c8c0e0;
 }
+
+.pc-ac-item-create.is-saved {
+  background: #243028;
+  color: #b8d4be;
+}
+
+.pc-ac-item-hint.is-saved {
+  color: #7dca8c;
+  font-weight: 600;
+}
+
+.pc-ac-item-create.is-saved:hover,
+.pc-ac-item-create.is-saved.selected {
+  background: #243028;
+  color: #b8d4be;
+}
+
+.pc-ac-item-create.is-saved:hover .pc-ac-item-hint,
+.pc-ac-item-create.is-saved.selected .pc-ac-item-hint {
+  color: #7dca8c;
+}
 `;
 
 export function injectStyles(styleId) {

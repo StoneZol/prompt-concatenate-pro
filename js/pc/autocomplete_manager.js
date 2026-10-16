@@ -1,6 +1,99 @@
 import { autocompleteAction, autocompleteList, rebuildAutocomplete } from "./api.js";
-import { CHEVRON_ICON_SVG } from "./icons.js";
+import { CHEVRON_ICON_SVG, TEXT_ICON_SVG } from "./icons.js";
 import { makeBusyLine } from "./busy.js";
+import { openConfirmPopup, openInputPopup, openPopup } from "./popup.js";
+import { bindPromptTip, hidePromptTip } from "./preview_tip.js";
+
+function acConfirm(opts) {
+  return openConfirmPopup({ nested: true, ...opts });
+}
+
+function makeReplaceCard(preset) {
+  const card = document.createElement("div");
+  card.className = "pc-ac-replace-card";
+
+  const shelf = document.createElement("div");
+  shelf.className = "pc-ac-replace-shelf";
+  shelf.textContent = (preset.category || "").trim() || "Uncategorised";
+
+  const head = document.createElement("div");
+  head.className = "pc-ac-replace-head";
+
+  const name = document.createElement("div");
+  name.className = "pc-ac-replace-name";
+  name.textContent = (preset.title || "").trim() || "Untitled";
+  name.title = name.textContent;
+
+  const peekBtn = document.createElement("button");
+  peekBtn.type = "button";
+  peekBtn.className = "pc-preset-peek";
+  peekBtn.title = "Preview prompts";
+  peekBtn.innerHTML = TEXT_ICON_SVG;
+  bindPromptTip(peekBtn, () => ({
+    positive: preset.positive,
+    negative: preset.negative,
+  }));
+
+  head.append(name, peekBtn);
+  card.append(shelf, head);
+  return card;
+}
+
+/** First confirm: count + scrollable prompt cards (shelf, title, info). */
+function openReplacePreviewPopup({
+  anchor,
+  oldText,
+  next,
+  sideLabel,
+  matches,
+  onContinue,
+}) {
+  const count = matches.length;
+  return openPopup({
+    nested: true,
+    anchor,
+    title: "Replace in presets?",
+    width: 360,
+    onClose: hidePromptTip,
+    render(body, { close }) {
+      const msg = document.createElement("div");
+      msg.className = "pc-popup-message";
+      msg.textContent =
+        `Found “${oldText}” in ${count} ${sideLabel} prompt${count === 1 ? "" : "s"}.\n` +
+        `Rename dictionary to “${next}” and rewrite those presets?`;
+
+      const list = document.createElement("div");
+      list.className = "pc-ac-replace-list";
+      for (const row of matches) {
+        list.appendChild(makeReplaceCard(row));
+      }
+
+      const actions = document.createElement("div");
+      actions.className = "pc-popup-actions";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "pc-popup-btn";
+      cancel.textContent = "Cancel";
+      cancel.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        close();
+      });
+      const cont = document.createElement("button");
+      cont.type = "button";
+      cont.className = "pc-popup-btn primary";
+      cont.textContent = "Continue";
+      cont.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        close();
+        onContinue?.();
+      });
+      actions.append(cancel, cont);
+      body.append(msg, list, actions);
+    },
+  });
+}
 
 function makeSideTabs(current, onChange) {
   const row = document.createElement("div");
@@ -230,6 +323,17 @@ export function mountAutocompletePanel(host, { reposition } = {}) {
             label.className = "pc-ac-mgr-text";
             label.textContent = row.text;
             label.title = `${row.text} · ×${row.use_count || 1}`;
+
+            const edit = document.createElement("button");
+            edit.type = "button";
+            edit.className = "pc-popup-btn";
+            edit.textContent = "Edit";
+            edit.title = "Rename segment";
+            edit.addEventListener("click", (e) => {
+              e.stopPropagation();
+              startRename(row.text, edit);
+            });
+
             const del = document.createElement("button");
             del.type = "button";
             del.className = "pc-popup-btn danger";
@@ -251,7 +355,7 @@ export function mountAutocompletePanel(host, { reposition } = {}) {
               status.textContent = "";
               load();
             });
-            line.append(label, del);
+            line.append(label, edit, del);
             return line;
           },
         }),
@@ -304,6 +408,96 @@ export function mountAutocompletePanel(host, { reposition } = {}) {
       openMaps[side].set(found.bucket || "_other", true);
       paintList();
     }
+  }
+
+  async function applyRename(oldText, next, replaceInPresets) {
+    const result = await autocompleteAction({
+      action: "rename",
+      side,
+      old_text: oldText,
+      new_text: next,
+      replace_in_presets: replaceInPresets,
+    });
+    if (!result.ok) {
+      status.textContent = result.error || "Rename failed";
+      return;
+    }
+    if (replaceInPresets) {
+      const n = result.presets_updated || 0;
+      status.textContent = `Renamed · ${n} preset${n === 1 ? "" : "s"} updated (${side === "neg" ? "negative" : "positive"})`;
+    } else {
+      status.textContent = "Renamed in dictionary";
+    }
+    const ch = String(result.new || next)[0];
+    if (ch) openMaps[side].set(ch.toLowerCase(), true);
+    await load();
+  }
+
+  function startRename(oldText, anchor) {
+    const sideLabel = side === "neg" ? "negative" : "positive";
+    openInputPopup({
+      nested: true,
+      anchor,
+      title: `Edit · ${sideLabel}`,
+      placeholder: "segment",
+      confirmLabel: "Save",
+      initialValue: oldText,
+      validate: (value) => {
+        if (!value.trim()) return "Segment is required";
+        if (value.trim().length < 2) return "Too short";
+        return "";
+      },
+      onSubmit: async (value) => {
+        const next = value.trim();
+        if (next.toLowerCase() === String(oldText).toLowerCase()) return;
+
+        const preview = await autocompleteAction({
+          action: "rename_preview",
+          side,
+          old_text: oldText,
+        });
+        if (!preview.ok) {
+          status.textContent = preview.error || "Preview failed";
+          return;
+        }
+
+        const matches = preview.matches || [];
+        const count = preview.count || matches.length;
+        if (count > 0) {
+          openReplacePreviewPopup({
+            anchor,
+            oldText,
+            next,
+            sideLabel,
+            matches,
+            onContinue: () => {
+              acConfirm({
+                anchor,
+                title: "Confirm replace",
+                message:
+                  `Replace “${oldText}” → “${next}” in ${count} preset${count === 1 ? "" : "s"} ` +
+                  `(${sideLabel} only)?`,
+                confirmLabel: "Replace",
+                danger: true,
+                onConfirm: () => applyRename(oldText, next, true),
+              });
+            },
+          });
+          return;
+        }
+
+        acConfirm({
+          anchor,
+          title: "Rename in dictionary?",
+          message:
+            `“${oldText}” is not used in saved ${sideLabel} prompts.\n` +
+            `Rename only in the ${sideLabel} dictionary to “${next}”?`,
+          confirmLabel: "Rename",
+          danger: false,
+          onConfirm: () => applyRename(oldText, next, false),
+        });
+      },
+    });
   }
 
   addBtn.addEventListener("click", (e) => {

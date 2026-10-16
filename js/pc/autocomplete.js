@@ -9,6 +9,9 @@ const MIN_SAVE_LEN = 2;
 
 let activePopup = null;
 let debounceTimer = null;
+/** After Esc (or while weight-editing), stay quiet until a new segment starts. */
+const suppressed = new WeakMap();
+const modHeld = new WeakMap();
 
 function normalizeSide(side) {
     if (
@@ -43,15 +46,37 @@ export function currentSegment(value, caret) {
     };
 }
 
+function clearSavedFlash(state) {
+    if (!state) return;
+    if (state.savedTimer) {
+        clearTimeout(state.savedTimer);
+        state.savedTimer = null;
+    }
+    state.savedFlash = false;
+}
+
 function dismissPopup() {
     if (debounceTimer) {
         clearTimeout(debounceTimer);
         debounceTimer = null;
     }
     if (!activePopup) return;
+    clearSavedFlash(activePopup);
     activePopup.abort?.abort();
     activePopup.root?.remove();
     activePopup = null;
+}
+
+function flashSaved(state) {
+    if (!state?.root) return;
+    state.savedFlash = true;
+    renderItems(state);
+    placePopup(state);
+    if (state.savedTimer) clearTimeout(state.savedTimer);
+    state.savedTimer = setTimeout(() => {
+        if (activePopup === state) dismissPopup();
+    }, 1500);
+    state.textarea?.focus();
 }
 
 function ensurePopupRoot() {
@@ -198,6 +223,26 @@ function applyCompletion(textarea, segment, text) {
     );
 }
 
+/** Mirror server normalize enough to avoid saving `(tag:1.2)` litter. */
+function normalizePrefix(raw) {
+    let text = String(raw || "")
+        .trim()
+        .replace(/\s+/g, " ");
+    while (true) {
+        const match = text.match(/^\((.+)\)$/);
+        if (!match) break;
+        text = match[1].trim().replace(/:[\d.]+$/u, "").trim();
+    }
+    text = text.replace(/:[\d.]+$/u, "").trim();
+    return text.toLowerCase();
+}
+
+function looksLikeWeightEdit(raw) {
+    const text = String(raw || "").trim();
+    // Mid-weight: `(foo:1` / `foo:1.25` / selection tweaks with colon+number.
+    return /:\s*[\d.]*$/u.test(text) || /^\(.*:\s*[\d.]*\)?$/u.test(text);
+}
+
 function makeCreateItem(prefix) {
     return { kind: "create", text: prefix };
 }
@@ -216,22 +261,29 @@ async function saveSegmentToLib(side, text) {
 }
 
 function renderItems(state) {
-    const { root, items, selected, onPick } = state;
+    const { root, items, selected, onPick, savedFlash } = state;
     root.replaceChildren();
     items.forEach((item, index) => {
         const btn = document.createElement("button");
         btn.type = "button";
         const selectedCls = index === selected ? " selected" : "";
         if (isCreateItem(item)) {
-            btn.className = "pc-ac-item pc-ac-item-create" + selectedCls;
+            btn.className =
+                "pc-ac-item pc-ac-item-create" +
+                selectedCls +
+                (savedFlash ? " is-saved" : "");
             const main = document.createElement("div");
             main.className = "pc-ac-item-main";
             main.textContent = item.text;
             const hint = document.createElement("div");
-            hint.className = "pc-ac-item-hint";
-            hint.textContent = "Tab to save";
+            hint.className =
+                "pc-ac-item-hint" + (savedFlash ? " is-saved" : "");
+            hint.textContent = savedFlash ? "Saved" : "Tab to save";
             btn.append(main, hint);
-            btn.title = `Save “${item.text}” to dictionary`;
+            btn.title = savedFlash
+                ? "Saved to dictionary"
+                : `Save “${item.text}” to dictionary`;
+            if (savedFlash) btn.disabled = true;
         } else {
             btn.className = "pc-ac-item" + selectedCls;
             btn.textContent = item.text;
@@ -240,6 +292,7 @@ function renderItems(state) {
         btn.addEventListener("mousedown", (e) => {
             e.preventDefault();
             e.stopPropagation();
+            if (savedFlash) return;
             onPick(item);
         });
         root.appendChild(btn);
@@ -284,11 +337,11 @@ async function showSuggestions(textarea, side, segment) {
         selected: reuse ? activePopup.selected : 0,
         abort,
         async onPick(item) {
+            if (state.savedFlash) return;
             if (isCreateItem(item)) {
                 const ok = await saveSegmentToLib(side, item.text);
-                if (!ok) return;
-                dismissPopup();
-                textarea.focus();
+                if (!ok || activePopup !== state) return;
+                flashSaved(state);
                 return;
             }
             applyCompletion(textarea, segment, item.text);
@@ -307,29 +360,25 @@ async function showSuggestions(textarea, side, segment) {
         );
         if (activePopup !== state || abort.signal.aborted)
             return;
-        const needle = prefix.toLowerCase();
+        const needle = normalizePrefix(prefix);
         const raw = result.items || [];
         const hasExact = raw.some(
-            (row) => String(row.text || "").toLowerCase() === needle,
+            (row) => normalizePrefix(row.text) === needle,
         );
         const matches = raw
-            .filter(
-                (row) =>
-                    String(row.text || "").toLowerCase() !==
-                    needle,
-            )
+            .filter((row) => normalizePrefix(row.text) !== needle)
             .slice(0, MAX_ITEMS)
             .map((row) => ({ kind: "match", text: row.text }));
 
         if (matches.length) {
             state.items = matches;
-        } else if (hasExact) {
-            // Already in the dictionary — nothing to suggest or save.
+        } else if (hasExact || looksLikeWeightEdit(prefix)) {
+            // Already known, or user is tweaking (tag:1.2) weights — stay quiet.
             dismissPopup();
             return;
-        } else if (prefix.trim().length >= MIN_SAVE_LEN) {
-            // Nothing in the letter bucket — offer to save the typed segment.
-            state.items = [makeCreateItem(prefix.trim())];
+        } else if (needle.length >= MIN_SAVE_LEN) {
+            // Offer clean phrase, not the weighted wrapper.
+            state.items = [makeCreateItem(needle)];
         } else {
             dismissPopup();
             return;
@@ -357,15 +406,48 @@ function scheduleSuggest(textarea, side) {
         dismissPopup();
         return;
     }
+    // Any typing / click ends the Saved flash immediately.
+    if (activePopup?.savedFlash && activePopup.textarea === textarea) {
+        dismissPopup();
+    }
+    // Weight tweak / dismissed: wait for a new segment delimiter.
+    if (suppressed.get(textarea)) {
+        dismissPopup();
+        return;
+    }
+    // Selecting text (Ctrl+arrows weight UX) — don't interrupt.
+    if (textarea.selectionStart !== textarea.selectionEnd) {
+        dismissPopup();
+        return;
+    }
+    if (modHeld.get(textarea)) {
+        dismissPopup();
+        return;
+    }
     const segment = currentSegment(
         textarea.value,
         textarea.selectionStart,
     );
+    if (looksLikeWeightEdit(segment.prefix)) {
+        dismissPopup();
+        return;
+    }
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
         debounceTimer = null;
+        if (suppressed.get(textarea) || modHeld.get(textarea)) return;
+        if (textarea.selectionStart !== textarea.selectionEnd) return;
         showSuggestions(textarea, side, segment);
     }, DEBOUNCE_MS);
+}
+
+function armSuppress(textarea) {
+    suppressed.set(textarea, true);
+    dismissPopup();
+}
+
+function clearSuppress(textarea) {
+    suppressed.delete(textarea);
 }
 
 function stopKey(e) {
@@ -380,9 +462,19 @@ export function bindPromptAutocomplete(textarea, side) {
     if (!textarea || textarea.dataset.pcAcBound) return;
     textarea.dataset.pcAcBound = "1";
 
-    textarea.addEventListener("input", () =>
-        scheduleSuggest(textarea, side),
-    );
+    textarea.addEventListener("input", (e) => {
+        const data = e.data;
+        // New segment boundary lifts Esc-suppress.
+        if (
+            data === "," ||
+            data === " " ||
+            data === "\n" ||
+            data === "\r"
+        ) {
+            clearSuppress(textarea);
+        }
+        scheduleSuggest(textarea, side);
+    });
     textarea.addEventListener("click", () => {
         if (getUiPref("promptAutocomplete"))
             scheduleSuggest(textarea, side);
@@ -394,17 +486,59 @@ export function bindPromptAutocomplete(textarea, side) {
         }, 120);
     });
 
+    textarea.addEventListener("keyup", (e) => {
+        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+            modHeld.delete(textarea);
+        }
+    });
+
     // Capture so Comfy/LiteGraph hotkeys don't steal Tab / arrows.
     textarea.addEventListener(
         "keydown",
         (e) => {
             if (!getUiPref("promptAutocomplete")) return;
+
+            if (e.ctrlKey || e.metaKey || e.altKey) {
+                modHeld.set(textarea, true);
+            }
+
+            // Saved flash: any key ends it (Tab is swallowed).
+            if (
+                activePopup?.savedFlash &&
+                activePopup.textarea === textarea
+            ) {
+                if (e.key === "Tab") {
+                    stopKey(e);
+                    return;
+                }
+                dismissPopup();
+            }
+
+            // Esc: close and ignore until space / enter / comma starts a new bit.
+            if (e.key === "Escape") {
+                stopKey(e);
+                armSuppress(textarea);
+                return;
+            }
+            if (
+                e.key === " " ||
+                e.key === "Enter" ||
+                e.key === ","
+            ) {
+                clearSuppress(textarea);
+            }
+
+            // Ctrl/Alt weight tweaks — never hijack arrows for the popup.
+            if (e.ctrlKey || e.metaKey || e.altKey) {
+                dismissPopup();
+                return;
+            }
+
             const popup = activePopup;
             if (
                 !popup?.items?.length ||
                 popup.textarea !== textarea
             ) {
-                if (e.key === "Escape") dismissPopup();
                 return;
             }
 
@@ -428,13 +562,9 @@ export function bindPromptAutocomplete(textarea, side) {
             }
             if (e.key === "Tab") {
                 stopKey(e);
+                if (popup.savedFlash) return;
                 const item = popup.items[popup.selected];
                 if (item) popup.onPick(item);
-                return;
-            }
-            if (e.key === "Escape") {
-                stopKey(e);
-                dismissPopup();
             }
         },
         true,

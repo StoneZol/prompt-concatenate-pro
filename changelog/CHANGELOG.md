@@ -13,12 +13,14 @@ Format: newest first.
 Suggest tags/phrases from **your** library while editing positive / negative — not from an external tag DB.
 
 - **Settings**: toggle **Prompt autocomplete** (off by default) with an `experimental` badge
-- When enabled: Library manager gets a **Suggest** tab — segments grouped by letter (collapsible); search expands matching groups; add / delete / **Rebuild from library**
+- When enabled: Library manager gets a **Suggest** tab — segments grouped by letter (collapsible); search expands matching groups; add / edit / delete / **Rebuild from library**
+- **Edit** a segment: rename in that side’s dictionary (pos or neg only); if presets use it, confirm twice then rewrite those prompts on that side only
 - Dictionaries live under `db/autocomplete/{pos,neg}/` — one SQLite file per first letter (dynamic)
 - Segments split on `,` and newlines; `(tag:1.2)` weights stripped on ingest
 - VS Code-style popup at the caret: arrows to move, **Tab** to accept, **Esc** to close (Enter still inserts a newline)
 - Scrollable suggestion list (max height); lookup stays inside the letter bucket
-- If nothing matches: popup offers the typed segment with **Tab to save** into the dictionary
+- If nothing matches: popup offers the typed segment with **Tab to save**; after save the hint turns green **Saved** (~1.5s or until next input)
+- **Edit** replace preview: count + scrollable cards (collection, name, info peek)
 - Saving or updating a pair also feeds the dictionaries
 
 ---

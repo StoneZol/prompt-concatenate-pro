@@ -803,6 +803,148 @@ def list_presets_for_autocomplete() -> List[Dict]:
             conn.close()
 
 
+def _prompt_field_for_side(side: str) -> str:
+    key = (side or "").strip().lower()
+    if key in ("negative", "neg", "str_neg"):
+        return "negative"
+    return "positive"
+
+
+def find_presets_with_segment(side: str, segment: str) -> Dict:
+    """Presets that contain the segment on this side only (pos OR neg)."""
+    from . import autocomplete as ac
+
+    field = _prompt_field_for_side(side)
+    needle = ac.normalize_segment(segment)
+    if not needle:
+        return {"ok": False, "error": "Empty segment"}
+
+    with _lock:
+        conn = _connect()
+        try:
+            rows = conn.execute(
+                """
+                SELECT
+                    presets.id,
+                    presets.title,
+                    presets.positive,
+                    presets.negative,
+                    categories.name AS category
+                FROM presets
+                JOIN categories ON categories.id = presets.category_id
+                ORDER BY categories.name COLLATE NOCASE, presets.title COLLATE NOCASE
+                """
+            ).fetchall()
+        finally:
+            conn.close()
+
+    matches = []
+    for row in rows:
+        body = row[field] or ""
+        if ac.prompt_contains_segment(body, needle):
+            matches.append(
+                {
+                    "id": int(row["id"]),
+                    "title": row["title"] or "",
+                    "category": row["category"] or "",
+                    "positive": row["positive"] or "",
+                    "negative": row["negative"] or "",
+                }
+            )
+    return {
+        "ok": True,
+        "side": "neg" if field == "negative" else "pos",
+        "segment": needle,
+        "count": len(matches),
+        "matches": matches,
+    }
+
+
+def replace_segment_in_presets(side: str, old_text: str, new_text: str) -> Dict:
+    """Rewrite segment inside preset prompts on one side only."""
+    from . import autocomplete as ac
+
+    field = _prompt_field_for_side(side)
+    old_n = ac.normalize_segment(old_text)
+    new_n = ac.normalize_segment(new_text)
+    if not old_n or not new_n:
+        return {"ok": False, "error": "Empty segment"}
+    if old_n == new_n:
+        return {"ok": True, "updated": 0, "replacements": 0}
+
+    with _lock:
+        conn = _connect()
+        try:
+            rows = conn.execute(
+                f"SELECT id, {field} AS body FROM presets"
+            ).fetchall()
+            updated = 0
+            replacements = 0
+            conn.execute("BEGIN")
+            for row in rows:
+                next_body, hits = ac.replace_segment_in_prompt(
+                    row["body"] or "", old_n, new_n
+                )
+                if hits <= 0:
+                    continue
+                conn.execute(
+                    f"""
+                    UPDATE presets
+                    SET {field} = ?, updated_at = datetime('now')
+                    WHERE id = ?
+                    """,
+                    (next_body, int(row["id"])),
+                )
+                updated += 1
+                replacements += hits
+            conn.commit()
+            return {
+                "ok": True,
+                "side": "neg" if field == "negative" else "pos",
+                "old": old_n,
+                "new": new_n,
+                "updated": updated,
+                "replacements": replacements,
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def rename_autocomplete_segment(
+    side: str,
+    old_text: str,
+    new_text: str,
+    replace_in_presets: bool = False,
+) -> Dict:
+    """Rename dictionary segment; optionally rewrite matching presets on that side."""
+    from . import autocomplete as ac
+
+    renamed = ac.rename_segment(side, old_text, new_text)
+    if not renamed.get("ok"):
+        return renamed
+
+    result = {
+        "ok": True,
+        "side": renamed.get("side"),
+        "old": renamed.get("old"),
+        "new": renamed.get("new"),
+        "changed": renamed.get("changed"),
+        "merged": renamed.get("merged"),
+        "presets_updated": 0,
+        "replacements": 0,
+    }
+    if replace_in_presets and renamed.get("changed"):
+        lib = replace_segment_in_presets(side, renamed["old"], renamed["new"])
+        if not lib.get("ok"):
+            return lib
+        result["presets_updated"] = int(lib.get("updated") or 0)
+        result["replacements"] = int(lib.get("replacements") or 0)
+    return result
+
+
 def rebuild_autocomplete_from_library() -> Dict:
     """Scan all saved pairs into pos/neg letter-bucket dictionaries."""
     rows = list_presets_for_autocomplete()
