@@ -435,7 +435,8 @@ const CSS = `
 }
 
 .pc-pair-save-btn,
-.pc-pair-load-btn {
+.pc-pair-load-btn,
+.pc-pair-clear-btn {
   flex: 0 0 auto;
   height: 28px;
   display: inline-flex;
@@ -454,14 +455,16 @@ const CSS = `
 }
 
 .pc-pair-save-btn:hover,
-.pc-pair-load-btn:hover {
+.pc-pair-load-btn:hover,
+.pc-pair-clear-btn:hover {
   color: var(--input-text, #ddd);
   background: var(--comfy-input-bg, #2a2a2e);
   border-color: var(--border-color, #444);
 }
 
 .pc-pair-save-btn svg,
-.pc-pair-load-btn svg {
+.pc-pair-load-btn svg,
+.pc-pair-clear-btn svg {
   width: 14px;
   height: 14px;
   display: block;

@@ -30,7 +30,7 @@ function makeTemplateCard(template, { onLoad }) {
   const loadBtn = document.createElement("button");
   loadBtn.type = "button";
   loadBtn.className = "pc-preset-load";
-  loadBtn.title = "Merge onto current groups by slot name";
+  loadBtn.title = "Load onto current groups by slot name";
   loadBtn.innerHTML = LOAD_ICON_SVG;
   loadBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -247,8 +247,8 @@ export function confirmReloadTemplate({ anchor, onConfirm }) {
   openConfirmPopup({
     anchor,
     title: "Reload template",
-    message: "Merge the saved template onto this node again?",
-    confirmLabel: "Merge",
+    message: "Load the saved template onto this node again?",
+    confirmLabel: "Load again",
     cancelLabel: "Cancel",
     danger: false,
     onConfirm,

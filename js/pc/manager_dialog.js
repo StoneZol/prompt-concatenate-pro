@@ -805,7 +805,33 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             });
           });
 
-          toolbar.append(savePairBtn, loadPairBtn);
+          const clearPairBtn = document.createElement("button");
+          clearPairBtn.type = "button";
+          clearPairBtn.className = "pc-popup-btn";
+          clearPairBtn.innerHTML = `${CLOSE_ICON_SVG}<span>Clear</span>`;
+          clearPairBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            hidePromptTip();
+            const hasText = slotHasPrompt(slot) || Boolean((slot.loadedTitle || "").trim());
+            if (!hasText) return;
+            mgrConfirm({
+              anchor: clearPairBtn,
+              title: "Clear pair",
+              message: "Clear positive / negative for this pair?",
+              confirmLabel: "Clear",
+              danger: true,
+              onConfirm: () => {
+                slot.positive = "";
+                slot.negative = "";
+                slot.loadedTitle = "";
+                slot.loadedCategory = "";
+                slot.loadedDescription = "";
+                paintSlots();
+              },
+            });
+          });
+
+          toolbar.append(savePairBtn, loadPairBtn, clearPairBtn);
 
           const loadedRow = document.createElement("div");
           loadedRow.className = "pc-loaded-row";

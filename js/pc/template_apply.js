@@ -57,14 +57,31 @@ function applySlotContent(target, slot) {
   return target;
 }
 
+function makeGroupFromSlot(slot, { newGroupId, stampLabels }) {
+  return {
+    id: newGroupId(),
+    title: slot.title,
+    positive: slot.positive,
+    negative: slot.negative,
+    enabled: true,
+    ...loadedMeta(slot),
+    ...stampLabels(slot.title),
+  };
+}
+
+function indexOfTitle(groups, titleKey) {
+  return groups.findIndex((group) => (group.title || "").trim().toLowerCase() === titleKey);
+}
+
 /**
  * Merge template onto node groups.
- * - Keep node order
+ * - Keep node order for existing slots
  * - Match by title (case-insensitive)
  * - Non-empty template fields overwrite; empty keep node
  * - Loaded-pair chip restored when content is applied
  * - Disabled / missing-from-template slots skipped
- * - New slots append at end (template order)
+ * - New slots insert before the next template slot already on the node
+ *   (falls back to append if nothing later matches)
  */
 export function mergeTemplateGroups(groups, templateSlots, { newGroupId, stampLabels }) {
   const active = [];
@@ -79,31 +96,37 @@ export function mergeTemplateGroups(groups, templateSlots, { newGroupId, stampLa
   }
 
   const result = [];
-  const used = new Set();
+  const present = new Set();
 
   for (const group of groups || []) {
     const key = (group.title || "").trim().toLowerCase();
     const slot = key ? byKey.get(key) : null;
     const next = { ...group };
     if (slot) {
-      used.add(key);
+      present.add(key);
       applySlotContent(next, slot);
     }
+    if (key) present.add(key);
     result.push(next);
   }
 
-  for (const slot of active) {
+  for (let i = 0; i < active.length; i++) {
+    const slot = active[i];
     const key = slot.title.toLowerCase();
-    if (used.has(key)) continue;
-    result.push({
-      id: newGroupId(),
-      title: slot.title,
-      positive: slot.positive,
-      negative: slot.negative,
-      enabled: true,
-      ...loadedMeta(slot),
-      ...stampLabels(slot.title),
-    });
+    if (present.has(key)) continue;
+
+    let insertAt = result.length;
+    for (let j = i + 1; j < active.length; j++) {
+      const anchorKey = active[j].title.toLowerCase();
+      const anchorIndex = indexOfTitle(result, anchorKey);
+      if (anchorIndex >= 0) {
+        insertAt = anchorIndex;
+        break;
+      }
+    }
+
+    result.splice(insertAt, 0, makeGroupFromSlot(slot, { newGroupId, stampLabels }));
+    present.add(key);
   }
 
   return result;

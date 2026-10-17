@@ -270,7 +270,7 @@ app.registerExtension({
       const loadedTemplateResetBtn = document.createElement("button");
       loadedTemplateResetBtn.type = "button";
       loadedTemplateResetBtn.className = "pc-loaded-reset";
-      loadedTemplateResetBtn.title = "Reload last saved template (merge)";
+      loadedTemplateResetBtn.title = "Reload last saved template";
       loadedTemplateResetBtn.innerHTML = RESET_ICON_SVG;
 
       const loadedTemplateClearBtn = document.createElement("button");

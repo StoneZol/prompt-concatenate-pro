@@ -223,10 +223,16 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     onLoadPair?.(loadPairBtn);
   });
 
+  const clearPairBtn = document.createElement("button");
+  clearPairBtn.type = "button";
+  clearPairBtn.className = "pc-pair-clear-btn";
+  clearPairBtn.title = "Clear pair prompts";
+  clearPairBtn.innerHTML = `${CLOSE_ICON_SVG}<span>Clear</span>`;
+
   const spacer = document.createElement("div");
   spacer.className = "pc-group-toolbar-spacer";
 
-  toolbar.append(savePairBtn, loadPairBtn, spacer, removeBtn);
+  toolbar.append(savePairBtn, loadPairBtn, clearPairBtn, spacer, removeBtn);
 
   const loadedRow = document.createElement("div");
   loadedRow.className = "pc-loaded-row";
@@ -290,6 +296,37 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
 
   const pos = makeField(group, "positive", "positive", { onChange, onPrompt });
   const neg = makeField(group, "negative", "negative", { onChange, onPrompt });
+
+  clearPairBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    hidePromptTip();
+    const hasText =
+      Boolean((group.positive || "").trim()) ||
+      Boolean((group.negative || "").trim()) ||
+      Boolean((group.loadedTitle || "").trim());
+    if (!hasText) return;
+    openConfirmPopup({
+      anchor: clearPairBtn,
+      title: "Clear pair",
+      message: "Clear positive / negative for this pair?",
+      confirmLabel: "Clear",
+      cancelLabel: "Cancel",
+      danger: true,
+      onConfirm: () => {
+        group.positive = "";
+        group.negative = "";
+        group.loadedTitle = "";
+        group.loadedCategory = "";
+        group.loadedDescription = "";
+        pos.area.value = "";
+        neg.area.value = "";
+        onPrompt?.("positive", "");
+        onPrompt?.("negative", "");
+        paintLoaded();
+        onChange?.();
+      },
+    });
+  });
 
   body.append(toolbar, loadedRow, pos.wrap, neg.wrap);
   card.append(head, body);
