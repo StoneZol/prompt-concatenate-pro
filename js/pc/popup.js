@@ -26,13 +26,14 @@ const CSS = `
 }
 
 .pc-popup-centered {
-  max-width: min(480px, calc(100vw - 16px));
-  max-height: 75vh;
+  max-width: min(520px, calc(100vw - 16px));
+  height: fit-content;
+  max-height: 88vh;
   overflow: hidden;
 }
 
 .pc-popup-centered .pc-popup-body {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   overflow: hidden;
   display: flex;
@@ -58,14 +59,34 @@ const CSS = `
   padding-right: 2px;
 }
 
+/* Centered editors: size to content; don't leave a hole above the footer Save. */
+.pc-popup-centered .pc-popup-scroll {
+  flex: 0 1 auto;
+  max-height: min(72vh, 640px);
+}
+
+.pc-popup-title.pc-popup-drag {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.pc-popup-title.pc-popup-drag:active {
+  cursor: grabbing;
+}
+
 .pc-popup-footer {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   padding-top: 8px;
   margin-top: 8px;
   border-top: 1px solid var(--border-color, #444);
+}
+
+.pc-popup-footer .pc-popup-error:empty {
+  display: none;
 }
 
 .pc-popup-footer .pc-popup-actions {
@@ -160,6 +181,7 @@ const CSS = `
   padding: 2px 4px 0;
   line-height: 1.4;
   color: var(--input-text, #ddd);
+  white-space: pre-wrap;
 }
 
 .pc-save-row {
@@ -240,6 +262,259 @@ const CSS = `
   color: var(--descrip-text, #888);
   font-size: 11px;
   line-height: 1.45;
+}
+
+.pc-busy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 2px 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--comfy-input-bg, #2a2a2e);
+  color: var(--input-text, #ddd);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.pc-busy[hidden] {
+  display: none !important;
+}
+
+.pc-busy-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pc-busy-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pc-busy-spinner {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--descrip-text, #666);
+  border-top-color: #c4b5fd;
+  border-radius: 50%;
+  animation: pc-busy-spin 0.7s linear infinite;
+}
+
+.pc-busy-track {
+  height: 4px;
+  border-radius: 999px;
+  background: #1a1a1e;
+  overflow: hidden;
+}
+
+.pc-busy-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: #8b7ec8;
+  transition: width 0.12s linear;
+}
+
+.pc-busy-detail {
+  font-size: 11px;
+  color: var(--descrip-text, #888);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-busy.is-done {
+  border-color: #3d5a40;
+  background: #243028;
+  color: #b8d4be;
+}
+
+.pc-busy.is-done .pc-busy-fill {
+  background: #6a9b72;
+}
+
+.pc-busy.is-error {
+  border-color: #6a3030;
+  background: #2e2222;
+  color: #e0a0a0;
+}
+
+@keyframes pc-busy-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pc-ac-mgr-list.is-busy {
+  position: relative;
+  min-height: 140px;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.pc-ac-mgr-busy-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 4px 0 8px;
+}
+
+.pc-settings-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid #8a6a2a;
+  background: #3a3218;
+  color: #e6c87a;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  text-transform: lowercase;
+}
+
+.pc-mgr-list-suggest {
+  min-height: 0;
+}
+
+.pc-ac-mgr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  width: 100%;
+}
+
+/* Side switcher — not a second row of main mgr tabs */
+.pc-ac-mgr-tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 0;
+  margin: 0 0 2px;
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--comfy-input-bg, #222);
+}
+
+.pc-ac-mgr-tab {
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--descrip-text, #aaa);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.pc-ac-mgr-tab.active {
+  background: #3a3450;
+  color: var(--input-text, #ddd);
+}
+
+.pc-ac-mgr-add {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.pc-ac-mgr-add .pc-popup-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pc-ac-mgr-list {
+  max-height: 280px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0;
+  min-height: 120px;
+}
+
+.pc-ac-mgr-bucket-body {
+  gap: 4px;
+  padding-left: 4px;
+}
+
+.pc-ac-mgr-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.pc-ac-mgr-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--input-text, #ddd);
+}
+
+.pc-ac-mgr-row .pc-popup-btn {
+  flex: 0 0 auto;
+  min-width: 28px;
+  padding: 0 8px;
+  height: 26px;
+}
+
+.pc-ac-replace-list {
+  max-height: 220px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 4px;
+  padding: 2px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.pc-ac-replace-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--comfy-input-bg, #2a2a2e);
+}
+
+.pc-ac-replace-shelf {
+  font-size: 10px;
+  color: var(--descrip-text, #888);
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-ac-replace-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pc-ac-replace-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--input-text, #ddd);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pc-info-tip {
@@ -338,6 +613,33 @@ const CSS = `
   gap: 4px;
   max-height: 240px;
   overflow-y: auto;
+}
+
+.pc-add-group-error:empty {
+  display: none;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.pc-add-group-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: -2px;
+}
+
+.pc-add-group-hint {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--descrip-text, #999);
+  line-height: 1;
+  user-select: none;
+}
+
+.pc-add-group-list {
+  max-height: 180px;
 }
 
 .pc-pick-item {
@@ -443,11 +745,13 @@ const CSS = `
 
 .pc-mgr-tabs {
   display: flex;
+  flex-wrap: nowrap;
   gap: 4px;
 }
 
 .pc-mgr-tab {
   flex: 1 1 0;
+  min-width: 0;
   height: 28px;
   border: 1px solid var(--border-color, #444);
   border-radius: 6px;
@@ -456,6 +760,10 @@ const CSS = `
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 6px;
 }
 
 .pc-mgr-tab.active {
@@ -703,6 +1011,15 @@ function injectPopupStyles() {
 
 const popupStack = [];
 
+function clampPopupPosition(el, x, y) {
+    const margin = 8;
+    const box = el.getBoundingClientRect();
+    const maxX = window.innerWidth - box.width - margin;
+    const maxY = window.innerHeight - box.height - margin;
+    el.style.left = `${Math.max(margin, Math.min(x, maxX))}px`;
+    el.style.top = `${Math.max(margin, Math.min(y, maxY))}px`;
+}
+
 function placePopup(el, { anchor, position, centered }) {
     const margin = 8;
     const gap = 4;
@@ -724,7 +1041,7 @@ function placePopup(el, { anchor, position, centered }) {
     const box = el.getBoundingClientRect();
     if (centered) {
         x = (window.innerWidth - box.width) / 2;
-        const anchorY = window.innerHeight * 0.4;
+        const anchorY = window.innerHeight * 0.42;
         y = anchorY - box.height / 2;
     } else if (anchorRect) {
         x =
@@ -736,11 +1053,46 @@ function placePopup(el, { anchor, position, centered }) {
             below + box.height <= window.innerHeight - margin;
         y = !fitsBelow && above >= margin ? above : below;
     }
-    const maxX = window.innerWidth - box.width - margin;
-    const maxY = window.innerHeight - box.height - margin;
-    el.style.left = `${Math.max(margin, Math.min(x, maxX))}px`;
-    el.style.top = `${Math.max(margin, Math.min(y, maxY))}px`;
+    clampPopupPosition(el, x, y);
     el.style.visibility = "visible";
+}
+
+function bindPopupDrag(root, handle, onMoved) {
+    if (!handle) return;
+    handle.classList.add("pc-popup-drag");
+    handle.title = handle.title || "Drag to move";
+
+    handle.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        handle.setPointerCapture(e.pointerId);
+        const rect = root.getBoundingClientRect();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const origX = rect.left;
+        const origY = rect.top;
+
+        function onMove(ev) {
+            clampPopupPosition(
+                root,
+                origX + (ev.clientX - startX),
+                origY + (ev.clientY - startY),
+            );
+            onMoved?.();
+        }
+
+        function onUp(ev) {
+            handle.releasePointerCapture(ev.pointerId);
+            handle.removeEventListener("pointermove", onMove);
+            handle.removeEventListener("pointerup", onUp);
+            handle.removeEventListener("pointercancel", onUp);
+        }
+
+        handle.addEventListener("pointermove", onMove);
+        handle.addEventListener("pointerup", onUp);
+        handle.addEventListener("pointercancel", onUp);
+    });
 }
 
 /**
@@ -755,6 +1107,7 @@ function placePopup(el, { anchor, position, centered }) {
  * @param {number} [opts.width]
  * @param {boolean} [opts.nested]
  * @param {boolean} [opts.centered]
+ * @param {boolean} [opts.draggable] — drag window by title (opt-in)
  * @param {(body: HTMLElement, api: { close: () => void, root: HTMLElement, setTitle: (t: string) => void }) => void} opts.render
  * @param {() => void} [opts.onClose]
  */
@@ -791,6 +1144,9 @@ export function openPopup(opts) {
     root.append(titleEl, body);
 
     let closed = false;
+    let userMoved = false;
+    const draggable = Boolean(opts.draggable);
+
     function close() {
         if (closed) return;
         closed = true;
@@ -853,6 +1209,11 @@ export function openPopup(opts) {
         root,
         reposition() {
             if (closed || !root.isConnected) return;
+            if (userMoved) {
+                const rect = root.getBoundingClientRect();
+                clampPopupPosition(root, rect.left, rect.top);
+                return;
+            }
             placePopup(root, opts);
         },
         setTitle(text) {
@@ -860,6 +1221,12 @@ export function openPopup(opts) {
             titleEl.textContent = text || "";
         },
     };
+
+    if (draggable && opts.title) {
+        bindPopupDrag(root, titleEl, () => {
+            userMoved = true;
+        });
+    }
 
     popupStack.push(api);
     opts.render?.(body, api);

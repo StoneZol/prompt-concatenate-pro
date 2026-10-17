@@ -7,7 +7,9 @@ const CLIP_TEXT_NAMES = new Set(["text", "text_g", "text_l"]);
 function parseGroups(raw) {
   try {
     const data = typeof raw === "string" ? JSON.parse(raw || "[]") : raw;
-    return Array.isArray(data) ? data : [];
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === "object" && Array.isArray(data.groups)) return data.groups;
+    return [];
   } catch {
     return [];
   }

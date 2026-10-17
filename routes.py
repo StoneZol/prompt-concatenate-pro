@@ -1,5 +1,10 @@
 """HTTP routes for the Prompt Concatenate Pro preset library."""
 
+import asyncio
+import json
+import queue
+import threading
+
 from aiohttp import web
 from server import PromptServer
 
@@ -10,7 +15,10 @@ LIST_ROUTE = "/prompt_craft/layouts"
 FOLDERS_ROUTE = "/prompt_craft/layout_folders"
 PRESETS_ROUTE = "/prompt_craft/presets"
 CATEGORIES_ROUTE = "/prompt_craft/categories"
+TEMPLATES_ROUTE = "/prompt_craft/templates"
+TEMPLATE_FOLDERS_ROUTE = "/prompt_craft/template_folders"
 PREFS_ROUTE = "/prompt_craft/prefs"
+AUTOCOMPLETE_ROUTE = "/prompt_craft/autocomplete"
 
 db.init_db()
 
@@ -215,6 +223,102 @@ async def delete_category(request):
     return web.json_response(result, status=status)
 
 
+async def save_template(request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    try:
+        result = db.save_template(
+            payload.get("name") or "",
+            payload.get("description") or "",
+            payload.get("slots") or [],
+            overwrite=bool(payload.get("overwrite")),
+            folder=payload.get("folder") or "",
+        )
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    status = 200 if result.get("ok") else 409 if result.get("conflicts") else 400
+    return web.json_response(result, status=status)
+
+
+async def list_templates(request):
+    try:
+        result = db.list_templates()
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    return web.json_response(result)
+
+
+async def update_template(request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    if not isinstance(payload, dict) or not payload.get("id"):
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    try:
+        result = db.update_template(
+            int(payload["id"]),
+            name=payload["name"] if "name" in payload else None,
+            description=payload["description"] if "description" in payload else None,
+            folder=payload["folder"] if "folder" in payload else None,
+            slots=payload["slots"] if "slots" in payload else None,
+            overwrite=bool(payload.get("overwrite")),
+        )
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    status = 200 if result.get("ok") else 409 if result.get("conflicts") else 400
+    return web.json_response(result, status=status)
+
+
+async def delete_template(request):
+    template_id = request.rel_url.query.get("id")
+    if not template_id:
+        return web.json_response({"ok": False, "error": "Missing id"}, status=400)
+    try:
+        result = db.delete_template(int(template_id))
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    status = 200 if result.get("ok") else 404 if result.get("error") == "Not found" else 400
+    return web.json_response(result, status=status)
+
+
+async def list_template_folders(request):
+    try:
+        result = db.list_template_folders()
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    return web.json_response(result)
+
+
+async def update_template_folder(request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    try:
+        result = db.rename_template_folder(payload.get("name") or "", payload.get("new_name") or "")
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    status = 200 if result.get("ok") else 409 if result.get("conflicts") else 400
+    return web.json_response(result, status=status)
+
+
+async def delete_template_folder_route(request):
+    name = request.rel_url.query.get("name") or ""
+    try:
+        result = db.delete_template_folder(name)
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    status = 200 if result.get("ok") else 400
+    return web.json_response(result, status=status)
+
+
 async def get_prefs(request):
     try:
         result = db.get_ui_prefs()
@@ -239,6 +343,141 @@ async def update_prefs(request):
     return web.json_response(result)
 
 
+async def autocomplete_lookup(request):
+    side = request.rel_url.query.get("side") or "pos"
+    prefix = request.rel_url.query.get("prefix") or ""
+    try:
+        limit = int(request.rel_url.query.get("limit") or 20)
+    except Exception:
+        limit = 20
+    try:
+        result = db.autocomplete.lookup(side, prefix, limit=limit)
+    except ValueError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=400)
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    return web.json_response(result)
+
+
+async def autocomplete_list(request):
+    side = request.rel_url.query.get("side") or "pos"
+    bucket = request.rel_url.query.get("bucket") or ""
+    try:
+        limit = int(request.rel_url.query.get("limit") or 500)
+    except Exception:
+        limit = 500
+    try:
+        result = db.autocomplete.list_segments(side, bucket=bucket, limit=limit)
+    except ValueError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=400)
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    return web.json_response(result)
+
+
+async def autocomplete_buckets(request):
+    side = request.rel_url.query.get("side") or "pos"
+    try:
+        result = db.autocomplete.list_buckets(side)
+    except ValueError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=400)
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    return web.json_response(result)
+
+
+async def _autocomplete_rebuild_ndjson(request):
+    """Stream rebuild progress as NDJSON: start → progress* → done."""
+    try:
+        rows = db.list_presets_for_autocomplete()
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+
+    response = web.StreamResponse(
+        status=200,
+        reason="OK",
+        headers={
+            "Content-Type": "application/x-ndjson; charset=utf-8",
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+    await response.prepare(request)
+
+    async def write_msg(payload: dict) -> None:
+        await response.write((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
+
+    loop = asyncio.get_running_loop()
+    events: queue.Queue = queue.Queue()
+
+    def worker() -> None:
+        try:
+            for event in db.autocomplete.iter_rebuild_events(rows):
+                events.put(event)
+        except Exception as exc:
+            events.put({"ok": False, "phase": "error", "error": str(exc)})
+        finally:
+            events.put(None)
+
+    threading.Thread(target=worker, name="pc-ac-rebuild", daemon=True).start()
+
+    while True:
+        event = await loop.run_in_executor(None, events.get)
+        if event is None:
+            break
+        await write_msg(event)
+        if event.get("ok") is False:
+            break
+
+    await response.write_eof()
+    return response
+
+
+async def autocomplete_mutate(request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+
+    action = (payload.get("action") or "add").strip().lower()
+    if action == "rebuild":
+        return await _autocomplete_rebuild_ndjson(request)
+
+    try:
+        if action == "add":
+            result = db.autocomplete.add_segment(payload.get("side") or "pos", payload.get("text") or "")
+        elif action == "delete":
+            result = db.autocomplete.delete_segment(payload.get("side") or "pos", payload.get("text") or "")
+        elif action == "ingest":
+            result = db.autocomplete.ingest_pair(
+                payload.get("positive") or "",
+                payload.get("negative") or "",
+            )
+        elif action == "rename_preview":
+            result = db.find_presets_with_segment(
+                payload.get("side") or "pos",
+                payload.get("old_text") or payload.get("text") or "",
+            )
+        elif action == "rename":
+            result = db.rename_autocomplete_segment(
+                payload.get("side") or "pos",
+                payload.get("old_text") or "",
+                payload.get("new_text") or "",
+                replace_in_presets=bool(payload.get("replace_in_presets")),
+            )
+        else:
+            return web.json_response({"ok": False, "error": "Unknown action"}, status=400)
+    except ValueError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=400)
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+
+    status = 200 if result.get("ok") else 400
+    return web.json_response(result, status=status)
+
+
 _existing = {getattr(route, "path", None) for route in PromptServer.instance.routes}
 if SAVE_ROUTE not in _existing:
     PromptServer.instance.routes.post(SAVE_ROUTE)(save_layout)
@@ -258,6 +497,20 @@ if CATEGORIES_ROUTE not in _existing:
     PromptServer.instance.routes.get(CATEGORIES_ROUTE)(list_categories)
     PromptServer.instance.routes.patch(CATEGORIES_ROUTE)(update_category)
     PromptServer.instance.routes.delete(CATEGORIES_ROUTE)(delete_category)
+if TEMPLATES_ROUTE not in _existing:
+    PromptServer.instance.routes.post(TEMPLATES_ROUTE)(save_template)
+    PromptServer.instance.routes.get(TEMPLATES_ROUTE)(list_templates)
+    PromptServer.instance.routes.patch(TEMPLATES_ROUTE)(update_template)
+    PromptServer.instance.routes.delete(TEMPLATES_ROUTE)(delete_template)
+if TEMPLATE_FOLDERS_ROUTE not in _existing:
+    PromptServer.instance.routes.get(TEMPLATE_FOLDERS_ROUTE)(list_template_folders)
+    PromptServer.instance.routes.patch(TEMPLATE_FOLDERS_ROUTE)(update_template_folder)
+    PromptServer.instance.routes.delete(TEMPLATE_FOLDERS_ROUTE)(delete_template_folder_route)
 if PREFS_ROUTE not in _existing:
     PromptServer.instance.routes.get(PREFS_ROUTE)(get_prefs)
     PromptServer.instance.routes.patch(PREFS_ROUTE)(update_prefs)
+if AUTOCOMPLETE_ROUTE not in _existing:
+    PromptServer.instance.routes.get(AUTOCOMPLETE_ROUTE)(autocomplete_lookup)
+    PromptServer.instance.routes.get(f"{AUTOCOMPLETE_ROUTE}/list")(autocomplete_list)
+    PromptServer.instance.routes.get(f"{AUTOCOMPLETE_ROUTE}/buckets")(autocomplete_buckets)
+    PromptServer.instance.routes.post(AUTOCOMPLETE_ROUTE)(autocomplete_mutate)

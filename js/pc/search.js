@@ -98,3 +98,37 @@ export function matchesLayoutPreset(layout, rawQuery, { emptyFolder = "Uncategor
 
   return includesAll(fields.join(" "), tokens);
 }
+
+/**
+ * Template pack: folder filter + name/desc/slot titles (+ optional prompt bodies).
+ */
+export function matchesTemplatePreset(
+  template,
+  rawQuery,
+  { emptyFolder = "Uncategorised", includeBody = false } = {},
+) {
+  const { shelf, tokens, hasShelfFilter } = parseSearchQuery(rawQuery);
+  if (!hasShelfFilter && !tokens.length) return true;
+
+  const folder = shelfLabel(template?.folder, emptyFolder);
+  if (shelf && !folder.toLowerCase().includes(shelf)) return false;
+
+  if (!tokens.length) return true;
+
+  const slotTitles = (template?.slots || [])
+    .map((slot) => (typeof slot === "string" ? slot : slot?.title || ""))
+    .join(" ");
+  const fields = hasShelfFilter
+    ? [template?.name, template?.description, slotTitles]
+    : [folder, template?.name, template?.description, slotTitles];
+
+  if (includeBody) {
+    for (const slot of template?.slots || []) {
+      if (typeof slot === "object" && slot) {
+        fields.push(slot.positive, slot.negative);
+      }
+    }
+  }
+
+  return includesAll(fields.join(" "), tokens);
+}

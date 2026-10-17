@@ -9,9 +9,22 @@ Used by the main [README](../../README.md) and [changelog](../../changelog/CHANG
 | `2.png` | Save pair dialog |
 | `3.png` | Load preset dialog |
 | `4.png` | Load pair with prompt preview |
-| `5.png` | Library manager · Stacks |
+| `5.png` | Library manager · Presets |
 | `6.png` | Library manager · Prompts |
 | `7.png` | Edit prompt dialog |
+
+## 2.0.0
+
+| File | Content |
+|------|---------|
+| `2.0.0/0.png` | Pair toolbar — Save / Load / Clear |
+| `2.0.0/1.png` | Autocomplete popup at the caret |
+| `2.0.0/2.png` | Library manager · Suggest |
+| `2.0.0/3.png` | Rename segment — Replace in presets |
+| `2.0.0/4.png` | Library manager · Templates |
+| `2.0.0/5.png` | Edit template — pairs, Save/Load/Clear, Loaded chip |
+| `2.0.0/6.png` | Node — Preset / Template sections + Loaded chips |
+| `2.0.0/7.png` | Add group — pick an existing group |
 
 ## 1.5.0
 

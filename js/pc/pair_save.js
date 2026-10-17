@@ -63,7 +63,7 @@ function openCategoryPicker({ anchor, categories, current, onPick, onClose }) {
   });
 }
 
-export function openSavePairPopup({ anchor, group, onSaved }) {
+export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
   const defaultCategory = baseShelfName(group?.title);
   const positive = group?.positive || "";
   const negative = group?.negative || "";
@@ -73,6 +73,7 @@ export function openSavePairPopup({ anchor, group, onSaved }) {
 
   if (!defaultCategory) {
     openConfirmPopup({
+      nested,
       anchor,
       title: "Save pair",
       message: "Name the pair first.",
@@ -85,6 +86,7 @@ export function openSavePairPopup({ anchor, group, onSaved }) {
 
   if (!positive.trim() && !negative.trim()) {
     openConfirmPopup({
+      nested,
       anchor,
       title: "Save pair",
       message: "Write a prompt first.",
@@ -96,6 +98,7 @@ export function openSavePairPopup({ anchor, group, onSaved }) {
   }
 
   return openPopup({
+    nested,
     anchor,
     title: "Save pair",
     width: 320,

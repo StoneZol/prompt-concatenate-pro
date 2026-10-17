@@ -1,16 +1,27 @@
 import { app } from "../../../scripts/app.js";
 import { loadConfig } from "./pc/config.js";
 import { injectStyles } from "./pc/styles.js";
-import { PLUS_ICON_SVG, SAVE_ICON_SVG, LOAD_ICON_SVG } from "./pc/icons.js";
+import {
+  CLOSE_ICON_SVG,
+  LOAD_ICON_SVG,
+  PLUS_ICON_SVG,
+  RESET_ICON_SVG,
+  SAVE_ICON_SVG,
+  TEXT_ICON_SVG,
+} from "./pc/icons.js";
 import { makeGroupCard } from "./pc/group_card.js";
-import { openConfirmPopup, openInputPopup } from "./pc/popup.js";
+import { openConfirmPopup } from "./pc/popup.js";
+import { openAddGroupPopup } from "./pc/add_group.js";
 import { openSavePresetsPopup } from "./pc/save_dialog.js";
 import { confirmReplaceGroups, openLoadPresetPopup } from "./pc/load_dialog.js";
+import { openSaveTemplatePopup } from "./pc/template_save.js";
+import { confirmReloadTemplate, openLoadTemplatePopup } from "./pc/template_load.js";
+import { mergeTemplateGroups } from "./pc/template_apply.js";
 import { openSavePairPopup } from "./pc/pair_save.js";
 import { confirmReplacePair, openLoadPairPopup } from "./pc/pair_load.js";
 import { openManagerPopup } from "./pc/manager_dialog.js";
 import { openSettingsPopup } from "./pc/settings_dialog.js";
-import { listPresets } from "./pc/api.js";
+import { listLayouts, listPresets, listTemplates } from "./pc/api.js";
 import {
   createShadowString,
   hideOnCanvasKeepInPanel,
@@ -21,6 +32,7 @@ import { craftOutput, isJoinDebugEnabled, joinFields } from "./pc/join.js";
 import { baseShelfName, nextDuplicateTitle } from "./pc/titles.js";
 import { attachPromptMaterializeHooks } from "./pc/metadata.js";
 import { ensureUiPrefs } from "./pc/prefs.js";
+import { bindInfoTip, hidePromptTip } from "./pc/preview_tip.js";
 
 const config = await loadConfig();
 injectStyles(config.style_id);
@@ -28,7 +40,8 @@ ensureUiPrefs();
 
 const MIN_NODE_WIDTH = 400;
 const SOCKET_ROWS_HEIGHT = 56;
-const HEADER_HEIGHT = 112;
+const HEADER_HEIGHT = 156;
+const LOADED_CHIP_ROW_HEIGHT = 26;
 const CONTAINER_PADDING_V = 10;
 const GAP_BETWEEN_SECTIONS = 8;
 const GROUP_HEIGHT = 266;
@@ -43,13 +56,34 @@ function newGroupId() {
   return `pc_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-3)}`;
 }
 
-function parseGroups(raw) {
+function normalizeLoadedRef(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const title = (raw.title || "").trim();
+  if (!title) return null;
+  return {
+    title,
+    folder: (raw.folder || "").trim(),
+    description: (raw.description || "").trim(),
+  };
+}
+
+function parseBlocksState(raw) {
   try {
     const data = raw ? JSON.parse(raw) : [];
-    return Array.isArray(data) ? data : [];
+    if (Array.isArray(data)) {
+      return { groups: data, loadedStack: null, loadedTemplate: null };
+    }
+    if (data && typeof data === "object") {
+      return {
+        groups: Array.isArray(data.groups) ? data.groups : [],
+        loadedStack: normalizeLoadedRef(data.loadedStack),
+        loadedTemplate: normalizeLoadedRef(data.loadedTemplate),
+      };
+    }
   } catch {
-    return [];
+    /* ignore */
   }
+  return { groups: [], loadedStack: null, loadedTemplate: null };
 }
 
 function stampLabels(title) {
@@ -115,7 +149,10 @@ app.registerExtension({
       dataWidget.type = "";
       attachPromptMaterializeHooks(node, dataWidget);
 
-      let groups = parseGroups(dataWidget?.value);
+      const initialState = parseBlocksState(dataWidget?.value);
+      let groups = initialState.groups;
+      let loadedStack = initialState.loadedStack;
+      let loadedTemplate = initialState.loadedTemplate;
       const cards = new Map();
       let uiWidget = null;
 
@@ -132,20 +169,126 @@ app.registerExtension({
       addBtn.className = "pc-add-btn";
       addBtn.innerHTML = `${PLUS_ICON_SVG}<span>Add group</span>`;
 
-      const libraryRow = document.createElement("div");
-      libraryRow.className = "pc-header-row";
+      function makeLibrarySection(kind, titleText) {
+        const section = document.createElement("div");
+        section.className = `pc-lib-section pc-lib-section-${kind}`;
 
+        const toolbar = document.createElement("div");
+        toolbar.className = "pc-lib-section-toolbar";
+
+        const label = document.createElement("div");
+        label.className = "pc-lib-section-label";
+        label.textContent = titleText;
+
+        const buttons = document.createElement("div");
+        buttons.className = "pc-lib-section-buttons";
+
+        toolbar.append(label, buttons);
+        section.append(toolbar);
+        return { section, buttons };
+      }
+
+      const presetBlock = makeLibrarySection("preset", "Preset");
       const saveBtn = document.createElement("button");
       saveBtn.type = "button";
       saveBtn.className = "pc-save-btn";
-      saveBtn.innerHTML = `${SAVE_ICON_SVG}<span>Save preset</span>`;
+      saveBtn.innerHTML = `${SAVE_ICON_SVG}<span>Save</span>`;
 
       const loadBtn = document.createElement("button");
       loadBtn.type = "button";
       loadBtn.className = "pc-load-btn";
-      loadBtn.innerHTML = `${LOAD_ICON_SVG}<span>Load preset</span>`;
+      loadBtn.innerHTML = `${LOAD_ICON_SVG}<span>Load</span>`;
 
-      libraryRow.append(saveBtn, loadBtn);
+      presetBlock.buttons.append(saveBtn, loadBtn);
+
+      const loadedStackRow = document.createElement("div");
+      loadedStackRow.className = "pc-loaded-row";
+      loadedStackRow.hidden = true;
+
+      const loadedStackLabel = document.createElement("span");
+      loadedStackLabel.className = "pc-loaded-label pc-loaded-preset";
+
+      const loadedStackNotesBtn = document.createElement("button");
+      loadedStackNotesBtn.type = "button";
+      loadedStackNotesBtn.className = "pc-loaded-notes";
+      loadedStackNotesBtn.title = "View notes";
+      loadedStackNotesBtn.innerHTML = TEXT_ICON_SVG;
+      loadedStackNotesBtn.hidden = true;
+      bindInfoTip(loadedStackNotesBtn, () => ({
+        title: "Notes",
+        text: (loadedStack?.description || "").trim(),
+      }));
+
+      const loadedStackResetBtn = document.createElement("button");
+      loadedStackResetBtn.type = "button";
+      loadedStackResetBtn.className = "pc-loaded-reset";
+      loadedStackResetBtn.title = "Reload last saved preset";
+      loadedStackResetBtn.innerHTML = RESET_ICON_SVG;
+
+      const loadedStackClearBtn = document.createElement("button");
+      loadedStackClearBtn.type = "button";
+      loadedStackClearBtn.className = "pc-loaded-clear";
+      loadedStackClearBtn.title = "Detach loaded preset";
+      loadedStackClearBtn.innerHTML = CLOSE_ICON_SVG;
+
+      loadedStackRow.append(
+        loadedStackLabel,
+        loadedStackNotesBtn,
+        loadedStackResetBtn,
+        loadedStackClearBtn,
+      );
+      presetBlock.section.appendChild(loadedStackRow);
+
+      const templateBlock = makeLibrarySection("template", "Template");
+      const saveTemplateBtn = document.createElement("button");
+      saveTemplateBtn.type = "button";
+      saveTemplateBtn.className = "pc-template-save-btn";
+      saveTemplateBtn.innerHTML = `${SAVE_ICON_SVG}<span>Save</span>`;
+
+      const loadTemplateBtn = document.createElement("button");
+      loadTemplateBtn.type = "button";
+      loadTemplateBtn.className = "pc-template-load-btn";
+      loadTemplateBtn.innerHTML = `${LOAD_ICON_SVG}<span>Load</span>`;
+
+      templateBlock.buttons.append(saveTemplateBtn, loadTemplateBtn);
+
+      const loadedTemplateRow = document.createElement("div");
+      loadedTemplateRow.className = "pc-loaded-row";
+      loadedTemplateRow.hidden = true;
+
+      const loadedTemplateLabel = document.createElement("span");
+      loadedTemplateLabel.className = "pc-loaded-label pc-loaded-template";
+
+      const loadedTemplateNotesBtn = document.createElement("button");
+      loadedTemplateNotesBtn.type = "button";
+      loadedTemplateNotesBtn.className = "pc-loaded-notes";
+      loadedTemplateNotesBtn.title = "View notes";
+      loadedTemplateNotesBtn.innerHTML = TEXT_ICON_SVG;
+      loadedTemplateNotesBtn.hidden = true;
+      bindInfoTip(loadedTemplateNotesBtn, () => ({
+        title: "Notes",
+        text: (loadedTemplate?.description || "").trim(),
+      }));
+
+      const loadedTemplateResetBtn = document.createElement("button");
+      loadedTemplateResetBtn.type = "button";
+      loadedTemplateResetBtn.className = "pc-loaded-reset";
+      loadedTemplateResetBtn.title = "Reload last saved template";
+      loadedTemplateResetBtn.innerHTML = RESET_ICON_SVG;
+
+      const loadedTemplateClearBtn = document.createElement("button");
+      loadedTemplateClearBtn.type = "button";
+      loadedTemplateClearBtn.className = "pc-loaded-clear";
+      loadedTemplateClearBtn.title = "Detach loaded template";
+      loadedTemplateClearBtn.innerHTML = CLOSE_ICON_SVG;
+
+      loadedTemplateRow.append(
+        loadedTemplateLabel,
+        loadedTemplateNotesBtn,
+        loadedTemplateResetBtn,
+        loadedTemplateClearBtn,
+      );
+      templateBlock.section.appendChild(loadedTemplateRow);
 
       const managerBtn = document.createElement("button");
       managerBtn.type = "button";
@@ -161,15 +304,79 @@ app.registerExtension({
       toolsRow.className = "pc-header-row";
       toolsRow.append(managerBtn, settingsBtn);
 
-      header.append(addBtn, libraryRow, toolsRow);
+      header.append(addBtn, presetBlock.section, templateBlock.section, toolsRow);
 
       const groupsWrap = document.createElement("div");
       groupsWrap.className = "pc-groups";
       root.append(header, groupsWrap);
 
+      function paintLoadedStack() {
+        const name = (loadedStack?.title || "").trim();
+        const folder = (loadedStack?.folder || "").trim();
+        const notes = (loadedStack?.description || "").trim();
+        if (!name) {
+          loadedStackRow.hidden = true;
+          loadedStackLabel.textContent = "";
+          loadedStackNotesBtn.hidden = true;
+          return;
+        }
+        loadedStackRow.hidden = false;
+        loadedStackLabel.textContent = folder ? `${name} · ${folder}` : name;
+        loadedStackLabel.title = folder ? `Loaded preset: ${name} (${folder})` : `Loaded preset: ${name}`;
+        loadedStackNotesBtn.hidden = !notes;
+      }
+
+      function paintLoadedTemplate() {
+        const name = (loadedTemplate?.title || "").trim();
+        const folder = (loadedTemplate?.folder || "").trim();
+        const notes = (loadedTemplate?.description || "").trim();
+        if (!name) {
+          loadedTemplateRow.hidden = true;
+          loadedTemplateLabel.textContent = "";
+          loadedTemplateNotesBtn.hidden = true;
+          return;
+        }
+        loadedTemplateRow.hidden = false;
+        loadedTemplateLabel.textContent = folder ? `${name} · ${folder}` : name;
+        loadedTemplateLabel.title = folder
+          ? `Loaded template: ${name} (${folder})`
+          : `Loaded template: ${name}`;
+        loadedTemplateNotesBtn.hidden = !notes;
+      }
+
+      function setLoadedStack(next) {
+        loadedStack = normalizeLoadedRef(next);
+        paintLoadedStack();
+      }
+
+      function setLoadedTemplate(next) {
+        loadedTemplate = normalizeLoadedRef(next);
+        paintLoadedTemplate();
+      }
+
+      function clearLoadedStack() {
+        if (!loadedStack) return;
+        loadedStack = null;
+        paintLoadedStack();
+      }
+
+      function clearLoadedTemplate() {
+        if (!loadedTemplate) return;
+        loadedTemplate = null;
+        paintLoadedTemplate();
+      }
+
       function persist() {
         if (!dataWidget) return;
-        dataWidget.value = JSON.stringify(groups);
+        const payload =
+          loadedStack || loadedTemplate
+            ? {
+                groups,
+                ...(loadedStack ? { loadedStack } : {}),
+                ...(loadedTemplate ? { loadedTemplate } : {}),
+              }
+            : groups;
+        dataWidget.value = JSON.stringify(payload);
         node.setDirtyCanvas(true, true);
         scheduleJoinDebugLog();
       }
@@ -283,7 +490,11 @@ app.registerExtension({
 
       function fillDom() {
         syncWidth();
-        const chromeHeight = HEADER_HEIGHT + GAP_BETWEEN_SECTIONS + CONTAINER_PADDING_V + BOTTOM_SLACK;
+        const headerExtra =
+          (loadedStack?.title ? LOADED_CHIP_ROW_HEIGHT : 0) +
+          (loadedTemplate?.title ? LOADED_CHIP_ROW_HEIGHT : 0);
+        const chromeHeight =
+          HEADER_HEIGHT + headerExtra + GAP_BETWEEN_SECTIONS + CONTAINER_PADDING_V + BOTTOM_SLACK;
         const bodyH = Math.max((node.size?.[1] || 0) - SOCKET_ROWS_HEIGHT, MIN_UI_HEIGHT);
         const overlay = uiWidget?.element;
 
@@ -482,6 +693,8 @@ app.registerExtension({
           ...stampLabels(name),
         };
         groups.push(group);
+        // Stack structure drifted; template chip can stay (merge is by name).
+        clearLoadedStack();
         persist();
         addShadows(group);
         renderCards();
@@ -508,6 +721,7 @@ app.registerExtension({
         const index = groups.findIndex((item) => item.id === source.id);
         if (index < 0) groups.push(group);
         else groups.splice(index + 1, 0, group);
+        clearLoadedStack();
         persist();
         addShadows(group);
         renderCards();
@@ -518,6 +732,7 @@ app.registerExtension({
       function removeGroup(id) {
         collectFromShadows();
         groups = groups.filter((g) => g.id !== id);
+        clearLoadedStack();
         persist();
         removeShadows(id);
         renderCards();
@@ -525,14 +740,37 @@ app.registerExtension({
         hideDataWidget(dataWidget);
       }
 
-      function applyLayout(layout) {
+      function rebuildFromGroups(nextGroups) {
         const ids = groups.map((group) => group.id);
-        groups = [];
+        groups = nextGroups;
         for (const id of ids) removeShadows(id);
+        for (const group of groups) addShadows(group);
+        persist();
+        renderCards();
+        fillDom();
+        hideDataWidget(dataWidget);
+      }
+
+      function applyTemplate(template) {
+        collectFromShadows();
+        const next = mergeTemplateGroups(groups, template.slots || [], {
+          newGroupId,
+          stampLabels,
+        });
+        setLoadedTemplate({
+          title: template.name,
+          folder: template.folder,
+          description: template.description,
+        });
+        rebuildFromGroups(next);
+      }
+
+      function applyLayout(layout) {
+        const next = [];
         for (const slot of layout.slots || []) {
           const name = (slot || "").trim();
           if (!name) continue;
-          groups.push({
+          next.push({
             id: newGroupId(),
             title: name,
             positive: "",
@@ -541,28 +779,148 @@ app.registerExtension({
             ...stampLabels(name),
           });
         }
-        persist();
-        for (const group of groups) addShadows(group);
-        renderCards();
-        fillDom();
-        hideDataWidget(dataWidget);
+        setLoadedStack({
+          title: layout.name,
+          folder: layout.folder,
+          description: layout.description,
+        });
+        clearLoadedTemplate();
+        rebuildFromGroups(next);
+      }
+
+      async function reloadLoadedStack(anchor) {
+        const title = (loadedStack?.title || "").trim();
+        const folder = (loadedStack?.folder || "").trim();
+        if (!title) return;
+        const result = await listLayouts();
+        if (!result.ok) {
+          openConfirmPopup({
+            anchor,
+            title: "Reload preset",
+            message: result.error || "Failed to load presets",
+            confirmLabel: "OK",
+            showCancel: false,
+            danger: false,
+          });
+          return;
+        }
+        const key = title.toLowerCase();
+        const folderKey = folder.toLowerCase();
+        const layout = (result.layouts || []).find((item) => {
+          if ((item.name || "").trim().toLowerCase() !== key) return false;
+          return (item.folder || "").trim().toLowerCase() === folderKey;
+        });
+        if (!layout) {
+          openConfirmPopup({
+            anchor,
+            title: "Reload preset",
+            message: "Saved preset not found. It may have been renamed or deleted.",
+            confirmLabel: "OK",
+            showCancel: false,
+            danger: false,
+          });
+          return;
+        }
+        applyLayout(layout);
+      }
+
+      async function reloadLoadedTemplate(anchor) {
+        const title = (loadedTemplate?.title || "").trim();
+        const folder = (loadedTemplate?.folder || "").trim();
+        if (!title) return;
+        const result = await listTemplates();
+        if (!result.ok) {
+          openConfirmPopup({
+            anchor,
+            title: "Reload template",
+            message: result.error || "Failed to load templates",
+            confirmLabel: "OK",
+            showCancel: false,
+            danger: false,
+          });
+          return;
+        }
+        const key = title.toLowerCase();
+        const folderKey = folder.toLowerCase();
+        const template = (result.templates || []).find((item) => {
+          if ((item.name || "").trim().toLowerCase() !== key) return false;
+          return (item.folder || "").trim().toLowerCase() === folderKey;
+        });
+        if (!template) {
+          openConfirmPopup({
+            anchor,
+            title: "Reload template",
+            message: "Saved template not found. It may have been renamed or deleted.",
+            confirmLabel: "OK",
+            showCancel: false,
+            danger: false,
+          });
+          return;
+        }
+        applyTemplate(template);
       }
 
       addBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        openInputPopup({
+        openAddGroupPopup({
           anchor: addBtn,
-          title: "Add group",
-          placeholder: "pair name",
-          confirmLabel: "Add",
+          existingTitles: groups.map((g) => g.title),
           validate: (value) => groupTitleError(groups, value),
           onSubmit: (value) => addGroup(value),
         });
       });
 
+      loadedStackClearBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        clearLoadedStack();
+        persist();
+        fillDom();
+      });
+
+      loadedStackResetBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        openConfirmPopup({
+          anchor: loadedStackResetBtn,
+          title: "Reload preset",
+          message: "Replace current groups with the saved preset? All prompts in this node will be cleared.",
+          confirmLabel: "Reload",
+          cancelLabel: "Cancel",
+          danger: true,
+          onConfirm: () => reloadLoadedStack(loadedStackResetBtn),
+        });
+      });
+
+      loadedTemplateClearBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        clearLoadedTemplate();
+        persist();
+        fillDom();
+      });
+
+      loadedTemplateResetBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        confirmReloadTemplate({
+          anchor: loadedTemplateResetBtn,
+          onConfirm: () => reloadLoadedTemplate(loadedTemplateResetBtn),
+        });
+      });
+
       saveBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        openSavePresetsPopup({ anchor: saveBtn, groups });
+        openSavePresetsPopup({
+          anchor: saveBtn,
+          groups,
+          loadedStack,
+          onSaved: (saved) => {
+            setLoadedStack(saved);
+            persist();
+            fillDom();
+          },
+        });
       });
 
       loadBtn.addEventListener("click", (e) => {
@@ -579,6 +937,28 @@ app.registerExtension({
             }
             applyLayout(layout);
           },
+        });
+      });
+
+      saveTemplateBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openSaveTemplatePopup({
+          anchor: saveTemplateBtn,
+          groups,
+          loadedTemplate,
+          onSaved: (saved) => {
+            setLoadedTemplate(saved);
+            persist();
+            fillDom();
+          },
+        });
+      });
+
+      loadTemplateBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openLoadTemplatePopup({
+          anchor: loadTemplateBtn,
+          onPick: (template) => applyTemplate(template),
         });
       });
 
@@ -608,7 +988,12 @@ app.registerExtension({
         const result = onConfigure ? onConfigure.apply(this, arguments) : undefined;
         const w = node.widgets?.find((x) => x.name === "blocks_data");
         hideDataWidget(w);
-        groups = parseGroups(w?.value);
+        const state = parseBlocksState(w?.value);
+        groups = state.groups;
+        loadedStack = state.loadedStack;
+        loadedTemplate = state.loadedTemplate;
+        paintLoadedStack();
+        paintLoadedTemplate();
         rebuildShadows();
         renderCards();
         fillDom();
@@ -646,8 +1031,8 @@ app.registerExtension({
             const val = elm.value;
             if (
               typeof val === "string" &&
-              val.trim().startsWith("[") &&
-              val.includes('"label_pos"')
+              val.includes('"label_pos"') &&
+              (val.trim().startsWith("[") || val.trim().startsWith("{"))
             ) {
               const wrap = elm.closest?.("[data-testid='node-widget'], .lg-node-widget, label, .comfy-widget-row") || elm;
               wrap.style.display = "none";
@@ -657,6 +1042,8 @@ app.registerExtension({
         }
       }
 
+      paintLoadedStack();
+      paintLoadedTemplate();
       renderCards();
       if (groups.length) rebuildShadows();
       fillDom();

@@ -2,6 +2,8 @@ import { openPopup } from "./popup.js";
 import { ensureUiPrefs, getUiPref, setUiPref } from "./prefs.js";
 import { TEXT_ICON_SVG } from "./icons.js";
 import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
+import { rebuildAutocomplete } from "./api.js";
+import { makeBusyLine } from "./busy.js";
 
 const EMBED_CLIP_META_HELP = {
   title: "Embed prompts in CLIP for PNG meta",
@@ -11,7 +13,19 @@ const EMBED_CLIP_META_HELP = {
     "The workflow saved in the PNG may show CLIP filled and Concatenate Pro disconnected — re-link after load if needed.",
 };
 
-function makeSettingRow({ label, prefKey, help }) {
+const AUTOCOMPLETE_HELP = {
+  title: "Prompt autocomplete",
+  text:
+    "Experimental. Off by default.\n\n" +
+    "When on, typing in positive/negative fields suggests segments from your saved pairs " +
+    "and from the autocomplete dictionary (comma / newline separated; weights stripped). " +
+    "Dictionaries are stored per side (pos/neg) in letter buckets.\n\n" +
+    "Manage the dictionary in Library manager → Suggest. " +
+    "Scrollable list at the caret (letter bucket only). Tab accepts a suggestion; " +
+    "if nothing matches, Tab saves the typed segment. Esc closes; Enter still inserts a newline.",
+};
+
+function makeSettingRow({ label, prefKey, help, badge, onToggle }) {
   const row = document.createElement("div");
   row.className = "pc-toggle-row pc-settings-row";
 
@@ -30,6 +44,14 @@ function makeSettingRow({ label, prefKey, help }) {
   labelEl.className = "pc-settings-label";
   labelEl.textContent = label;
 
+  if (badge) {
+    const badgeEl = document.createElement("span");
+    badgeEl.className = "pc-settings-badge";
+    badgeEl.textContent = badge;
+    labelEl.appendChild(document.createTextNode(" "));
+    labelEl.appendChild(badgeEl);
+  }
+
   const infoBtn = document.createElement("button");
   infoBtn.type = "button";
   infoBtn.className = "pc-preset-peek pc-settings-info";
@@ -38,12 +60,33 @@ function makeSettingRow({ label, prefKey, help }) {
   bindInfoTip(infoBtn, () => help);
 
   let enabled = on;
-  toggle.addEventListener("click", (e) => {
+  let locked = false;
+  toggle.addEventListener("click", async (e) => {
     e.stopPropagation();
+    if (locked) return;
     enabled = !enabled;
     toggle.classList.toggle("on", enabled);
     toggle.setAttribute("aria-checked", enabled ? "true" : "false");
     setUiPref(prefKey, enabled);
+    const result = onToggle?.(enabled, {
+      setBusy(next) {
+        locked = Boolean(next);
+        toggle.style.pointerEvents = locked ? "none" : "";
+        toggle.style.opacity = locked ? "0.55" : "";
+      },
+    });
+    if (result && typeof result.then === "function") {
+      locked = true;
+      toggle.style.pointerEvents = "none";
+      toggle.style.opacity = "0.55";
+      try {
+        await result;
+      } finally {
+        locked = false;
+        toggle.style.pointerEvents = "";
+        toggle.style.opacity = "";
+      }
+    }
   });
 
   row.append(toggle, labelEl, infoBtn);
@@ -59,7 +102,7 @@ export async function openSettingsPopup({ anchor } = {}) {
   openPopup({
     title: "Settings",
     anchor,
-    width: 360,
+    width: 380,
     onClose: hidePromptTip,
     render(body) {
       const list = document.createElement("div");
@@ -71,6 +114,51 @@ export async function openSettingsPopup({ anchor } = {}) {
           help: EMBED_CLIP_META_HELP,
         }),
       );
+
+      const acBusy = makeBusyLine({ className: "pc-settings-busy" });
+      list.appendChild(
+        makeSettingRow({
+          label: "Prompt autocomplete",
+          prefKey: "promptAutocomplete",
+          help: AUTOCOMPLETE_HELP,
+          badge: "experimental",
+          async onToggle(enabled, { setBusy } = {}) {
+            if (!enabled) {
+              acBusy.hide();
+              return;
+            }
+            setBusy?.(true);
+            acBusy.show("Building dictionary from library…");
+            try {
+              const result = await rebuildAutocomplete((msg) => {
+                if (msg.phase === "start" && !msg.total) {
+                  acBusy.progress({
+                    current: 0,
+                    total: 0,
+                    percent: 100,
+                    message: "No pairs in library yet",
+                  });
+                  return;
+                }
+                acBusy.progress(msg);
+              });
+              if (!result.ok) {
+                acBusy.error(result.error || "Rebuild failed");
+                return;
+              }
+              const n = result.presets ?? result.total ?? 0;
+              acBusy.done(
+                `Dictionary ready · scanned ${n} pair${n === 1 ? "" : "s"}`,
+              );
+            } catch (err) {
+              acBusy.error(err?.message || "Rebuild failed");
+            } finally {
+              setBusy?.(false);
+            }
+          },
+        }),
+      );
+      list.appendChild(acBusy.el);
 
       const footer = document.createElement("div");
       footer.className = "pc-settings-footer";
