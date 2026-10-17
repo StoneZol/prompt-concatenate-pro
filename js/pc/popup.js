@@ -615,6 +615,33 @@ const CSS = `
   overflow-y: auto;
 }
 
+.pc-add-group-error:empty {
+  display: none;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.pc-add-group-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: -2px;
+}
+
+.pc-add-group-hint {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--descrip-text, #999);
+  line-height: 1;
+  user-select: none;
+}
+
+.pc-add-group-list {
+  max-height: 180px;
+}
+
 .pc-pick-item {
   display: flex;
   align-items: center;

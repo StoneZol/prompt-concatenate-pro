@@ -24,6 +24,7 @@ Used by the main [README](../../README.md) and [changelog](../../changelog/CHANG
 | `2.0.0/4.png` | Library manager · Templates |
 | `2.0.0/5.png` | Edit template — pairs, Save/Load/Clear, Loaded chip |
 | `2.0.0/6.png` | Node — Preset / Template sections + Loaded chips |
+| `2.0.0/7.png` | Add group — pick an existing group |
 
 ## 1.5.0
 

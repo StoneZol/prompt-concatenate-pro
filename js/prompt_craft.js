@@ -10,7 +10,8 @@ import {
   TEXT_ICON_SVG,
 } from "./pc/icons.js";
 import { makeGroupCard } from "./pc/group_card.js";
-import { openConfirmPopup, openInputPopup } from "./pc/popup.js";
+import { openConfirmPopup } from "./pc/popup.js";
+import { openAddGroupPopup } from "./pc/add_group.js";
 import { openSavePresetsPopup } from "./pc/save_dialog.js";
 import { confirmReplaceGroups, openLoadPresetPopup } from "./pc/load_dialog.js";
 import { openSaveTemplatePopup } from "./pc/template_save.js";
@@ -861,11 +862,9 @@ app.registerExtension({
 
       addBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        openInputPopup({
+        openAddGroupPopup({
           anchor: addBtn,
-          title: "Add group",
-          placeholder: "pair name",
-          confirmLabel: "Add",
+          existingTitles: groups.map((g) => g.title),
           validate: (value) => groupTitleError(groups, value),
           onSubmit: (value) => addGroup(value),
         });

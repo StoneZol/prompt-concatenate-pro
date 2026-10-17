@@ -12,49 +12,60 @@ Format: newest first.
 
 **Presets** stay the empty planning canvas (slot names only). **Templates** are full prompt packs you drop onto a node — pose / light / camera filled, character left alone if it wasn’t in the pack. Plus experimental **prompt autocomplete** from your own library.
 
-![Node: Preset / Template sections + Loaded chips](../docs/screenshots/2.0.0/6.png)
-
 #### Templates
 
 - Node: **Preset** and **Template** sections — label + Save/Load on one row; **Loaded** chip (notes / reload / detach) under each
+
+![Node: Preset / Template sections + Loaded chips](../docs/screenshots/2.0.0/6.png)
+
 - Load by slot name: keep the node’s order; fill matching pairs; insert missing slots before the next already-present template pair (not always at the end); ignore pairs that aren’t in the template
 - Empty pairs are not saved; **Loaded** pair chips travel with the pack
 - Manager: **Templates** tab — folders, edit pairs (add / remove / reorder / collapse, Save / Load / Clear pair, enable / disable), duplicate / delete
-- Saving a template also feeds autocomplete dictionaries
 
 ![Library manager · Templates](../docs/screenshots/2.0.0/4.png)
 
 ![Edit template — pairs like on the node](../docs/screenshots/2.0.0/5.png)
 
+- Saving a template also feeds autocomplete dictionaries
+
 #### Prompt autocomplete (experimental)
 
 Suggest tags/phrases from **your** library while editing positive / negative — not from an external tag DB.
 
-![Autocomplete at the caret](../docs/screenshots/2.0.0/1.png)
-
 - **Settings**: toggle **Prompt autocomplete** (off by default) with an `experimental` badge
 - When enabled: Library manager gets a **Suggest** tab — segments grouped by letter (collapsible); search expands matching groups; add / edit / delete / **Rebuild from library**
+
+![Library manager · Suggest](../docs/screenshots/2.0.0/2.png)
+
 - **Edit** a segment: rename in that side’s dictionary (pos or neg only); if presets use it, confirm then rewrite those prompts on that side only
+- **Edit** replace preview: count + scrollable cards (collection, name, info peek)
+
+![Rename segment — replace in presets](../docs/screenshots/2.0.0/3.png)
+
 - Dictionaries live under `db/autocomplete/{pos,neg}/` — one SQLite file per first letter (dynamic)
 - Segments split on `,` and newlines; `(tag:1.2)` weights stripped on ingest
 - VS Code-style popup at the caret: arrows to move, **Tab** to accept, **Esc** to close (Enter still inserts a newline)
 - Scrollable suggestion list (max height); lookup stays inside the letter bucket
 - If nothing matches: popup offers the typed segment with **Tab to save**; after save the hint turns green **Saved** (~1.5s or until next input)
-- **Edit** replace preview: count + scrollable cards (collection, name, info peek)
+
+![Autocomplete at the caret](../docs/screenshots/2.0.0/1.png)
+![Autocomplete at the caret](../docs/screenshots/2.0.0/1.1.png)
+
 - Saving or updating a pair also feeds the dictionaries
-
-![Library manager · Suggest](../docs/screenshots/2.0.0/2.png)
-
-![Rename segment — replace in presets](../docs/screenshots/2.0.0/3.png)
 
 #### Preset & pair UX
 
 - After Load: **Loaded ·** name (+ folder), reload / detach; Save prefills from the chip
 - Preset chip clears when you add, remove, or duplicate a group
 - Pair toolbar: **Clear** next to Save / Load (clears pos / neg + Loaded chip)
-- Library manager: **Stacks** renamed to **Presets**; last opened tab remembered in SQLite
 
 ![Pair toolbar: Save / Load / Clear](../docs/screenshots/2.0.0/0.png)
+
+- **Add group**: type a new name as before, or pick an existing group from the list under Add (exact shelf name)
+
+![Add group: pick an existing group](../docs/screenshots/2.0.0/7.png)
+
+- Library manager: **Stacks** renamed to **Presets**; last opened tab remembered in SQLite
 
 ---
 
