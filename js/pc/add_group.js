@@ -2,10 +2,14 @@ import { listCategories } from "./api.js";
 import { openPopup } from "./popup.js";
 
 /**
- * Add group: same name input as before, plus clickable collection names from SQLite.
+ * Name a new group/pair slot: free text + shelves that already have saved pairs.
  */
 export function openAddGroupPopup({
   anchor,
+  title = "Add group",
+  placeholder = "pair name",
+  confirmLabel = "Add",
+  nested = false,
   existingTitles = [],
   validate,
   onSubmit,
@@ -16,13 +20,14 @@ export function openAddGroupPopup({
 
   return openPopup({
     anchor,
-    title: "Add group",
+    title,
     width: 280,
+    nested,
     render(body, { close }) {
       const input = document.createElement("input");
       input.className = "pc-popup-input";
       input.type = "text";
-      input.placeholder = "pair name";
+      input.placeholder = placeholder;
 
       const errorEl = document.createElement("div");
       errorEl.className = "pc-popup-error pc-add-group-error";
@@ -33,7 +38,7 @@ export function openAddGroupPopup({
       const confirm = document.createElement("button");
       confirm.type = "button";
       confirm.className = "pc-popup-btn primary";
-      confirm.textContent = "Add";
+      confirm.textContent = confirmLabel;
       actions.appendChild(confirm);
 
       const groupsBlock = document.createElement("div");
@@ -144,7 +149,9 @@ export function openAddGroupPopup({
           list.appendChild(err);
           return;
         }
+        // Only shelves that already have at least one saved pair (not empty leftovers).
         names = (result.categories || [])
+          .filter((c) => Number(c?.count || 0) > 0)
           .map((c) => String(c?.name || "").trim())
           .filter(Boolean);
         paintList();

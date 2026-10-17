@@ -20,7 +20,7 @@ Format: newest first.
 
 - Load by slot name: keep the node’s order; fill matching pairs; insert missing slots before the next already-present template pair (not always at the end); ignore pairs that aren’t in the template
 - Empty pairs are not saved; **Loaded** pair chips travel with the pack
-- Manager: **Templates** tab — folders, edit pairs (add / remove / reorder / collapse, Save / Load / Clear pair, enable / disable), duplicate / delete
+- Manager: **Templates** tab — folders, edit pairs (add / remove / reorder / collapse, Save / Load / Clear pair, enable / disable), duplicate / delete; **Add pair** uses the same group-shelf picker as **Add group**
 
 ![Library manager · Templates](../docs/screenshots/2.0.0/4.png)
 
@@ -61,7 +61,7 @@ Suggest tags/phrases from **your** library while editing positive / negative —
 
 ![Pair toolbar: Save / Load / Clear](../docs/screenshots/2.0.0/0.png)
 
-- **Add group**: type a new name as before, or pick an existing group from the list under Add (exact shelf name)
+- **Add group**: type a new name as before, or pick a library shelf that already has saved pairs (exact name)
 
 ![Add group: pick an existing group](../docs/screenshots/2.0.0/7.png)
 

@@ -11,6 +11,7 @@ import {
   TRASH_ICON_SVG,
 } from "./icons.js";
 import { openConfirmPopup, openInputPopup, openPopup } from "./popup.js";
+import { openAddGroupPopup } from "./add_group.js";
 import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
 import { confirmReplacePair, openLoadPairPopup } from "./pair_load.js";
 import { openSavePairPopup } from "./pair_save.js";
@@ -973,11 +974,11 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
 
       addSlotBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        mgrInput({
+        openAddGroupPopup({
           anchor: addSlotBtn,
           title: "Add pair",
-          placeholder: "pair name",
-          confirmLabel: "Add",
+          nested: true,
+          existingTitles: slotState.map((s) => s.title),
           validate: (value) => slotTitleError(value, -1),
           onSubmit: (value) => {
             slotState.push({
@@ -991,7 +992,6 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
               loadedDescription: "",
             });
             paintSlots();
-            return "";
           },
         });
       });
