@@ -39,7 +39,7 @@ ensureUiPrefs();
 
 const MIN_NODE_WIDTH = 400;
 const SOCKET_ROWS_HEIGHT = 56;
-const HEADER_HEIGHT = 152;
+const HEADER_HEIGHT = 156;
 const LOADED_CHIP_ROW_HEIGHT = 26;
 const CONTAINER_PADDING_V = 10;
 const GAP_BETWEEN_SECTIONS = 8;
@@ -168,49 +168,37 @@ app.registerExtension({
       addBtn.className = "pc-add-btn";
       addBtn.innerHTML = `${PLUS_ICON_SVG}<span>Add group</span>`;
 
-      const libraryRow = document.createElement("div");
-      libraryRow.className = "pc-header-row";
+      function makeLibrarySection(kind, titleText) {
+        const section = document.createElement("div");
+        section.className = `pc-lib-section pc-lib-section-${kind}`;
 
+        const toolbar = document.createElement("div");
+        toolbar.className = "pc-lib-section-toolbar";
+
+        const label = document.createElement("div");
+        label.className = "pc-lib-section-label";
+        label.textContent = titleText;
+
+        const buttons = document.createElement("div");
+        buttons.className = "pc-lib-section-buttons";
+
+        toolbar.append(label, buttons);
+        section.append(toolbar);
+        return { section, buttons };
+      }
+
+      const presetBlock = makeLibrarySection("preset", "Preset");
       const saveBtn = document.createElement("button");
       saveBtn.type = "button";
       saveBtn.className = "pc-save-btn";
-      saveBtn.innerHTML = `${SAVE_ICON_SVG}<span>Save preset</span>`;
+      saveBtn.innerHTML = `${SAVE_ICON_SVG}<span>Save</span>`;
 
       const loadBtn = document.createElement("button");
       loadBtn.type = "button";
       loadBtn.className = "pc-load-btn";
-      loadBtn.innerHTML = `${LOAD_ICON_SVG}<span>Load preset</span>`;
+      loadBtn.innerHTML = `${LOAD_ICON_SVG}<span>Load</span>`;
 
-      libraryRow.append(saveBtn, loadBtn);
-
-      const templateRow = document.createElement("div");
-      templateRow.className = "pc-header-row";
-
-      const saveTemplateBtn = document.createElement("button");
-      saveTemplateBtn.type = "button";
-      saveTemplateBtn.className = "pc-template-save-btn";
-      saveTemplateBtn.innerHTML = `${SAVE_ICON_SVG}<span>Save template</span>`;
-
-      const loadTemplateBtn = document.createElement("button");
-      loadTemplateBtn.type = "button";
-      loadTemplateBtn.className = "pc-template-load-btn";
-      loadTemplateBtn.innerHTML = `${LOAD_ICON_SVG}<span>Load template</span>`;
-
-      templateRow.append(saveTemplateBtn, loadTemplateBtn);
-
-      const managerBtn = document.createElement("button");
-      managerBtn.type = "button";
-      managerBtn.className = "pc-manage-btn";
-      managerBtn.textContent = "Manage library";
-
-      const settingsBtn = document.createElement("button");
-      settingsBtn.type = "button";
-      settingsBtn.className = "pc-settings-btn";
-      settingsBtn.textContent = "Settings";
-
-      const toolsRow = document.createElement("div");
-      toolsRow.className = "pc-header-row";
-      toolsRow.append(managerBtn, settingsBtn);
+      presetBlock.buttons.append(saveBtn, loadBtn);
 
       const loadedStackRow = document.createElement("div");
       loadedStackRow.className = "pc-loaded-row";
@@ -248,6 +236,20 @@ app.registerExtension({
         loadedStackResetBtn,
         loadedStackClearBtn,
       );
+      presetBlock.section.appendChild(loadedStackRow);
+
+      const templateBlock = makeLibrarySection("template", "Template");
+      const saveTemplateBtn = document.createElement("button");
+      saveTemplateBtn.type = "button";
+      saveTemplateBtn.className = "pc-template-save-btn";
+      saveTemplateBtn.innerHTML = `${SAVE_ICON_SVG}<span>Save</span>`;
+
+      const loadTemplateBtn = document.createElement("button");
+      loadTemplateBtn.type = "button";
+      loadTemplateBtn.className = "pc-template-load-btn";
+      loadTemplateBtn.innerHTML = `${LOAD_ICON_SVG}<span>Load</span>`;
+
+      templateBlock.buttons.append(saveTemplateBtn, loadTemplateBtn);
 
       const loadedTemplateRow = document.createElement("div");
       loadedTemplateRow.className = "pc-loaded-row";
@@ -285,8 +287,23 @@ app.registerExtension({
         loadedTemplateResetBtn,
         loadedTemplateClearBtn,
       );
+      templateBlock.section.appendChild(loadedTemplateRow);
 
-      header.append(addBtn, libraryRow, templateRow, toolsRow, loadedStackRow, loadedTemplateRow);
+      const managerBtn = document.createElement("button");
+      managerBtn.type = "button";
+      managerBtn.className = "pc-manage-btn";
+      managerBtn.textContent = "Manage library";
+
+      const settingsBtn = document.createElement("button");
+      settingsBtn.type = "button";
+      settingsBtn.className = "pc-settings-btn";
+      settingsBtn.textContent = "Settings";
+
+      const toolsRow = document.createElement("div");
+      toolsRow.className = "pc-header-row";
+      toolsRow.append(managerBtn, settingsBtn);
+
+      header.append(addBtn, presetBlock.section, templateBlock.section, toolsRow);
 
       const groupsWrap = document.createElement("div");
       groupsWrap.className = "pc-groups";

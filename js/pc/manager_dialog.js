@@ -3,6 +3,7 @@ import {
   CLOSE_ICON_SVG,
   COPY_ICON_SVG,
   EDIT_ICON_SVG,
+  GRIP_ICON_SVG,
   LOAD_ICON_SVG,
   PLUS_ICON_SVG,
   SAVE_ICON_SVG,
@@ -302,7 +303,7 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
   return openPopup({
     nested: true,
     anchor,
-    title: "Edit stack",
+    title: "Edit preset",
     width: 320,
     render(body, { close }) {
       const title = document.createElement("input");
@@ -627,7 +628,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
     centered: true,
     anchor,
     title: "Edit template",
-    width: 460,
+    width: 480,
     render(body, { close, reposition }) {
       const title = document.createElement("input");
       title.className = "pc-popup-input";
@@ -673,6 +674,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
         positive: slot.positive || "",
         negative: slot.negative || "",
         enabled: slot.enabled !== false,
+        collapsed: false,
         loadedTitle: (slot.loadedTitle || "").trim(),
         loadedCategory: (slot.loadedCategory || "").trim(),
         loadedDescription: (slot.loadedDescription || "").trim(),
@@ -701,10 +703,31 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
         }
         slotState.forEach((slot, index) => {
           const card = document.createElement("div");
-          card.className = "pc-tpl-slot" + (slot.enabled ? "" : " is-off");
+          card.className =
+            "pc-tpl-slot" +
+            (slot.enabled ? "" : " is-off") +
+            (slot.collapsed ? " collapsed" : "");
+          card.dataset.slotIndex = String(index);
 
           const head = document.createElement("div");
           head.className = "pc-tpl-slot-head";
+
+          const dragHandle = document.createElement("div");
+          dragHandle.className = "pc-drag-handle";
+          dragHandle.title = "Drag to reorder";
+          dragHandle.innerHTML = GRIP_ICON_SVG;
+          dragHandle.draggable = true;
+          dragHandle.addEventListener("dragstart", (e) => {
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", String(index));
+            card.classList.add("dragging");
+          });
+          dragHandle.addEventListener("dragend", () => {
+            card.classList.remove("dragging");
+            slotsWrap.querySelectorAll(".pc-tpl-slot").forEach((el) => {
+              el.classList.remove("drop-above", "drop-below");
+            });
+          });
 
           const toggle = document.createElement("div");
           toggle.className = "pc-toggle" + (slot.enabled ? " on" : "");
@@ -729,6 +752,36 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             slot.title = nameInput.value;
           });
 
+          const copyBtn = makeIconBtn("pc-mgr-icon-btn", "Duplicate pair", COPY_ICON_SVG, () => {
+            const nextTitle = nextDuplicateName(
+              slotState.map((item) => item.title || ""),
+              slot.title || "Pair",
+            );
+            slotState.splice(index + 1, 0, {
+              title: nextTitle,
+              positive: slot.positive || "",
+              negative: slot.negative || "",
+              enabled: slot.enabled !== false,
+              collapsed: false,
+              loadedTitle: (slot.loadedTitle || "").trim(),
+              loadedCategory: (slot.loadedCategory || "").trim(),
+              loadedDescription: (slot.loadedDescription || "").trim(),
+            });
+            paintSlots();
+          });
+
+          const collapseBtn = document.createElement("button");
+          collapseBtn.type = "button";
+          collapseBtn.className = "pc-mgr-icon-btn pc-tpl-collapse-btn";
+          collapseBtn.innerHTML = CHEVRON_ICON_SVG;
+          collapseBtn.title = slot.collapsed ? "Expand pair" : "Collapse pair";
+          collapseBtn.setAttribute("aria-expanded", slot.collapsed ? "false" : "true");
+          collapseBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            slot.collapsed = !slot.collapsed;
+            paintSlots();
+          });
+
           const removeBtn = makeIconBtn("pc-mgr-icon-btn danger", "Remove pair", TRASH_ICON_SVG, () => {
             mgrConfirm({
               anchor: removeBtn,
@@ -743,7 +796,31 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             });
           });
 
-          head.append(toggle, nameInput, removeBtn);
+          head.append(dragHandle, toggle, nameInput, copyBtn, collapseBtn, removeBtn);
+
+          card.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            const rect = card.getBoundingClientRect();
+            const above = e.clientY < rect.top + rect.height / 2;
+            card.classList.toggle("drop-above", above);
+            card.classList.toggle("drop-below", !above);
+          });
+          card.addEventListener("dragleave", () => {
+            card.classList.remove("drop-above", "drop-below");
+          });
+          card.addEventListener("drop", (e) => {
+            e.preventDefault();
+            card.classList.remove("drop-above", "drop-below");
+            const from = parseInt(e.dataTransfer.getData("text/plain"), 10);
+            if (Number.isNaN(from) || from === index) return;
+            const rect = card.getBoundingClientRect();
+            let to = index;
+            if (e.clientY >= rect.top + rect.height / 2) to += 1;
+            if (from < to) to -= 1;
+            const [moved] = slotState.splice(from, 1);
+            slotState.splice(to, 0, moved);
+            paintSlots();
+          });
 
           const toolbar = document.createElement("div");
           toolbar.className = "pc-tpl-slot-toolbar";
@@ -882,7 +959,11 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             slot.negative = neg.area.value;
           });
 
-          card.append(head, toolbar, loadedRow, pos.wrap, neg.wrap);
+          const body = document.createElement("div");
+          body.className = "pc-tpl-slot-body";
+          body.append(toolbar, loadedRow, pos.wrap, neg.wrap);
+
+          card.append(head, body);
           slotsWrap.appendChild(card);
         });
         reposition();
@@ -904,6 +985,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
               positive: "",
               negative: "",
               enabled: true,
+              collapsed: false,
               loadedTitle: "",
               loadedCategory: "",
               loadedDescription: "",
@@ -1229,7 +1311,7 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
   if (!names.length) {
     const empty = document.createElement("div");
     empty.className = "pc-popup-message";
-    empty.textContent = q ? "No stacks" : "No saved stacks yet.";
+    empty.textContent = q ? "No presets" : "No saved presets yet.";
     listEl.appendChild(empty);
     return;
   }
@@ -1282,7 +1364,7 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
           mgrConfirm({
             anchor: btn,
             title: "Delete folder",
-            message: `Delete folder “${folderName}”?\n${items.length} stack(s) will move to ${UNCATEGORISED}.`,
+            message: `Delete folder “${folderName}”?\n${items.length} preset(s) will move to ${UNCATEGORISED}.`,
             confirmLabel: "Delete",
             danger: true,
             onConfirm: async () => {
@@ -1327,7 +1409,7 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
                 folder: layout.folder || "",
               });
               if (!result.ok) {
-                showMgrError(btn, "Duplicate stack", result.error);
+                showMgrError(btn, "Duplicate preset", result.error);
                 return;
               }
               reload();
@@ -1335,14 +1417,14 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
             onDelete: (btn) => {
               mgrConfirm({
                 anchor: btn,
-                title: "Delete stack",
+                title: "Delete preset",
                 message: `Delete “${layout.name}”?`,
                 confirmLabel: "Delete",
                 danger: true,
                 onConfirm: async () => {
                   const result = await deleteLayout(layout.id);
                   if (!result.ok) {
-                    showMgrError(btn, "Delete stack", result.error);
+                    showMgrError(btn, "Delete preset", result.error);
                     return;
                   }
                   reload();
@@ -1527,10 +1609,10 @@ export async function openManagerPopup({ anchor }) {
       const tabs = document.createElement("div");
       tabs.className = "pc-mgr-tabs";
 
-      const stacksTab = document.createElement("button");
-      stacksTab.type = "button";
-      stacksTab.className = "pc-mgr-tab active";
-      stacksTab.textContent = "Stacks";
+      const presetsTab = document.createElement("button");
+      presetsTab.type = "button";
+      presetsTab.className = "pc-mgr-tab";
+      presetsTab.textContent = "Presets";
 
       const promptsTab = document.createElement("button");
       promptsTab.type = "button";
@@ -1542,7 +1624,7 @@ export async function openManagerPopup({ anchor }) {
       templatesTab.className = "pc-mgr-tab";
       templatesTab.textContent = "Templates";
 
-      tabs.append(stacksTab, promptsTab, templatesTab);
+      tabs.append(presetsTab, promptsTab, templatesTab);
 
       let suggestTab = null;
       if (acEnabled) {
@@ -1604,7 +1686,7 @@ export async function openManagerPopup({ anchor }) {
 
       body.append(tabs, search, emptyRow, bodyRow, status, list);
 
-      let mode = "stacks";
+      let mode = "presets";
       let showEmpty = showEmptyPref;
       let includeBody = searchInPromptsPref;
       let layouts = [];
@@ -1614,27 +1696,28 @@ export async function openManagerPopup({ anchor }) {
       let categories = [];
       let templateFolders = [];
       let acPanel = null;
-      const stacksOpen = new Map();
+      const presetsOpen = new Map();
       const promptsOpen = new Map();
       const templatesOpen = new Map();
 
       const titles = {
-        stacks: "Library manager · Stacks",
+        presets: "Library manager · Presets",
         prompts: "Library manager · Prompts",
         templates: "Library manager · Templates",
         suggest: "Library manager · Suggest",
       };
 
-      function setActiveTab(next) {
+      function setActiveTab(next, { persist = true } = {}) {
         mode = next;
-        stacksTab.classList.toggle("active", mode === "stacks");
+        presetsTab.classList.toggle("active", mode === "presets");
         promptsTab.classList.toggle("active", mode === "prompts");
         templatesTab.classList.toggle("active", mode === "templates");
         suggestTab?.classList.toggle("active", mode === "suggest");
         setTitle(titles[mode] || "Library manager");
+        if (persist) setUiPref("managerTab", mode);
 
         if (mode === "suggest") {
-          // Same content slot as Stacks/Prompts — full replace, not a panel under them.
+          // Same content slot as list tabs — full replace, not a panel under them.
           search.style.display = "none";
           emptyRow.style.display = "none";
           bodyRow.style.display = "none";
@@ -1659,14 +1742,14 @@ export async function openManagerPopup({ anchor }) {
 
       function paint() {
         if (mode === "suggest") return;
-        if (mode === "stacks") {
+        if (mode === "presets") {
           paintStacksTab(list, {
             layouts,
             folders,
             showEmpty,
             query: search.value,
-            openMap: stacksOpen,
-            reload: loadStacks,
+            openMap: presetsOpen,
+            reload: loadPresetsTab,
           });
         } else if (mode === "templates") {
           paintTemplatesTab(list, {
@@ -1691,12 +1774,12 @@ export async function openManagerPopup({ anchor }) {
         reposition();
       }
 
-      async function loadStacks() {
+      async function loadPresetsTab() {
         status.textContent = "Loading…";
         status.style.display = "";
         const [layoutResult, folderResult] = await Promise.all([listLayouts(), listLayoutFolders()]);
         if (!layoutResult.ok) {
-          status.textContent = layoutResult.error || "Failed to load stacks";
+          status.textContent = layoutResult.error || "Failed to load presets";
           return;
         }
         layouts = layoutResult.layouts || [];
@@ -1736,11 +1819,11 @@ export async function openManagerPopup({ anchor }) {
         paint();
       }
 
-      stacksTab.addEventListener("click", (e) => {
+      presetsTab.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (mode === "stacks") return;
-        setActiveTab("stacks");
-        if (!layouts.length) loadStacks();
+        if (mode === "presets") return;
+        setActiveTab("presets");
+        if (!layouts.length) loadPresetsTab();
         else paint();
       });
 
@@ -1786,8 +1869,15 @@ export async function openManagerPopup({ anchor }) {
         paint();
       });
 
-      setTitle("Library manager · Stacks");
-      loadStacks();
+      let initialTab = String(getUiPref("managerTab") || "presets");
+      if (initialTab === "suggest" && !acEnabled) initialTab = "presets";
+      if (!titles[initialTab]) initialTab = "presets";
+
+      setActiveTab(initialTab, { persist: false });
+      if (initialTab === "presets") loadPresetsTab();
+      else if (initialTab === "prompts") loadPrompts();
+      else if (initialTab === "templates") loadTemplates();
+      // suggest: setActiveTab already mounted the panel
     },
   });
 }

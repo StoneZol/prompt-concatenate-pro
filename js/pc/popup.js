@@ -26,13 +26,14 @@ const CSS = `
 }
 
 .pc-popup-centered {
-  max-width: min(480px, calc(100vw - 16px));
-  max-height: 75vh;
+  max-width: min(520px, calc(100vw - 16px));
+  height: fit-content;
+  max-height: 88vh;
   overflow: hidden;
 }
 
 .pc-popup-centered .pc-popup-body {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   overflow: hidden;
   display: flex;
@@ -58,14 +59,34 @@ const CSS = `
   padding-right: 2px;
 }
 
+/* Centered editors: size to content; don't leave a hole above the footer Save. */
+.pc-popup-centered .pc-popup-scroll {
+  flex: 0 1 auto;
+  max-height: min(72vh, 640px);
+}
+
+.pc-popup-title.pc-popup-drag {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.pc-popup-title.pc-popup-drag:active {
+  cursor: grabbing;
+}
+
 .pc-popup-footer {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   padding-top: 8px;
   margin-top: 8px;
   border-top: 1px solid var(--border-color, #444);
+}
+
+.pc-popup-footer .pc-popup-error:empty {
+  display: none;
 }
 
 .pc-popup-footer .pc-popup-actions {
@@ -963,6 +984,15 @@ function injectPopupStyles() {
 
 const popupStack = [];
 
+function clampPopupPosition(el, x, y) {
+    const margin = 8;
+    const box = el.getBoundingClientRect();
+    const maxX = window.innerWidth - box.width - margin;
+    const maxY = window.innerHeight - box.height - margin;
+    el.style.left = `${Math.max(margin, Math.min(x, maxX))}px`;
+    el.style.top = `${Math.max(margin, Math.min(y, maxY))}px`;
+}
+
 function placePopup(el, { anchor, position, centered }) {
     const margin = 8;
     const gap = 4;
@@ -984,7 +1014,7 @@ function placePopup(el, { anchor, position, centered }) {
     const box = el.getBoundingClientRect();
     if (centered) {
         x = (window.innerWidth - box.width) / 2;
-        const anchorY = window.innerHeight * 0.4;
+        const anchorY = window.innerHeight * 0.42;
         y = anchorY - box.height / 2;
     } else if (anchorRect) {
         x =
@@ -996,11 +1026,46 @@ function placePopup(el, { anchor, position, centered }) {
             below + box.height <= window.innerHeight - margin;
         y = !fitsBelow && above >= margin ? above : below;
     }
-    const maxX = window.innerWidth - box.width - margin;
-    const maxY = window.innerHeight - box.height - margin;
-    el.style.left = `${Math.max(margin, Math.min(x, maxX))}px`;
-    el.style.top = `${Math.max(margin, Math.min(y, maxY))}px`;
+    clampPopupPosition(el, x, y);
     el.style.visibility = "visible";
+}
+
+function bindPopupDrag(root, handle, onMoved) {
+    if (!handle) return;
+    handle.classList.add("pc-popup-drag");
+    handle.title = handle.title || "Drag to move";
+
+    handle.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        handle.setPointerCapture(e.pointerId);
+        const rect = root.getBoundingClientRect();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const origX = rect.left;
+        const origY = rect.top;
+
+        function onMove(ev) {
+            clampPopupPosition(
+                root,
+                origX + (ev.clientX - startX),
+                origY + (ev.clientY - startY),
+            );
+            onMoved?.();
+        }
+
+        function onUp(ev) {
+            handle.releasePointerCapture(ev.pointerId);
+            handle.removeEventListener("pointermove", onMove);
+            handle.removeEventListener("pointerup", onUp);
+            handle.removeEventListener("pointercancel", onUp);
+        }
+
+        handle.addEventListener("pointermove", onMove);
+        handle.addEventListener("pointerup", onUp);
+        handle.addEventListener("pointercancel", onUp);
+    });
 }
 
 /**
@@ -1015,6 +1080,7 @@ function placePopup(el, { anchor, position, centered }) {
  * @param {number} [opts.width]
  * @param {boolean} [opts.nested]
  * @param {boolean} [opts.centered]
+ * @param {boolean} [opts.draggable] — drag window by title (opt-in)
  * @param {(body: HTMLElement, api: { close: () => void, root: HTMLElement, setTitle: (t: string) => void }) => void} opts.render
  * @param {() => void} [opts.onClose]
  */
@@ -1051,6 +1117,9 @@ export function openPopup(opts) {
     root.append(titleEl, body);
 
     let closed = false;
+    let userMoved = false;
+    const draggable = Boolean(opts.draggable);
+
     function close() {
         if (closed) return;
         closed = true;
@@ -1113,6 +1182,11 @@ export function openPopup(opts) {
         root,
         reposition() {
             if (closed || !root.isConnected) return;
+            if (userMoved) {
+                const rect = root.getBoundingClientRect();
+                clampPopupPosition(root, rect.left, rect.top);
+                return;
+            }
             placePopup(root, opts);
         },
         setTitle(text) {
@@ -1120,6 +1194,12 @@ export function openPopup(opts) {
             titleEl.textContent = text || "";
         },
     };
+
+    if (draggable && opts.title) {
+        bindPopupDrag(root, titleEl, () => {
+            userMoved = true;
+        });
+    }
 
     popupStack.push(api);
     opts.render?.(body, api);

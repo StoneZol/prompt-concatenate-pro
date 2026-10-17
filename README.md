@@ -30,10 +30,10 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 - **Pin to sidebar** — each group's pos/neg appears in ComfyUI Inputs / Favorites (`Group | positive`, `Group | negative`)
 - **Duplicate pairs** — copy a group as `Title (2)` while Save/Load still use the base shelf (`Pose`)
 - **Loaded pair tracking** — after Load, the card shows **Loaded · name**; **×** detaches the link; Save prefills name, collection, and notes
-- **Layout presets (Stacks)** — save the current slot list + order; optional folder; edit slots as comma-separated text in the manager
+- **Layout presets** — save the current slot list + order; optional folder; edit slots as comma-separated text in the manager
 - **Prompt pairs** — save/load pos+neg per **collection** (e.g. shelf named after the slot)
 - **Smart library search** — AND tokens; `shelf\keyword` filters a collection first; optional **Search in prompts** for body text
-- **Library manager** — rename, move, delete, edit, and **duplicate** stacks & prompts; prefs (Show empty / Search in prompts / Other collections) persist in SQLite
+- **Library manager** — rename, move, delete, edit, and **duplicate** presets & prompts; last opened tab + prefs persist in SQLite
 - **PNG-friendly prompts** — optional (Settings): on queue, joined text is written into stock **CLIP Text Encode** `text`; wires restore after. Off by default so workflows loaded from images keep links. Pref in SQLite.
 - **Local SQLite** — `db/presets.sqlite`, auto-created on first use
 
@@ -62,11 +62,11 @@ No pip dependencies — Python 3.8+ stdlib + SQLite only.
 3. Connect **`str_pos`** / **`str_neg`** to two stock **CLIP Text Encode (Prompt)** nodes (positive / negative). Optional: **Settings → Embed prompts in CLIP for PNG meta** if you need readable prompts in PNG metadata.
 4. **Save preset** — snapshot your current slot layout (names + order).
 5. On a group card: **Save pair** / **Load pair** — store or recall that block's prompts in a collection.
-6. **Manage library** — edit, duplicate, move, or delete saved stacks and prompts.
+6. **Manage library** — edit, duplicate, move, or delete saved presets and prompts.
 
 ### Save a layout preset
 
-Snapshot the current slots (`Skin · Bg · Light`) into a named stack, optionally in a folder.
+Snapshot the current slots (`Skin · Bg · Light`) into a named preset, optionally in a folder.
 
 ![Save preset dialog](docs/screenshots/1.png)
 
@@ -78,7 +78,7 @@ From a group card, store that block's positive / negative under a collection (de
 
 ### Load a layout
 
-Search stacks by folder and apply the slot list back onto the node.
+Search presets by folder and apply the slot list back onto the node.
 
 ![Load preset dialog](docs/screenshots/3.png)
 
@@ -103,7 +103,7 @@ After load, the group shows which library item is attached — Save will prefill
 Live editing surface. Each group has `title`, `positive`, `negative`, order, and `enabled`.  
 Sidebar labels (`Skin | positive`) are stamped **when the group is created**. Renaming the group on the node is local — it does **not** rewrite those labels and does **not** rename library collections.
 
-### Stacks (layout presets)
+### Presets (layout)
 
 Saved from **Save preset** in the node header.  
 Stores **slot names + order** only (empty pairs). Optional **folder**; default bucket is **Uncategorised**.
@@ -115,10 +115,10 @@ Stored in a **collection** (defaults to the group's title). Includes title, note
 
 ### Collections vs folders
 
-| Term           | Used for                | Table            |
-| -------------- | ----------------------- | ---------------- |
-| **Folder**     | Layout presets (stacks) | `layout_folders` |
-| **Collection** | Prompt pairs            | `categories`     |
+| Term           | Used for         | Table            |
+| -------------- | ---------------- | ---------------- |
+| **Folder**     | Layout presets   | `layout_folders` |
+| **Collection** | Prompt pairs     | `categories`     |
 
 Collections are created when you **Save pair**, not when you save a layout preset.
 
@@ -139,13 +139,14 @@ Pin them from the node **Inputs** panel or **Favorites**. Edits sync both ways w
 
 **Manage library** (full-width button under Save / Load preset):
 
-- **Stacks** — layout presets by folder; rename folder, move stack, delete, **duplicate** (`Name` → `Name (2)`), edit slots as `Base, Scene, …`
+- **Presets** — layout presets by folder; rename folder, move, delete, **duplicate** (`Name` → `Name (2)`), edit slots as `Base, Scene, …`
 - **Prompts** — pairs by collection; full editor for metadata + prompt text; **duplicate** to fork a version
+- **Templates** — full prompt packs; edit pairs, reorder, duplicate
 - **Show empty** — reveal empty folders / collections
 - **Search in prompts** — include positive/negative body in search (off by default)
-- Search on both tabs (`name or shelf\keyword`); toggle prefs persist in SQLite
+- Last opened tab and toggle prefs persist in SQLite
 
-![Library manager · Stacks](docs/screenshots/5.png)
+![Library manager · Presets](docs/screenshots/5.png)
 
 ![Library manager · Prompts](docs/screenshots/6.png)
 
@@ -155,7 +156,7 @@ Edit a prompt in a centered dialog: name, collection, notes stay fixed; positive
 
 ![Edit prompt dialog](docs/screenshots/7.png)
 
-![Edit stack slots](docs/screenshots/1.2.0/2.png)
+![Edit preset slots](docs/screenshots/1.2.0/2.png)
 
 ---
 

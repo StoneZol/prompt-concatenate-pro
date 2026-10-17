@@ -2,6 +2,8 @@ import { getUiPrefs, updateUiPrefs } from "./api.js";
 
 const LEGACY_KEY = "pc-ui-prefs";
 
+const MANAGER_TABS = new Set(["presets", "prompts", "templates", "suggest"]);
+
 const DEFAULTS = {
   otherCollections: false,
   showEmpty: false,
@@ -10,11 +12,24 @@ const DEFAULTS = {
   embedClipMeta: false,
   /** Experimental: suggest segments from saved pairs / autocomplete dict. */
   promptAutocomplete: false,
+  /** Last Library manager tab: presets | prompts | templates | suggest */
+  managerTab: "presets",
 };
 
 let cache = { ...DEFAULTS };
 let loaded = false;
 let loadPromise = null;
+
+function normalizeManagerTab(value) {
+  let val = String(value || "").trim().toLowerCase();
+  if (val === "stacks") val = "presets";
+  return MANAGER_TABS.has(val) ? val : "presets";
+}
+
+function coercePref(key, value) {
+  if (key === "managerTab") return normalizeManagerTab(value);
+  return Boolean(value);
+}
 
 function readLegacyLocal() {
   try {
@@ -24,7 +39,7 @@ function readLegacyLocal() {
     if (!parsed || typeof parsed !== "object") return null;
     const prefs = { ...DEFAULTS };
     for (const key of Object.keys(DEFAULTS)) {
-      if (key in parsed) prefs[key] = Boolean(parsed[key]);
+      if (key in parsed) prefs[key] = coercePref(key, parsed[key]);
     }
     return prefs;
   } catch {
@@ -43,7 +58,7 @@ function clearLegacyLocal() {
 function applyPrefs(prefs) {
   cache = { ...DEFAULTS, ...(prefs || {}) };
   for (const key of Object.keys(DEFAULTS)) {
-    cache[key] = Boolean(cache[key]);
+    cache[key] = coercePref(key, cache[key]);
   }
   loaded = true;
   return cache;
@@ -84,7 +99,7 @@ export function getUiPref(key) {
 
 export function setUiPref(key, value) {
   if (!Object.prototype.hasOwnProperty.call(DEFAULTS, key)) return;
-  cache[key] = Boolean(value);
+  cache[key] = coercePref(key, value);
   updateUiPrefs({ [key]: cache[key] }).then((result) => {
     if (result?.ok && result.prefs) applyPrefs(result.prefs);
   });

@@ -1144,6 +1144,7 @@ UI_PREF_KEYS = (
     "searchInPrompts",
     "embedClipMeta",
     "promptAutocomplete",
+    "managerTab",
 )
 UI_PREF_DEFAULTS = {
     "otherCollections": False,
@@ -1151,7 +1152,9 @@ UI_PREF_DEFAULTS = {
     "searchInPrompts": False,
     "embedClipMeta": False,
     "promptAutocomplete": False,
+    "managerTab": "presets",
 }
+_MANAGER_TAB_VALUES = frozenset({"presets", "prompts", "templates", "suggest"})
 
 
 def _safe_ingest_pair(positive: str = "", negative: str = "") -> None:
@@ -1356,7 +1359,14 @@ def _normalize_ui_prefs(raw) -> Dict:
     if not isinstance(raw, dict):
         return prefs
     for key in UI_PREF_KEYS:
-        if key in raw:
+        if key not in raw:
+            continue
+        if key == "managerTab":
+            val = str(raw[key] or "").strip().lower()
+            if val == "stacks":
+                val = "presets"
+            prefs[key] = val if val in _MANAGER_TAB_VALUES else "presets"
+        else:
             prefs[key] = bool(raw[key])
     return prefs
 
@@ -1398,7 +1408,14 @@ def set_ui_prefs(patch: Optional[Dict] = None) -> Dict:
                     raw = {}
             prefs = _normalize_ui_prefs(raw)
             for key in UI_PREF_KEYS:
-                if key in incoming:
+                if key not in incoming:
+                    continue
+                if key == "managerTab":
+                    val = str(incoming[key] or "").strip().lower()
+                    if val == "stacks":
+                        val = "presets"
+                    prefs[key] = val if val in _MANAGER_TAB_VALUES else "presets"
+                else:
                     prefs[key] = bool(incoming[key])
             payload = json.dumps(prefs)
             conn.execute(

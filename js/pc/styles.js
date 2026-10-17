@@ -25,6 +25,78 @@ const CSS = `
   gap: 6px;
 }
 
+.pc-lib-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px 7px;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.pc-lib-section-preset {
+  border-color: #4a5568;
+  background: rgba(55, 65, 81, 0.28);
+}
+
+.pc-lib-section-template {
+  border-color: #5a5080;
+  background: rgba(47, 43, 61, 0.45);
+}
+
+.pc-lib-section-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pc-lib-section-label {
+  flex: 1 1 50%;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--descrip-text, #999);
+  line-height: 1;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pc-lib-section-buttons {
+  flex: 0 0 50%;
+  width: 50%;
+  max-width: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pc-lib-section-buttons > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 6px;
+}
+
+.pc-lib-section-preset .pc-lib-section-label {
+  color: #9aa4b2;
+}
+
+.pc-lib-section-template .pc-lib-section-label {
+  color: #b7aee0;
+}
+
+.pc-lib-section .pc-loaded-row {
+  margin-top: 2px;
+  padding: 2px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
 .pc-title-input,
 .pc-textarea {
   box-sizing: border-box;
@@ -107,10 +179,6 @@ const CSS = `
   font-size: 11px;
 }
 
-.pc-loaded-label.pc-loaded-template::before {
-  content: "Loaded template · ";
-}
-
 .pc-tpl-slot {
   display: flex;
   flex-direction: column;
@@ -125,15 +193,48 @@ const CSS = `
   opacity: 0.55;
 }
 
+.pc-tpl-slot.collapsed .pc-tpl-slot-body {
+  display: none;
+}
+
+.pc-tpl-slot.dragging {
+  opacity: 0.45;
+}
+
+.pc-tpl-slot.drop-above {
+  box-shadow: inset 0 2px 0 0 #7c6bb5;
+}
+
+.pc-tpl-slot.drop-below {
+  box-shadow: inset 0 -2px 0 0 #7c6bb5;
+}
+
+.pc-tpl-slot-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .pc-tpl-slot-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .pc-tpl-slot-head .pc-popup-input {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.pc-tpl-collapse-btn svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+  transition: transform 0.15s ease;
+}
+
+.pc-tpl-slot.collapsed .pc-tpl-collapse-btn svg {
+  transform: rotate(-90deg);
 }
 
 .pc-tpl-slot-toolbar {
@@ -516,10 +617,6 @@ const CSS = `
 .pc-loaded-label::before {
   content: "Loaded · ";
   color: var(--descrip-text, #777);
-}
-
-.pc-loaded-label.pc-loaded-preset::before {
-  content: "Loaded preset · ";
 }
 
 .pc-loaded-clear,

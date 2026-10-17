@@ -6,43 +6,35 @@ Format: newest first.
 
 ---
 
-## [1.7.0] — 2026-10-17
+## [2.0.0] — 2026-10-17
 
-### Templates
+### Templates, autocomplete, library polish
 
-Full prompt packs for a node — separate from empty **Stacks** (planning canvas).
+**Presets** stay the empty planning canvas (slot names only). **Templates** are full prompt packs you drop onto a node — pose / light / camera filled, character left alone if it wasn’t in the pack. Plus experimental **prompt autocomplete** from your own library.
 
-- Library manager: **Templates** tab (folders, edit pairs like the node — add/remove, Save/Load pair, enable/disable, duplicate/delete)
-- Node: **Save template** / **Load template**
-- Load merges by slot name: keep node order; fill matching pairs; append missing; ignore slots not in the template
-- Empty pairs are not saved into a template; **Loaded** pair chips travel with the pack
-- **Loaded template** chip with notes / reload / detach
+![Node: Preset / Template sections + Loaded chips](../docs/screenshots/2.0.0/6.png)
+
+#### Templates
+
+- Node: **Preset** and **Template** sections — label + Save/Load on one row; **Loaded** chip (notes / reload / detach) under each
+- Load by slot name: keep the node’s order; fill matching pairs; insert missing slots before the next already-present template pair (not always at the end); ignore pairs that aren’t in the template
+- Empty pairs are not saved; **Loaded** pair chips travel with the pack
+- Manager: **Templates** tab — folders, edit pairs (add / remove / reorder / collapse, Save / Load / Clear pair, enable / disable), duplicate / delete
 - Saving a template also feeds autocomplete dictionaries
 
----
+![Library manager · Templates](../docs/screenshots/2.0.0/4.png)
 
-## [1.6.1] — 2026-10-17
+![Edit template — pairs like on the node](../docs/screenshots/2.0.0/5.png)
 
-### Loaded stack chip
-
-After **Load preset**, the header shows which layout is attached — same idea as the pair **Loaded** row.
-
-- Chip: **Loaded stack ·** name (+ folder); notes peek when present
-- **Reload** pulls the layout from the library again; **×** detaches the name only
-- **Save preset** prefills name / folder / notes from the loaded stack
-- Chip clears when you add, remove, or duplicate a group (slot structure changed)
-
----
-
-## [1.6.0] — 2026-10-17
-
-### Prompt autocomplete (experimental)
+#### Prompt autocomplete (experimental)
 
 Suggest tags/phrases from **your** library while editing positive / negative — not from an external tag DB.
 
+![Autocomplete at the caret](../docs/screenshots/2.0.0/1.png)
+
 - **Settings**: toggle **Prompt autocomplete** (off by default) with an `experimental` badge
 - When enabled: Library manager gets a **Suggest** tab — segments grouped by letter (collapsible); search expands matching groups; add / edit / delete / **Rebuild from library**
-- **Edit** a segment: rename in that side’s dictionary (pos or neg only); if presets use it, confirm twice then rewrite those prompts on that side only
+- **Edit** a segment: rename in that side’s dictionary (pos or neg only); if presets use it, confirm then rewrite those prompts on that side only
 - Dictionaries live under `db/autocomplete/{pos,neg}/` — one SQLite file per first letter (dynamic)
 - Segments split on `,` and newlines; `(tag:1.2)` weights stripped on ingest
 - VS Code-style popup at the caret: arrows to move, **Tab** to accept, **Esc** to close (Enter still inserts a newline)
@@ -50,6 +42,19 @@ Suggest tags/phrases from **your** library while editing positive / negative —
 - If nothing matches: popup offers the typed segment with **Tab to save**; after save the hint turns green **Saved** (~1.5s or until next input)
 - **Edit** replace preview: count + scrollable cards (collection, name, info peek)
 - Saving or updating a pair also feeds the dictionaries
+
+![Library manager · Suggest](../docs/screenshots/2.0.0/2.png)
+
+![Rename segment — replace in presets](../docs/screenshots/2.0.0/3.png)
+
+#### Preset & pair UX
+
+- After Load: **Loaded ·** name (+ folder), reload / detach; Save prefills from the chip
+- Preset chip clears when you add, remove, or duplicate a group
+- Pair toolbar: **Clear** next to Save / Load (clears pos / neg + Loaded chip)
+- Library manager: **Stacks** renamed to **Presets**; last opened tab remembered in SQLite
+
+![Pair toolbar: Save / Load / Clear](../docs/screenshots/2.0.0/0.png)
 
 ---
 
