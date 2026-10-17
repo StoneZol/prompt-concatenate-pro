@@ -15,6 +15,8 @@ LIST_ROUTE = "/prompt_craft/layouts"
 FOLDERS_ROUTE = "/prompt_craft/layout_folders"
 PRESETS_ROUTE = "/prompt_craft/presets"
 CATEGORIES_ROUTE = "/prompt_craft/categories"
+TEMPLATES_ROUTE = "/prompt_craft/templates"
+TEMPLATE_FOLDERS_ROUTE = "/prompt_craft/template_folders"
 PREFS_ROUTE = "/prompt_craft/prefs"
 AUTOCOMPLETE_ROUTE = "/prompt_craft/autocomplete"
 
@@ -221,6 +223,102 @@ async def delete_category(request):
     return web.json_response(result, status=status)
 
 
+async def save_template(request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    try:
+        result = db.save_template(
+            payload.get("name") or "",
+            payload.get("description") or "",
+            payload.get("slots") or [],
+            overwrite=bool(payload.get("overwrite")),
+            folder=payload.get("folder") or "",
+        )
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    status = 200 if result.get("ok") else 409 if result.get("conflicts") else 400
+    return web.json_response(result, status=status)
+
+
+async def list_templates(request):
+    try:
+        result = db.list_templates()
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    return web.json_response(result)
+
+
+async def update_template(request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    if not isinstance(payload, dict) or not payload.get("id"):
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    try:
+        result = db.update_template(
+            int(payload["id"]),
+            name=payload["name"] if "name" in payload else None,
+            description=payload["description"] if "description" in payload else None,
+            folder=payload["folder"] if "folder" in payload else None,
+            slots=payload["slots"] if "slots" in payload else None,
+            overwrite=bool(payload.get("overwrite")),
+        )
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    status = 200 if result.get("ok") else 409 if result.get("conflicts") else 400
+    return web.json_response(result, status=status)
+
+
+async def delete_template(request):
+    template_id = request.rel_url.query.get("id")
+    if not template_id:
+        return web.json_response({"ok": False, "error": "Missing id"}, status=400)
+    try:
+        result = db.delete_template(int(template_id))
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    status = 200 if result.get("ok") else 404 if result.get("error") == "Not found" else 400
+    return web.json_response(result, status=status)
+
+
+async def list_template_folders(request):
+    try:
+        result = db.list_template_folders()
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    return web.json_response(result)
+
+
+async def update_template_folder(request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    try:
+        result = db.rename_template_folder(payload.get("name") or "", payload.get("new_name") or "")
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    status = 200 if result.get("ok") else 409 if result.get("conflicts") else 400
+    return web.json_response(result, status=status)
+
+
+async def delete_template_folder_route(request):
+    name = request.rel_url.query.get("name") or ""
+    try:
+        result = db.delete_template_folder(name)
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    status = 200 if result.get("ok") else 400
+    return web.json_response(result, status=status)
+
+
 async def get_prefs(request):
     try:
         result = db.get_ui_prefs()
@@ -399,6 +497,15 @@ if CATEGORIES_ROUTE not in _existing:
     PromptServer.instance.routes.get(CATEGORIES_ROUTE)(list_categories)
     PromptServer.instance.routes.patch(CATEGORIES_ROUTE)(update_category)
     PromptServer.instance.routes.delete(CATEGORIES_ROUTE)(delete_category)
+if TEMPLATES_ROUTE not in _existing:
+    PromptServer.instance.routes.post(TEMPLATES_ROUTE)(save_template)
+    PromptServer.instance.routes.get(TEMPLATES_ROUTE)(list_templates)
+    PromptServer.instance.routes.patch(TEMPLATES_ROUTE)(update_template)
+    PromptServer.instance.routes.delete(TEMPLATES_ROUTE)(delete_template)
+if TEMPLATE_FOLDERS_ROUTE not in _existing:
+    PromptServer.instance.routes.get(TEMPLATE_FOLDERS_ROUTE)(list_template_folders)
+    PromptServer.instance.routes.patch(TEMPLATE_FOLDERS_ROUTE)(update_template_folder)
+    PromptServer.instance.routes.delete(TEMPLATE_FOLDERS_ROUTE)(delete_template_folder_route)
 if PREFS_ROUTE not in _existing:
     PromptServer.instance.routes.get(PREFS_ROUTE)(get_prefs)
     PromptServer.instance.routes.patch(PREFS_ROUTE)(update_prefs)

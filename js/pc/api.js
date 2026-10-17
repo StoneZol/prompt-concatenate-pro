@@ -141,6 +141,60 @@ export async function deleteCategory(name) {
   return readJson(res);
 }
 
+const TEMPLATES_URL = "/prompt_craft/templates";
+const TEMPLATE_FOLDERS_URL = "/prompt_craft/template_folders";
+
+export async function saveTemplate({ name, description, slots, folder = "", overwrite = false }) {
+  const res = await fetch(TEMPLATES_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, description, slots, folder, overwrite }),
+  });
+  return readJson(res);
+}
+
+export async function listTemplates() {
+  const res = await fetch(TEMPLATES_URL);
+  return readJson(res);
+}
+
+export async function updateTemplate({ id, name, description, folder, slots, overwrite = false }) {
+  const body = { id, name, description, folder, overwrite };
+  if (slots !== undefined) body.slots = slots;
+  const res = await fetch(TEMPLATES_URL, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return readJson(res);
+}
+
+export async function deleteTemplate(id) {
+  const res = await fetch(`${TEMPLATES_URL}?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  return readJson(res);
+}
+
+export async function listTemplateFolders() {
+  const res = await fetch(TEMPLATE_FOLDERS_URL);
+  return readJson(res);
+}
+
+export async function renameTemplateFolder({ name, newName }) {
+  const res = await fetch(TEMPLATE_FOLDERS_URL, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, new_name: newName }),
+  });
+  return readJson(res);
+}
+
+export async function deleteTemplateFolder(name) {
+  const res = await fetch(`${TEMPLATE_FOLDERS_URL}?name=${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+  return readJson(res);
+}
+
 const PREFS_URL = "/prompt_craft/prefs";
 
 export async function getUiPrefs() {

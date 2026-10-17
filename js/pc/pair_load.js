@@ -273,10 +273,12 @@ export async function openLoadPairPopup({
     category,
     onPick,
     onAppend,
+    nested = false,
 }) {
     const shelf = (category || "").trim();
     if (!shelf) {
         openConfirmPopup({
+            nested,
             anchor,
             title: "Load pair",
             message: "Name the pair first.",
@@ -288,6 +290,7 @@ export async function openLoadPairPopup({
     }
     await ensureUiPrefs();
     return openPopup({
+        nested,
         anchor,
         title: shelf ? `Load pair · ${shelf}` : "Load pair",
         width: 340,
@@ -520,8 +523,9 @@ export async function openLoadPairPopup({
     });
 }
 
-export function confirmReplacePair({ anchor, onConfirm }) {
+export function confirmReplacePair({ anchor, onConfirm, nested = false }) {
     openConfirmPopup({
+        nested,
         anchor,
         title: "Load pair",
         message: "Replace current prompts with this pair?",

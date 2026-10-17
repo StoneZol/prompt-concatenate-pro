@@ -55,6 +55,8 @@ const CSS = `
 .pc-add-btn,
 .pc-save-btn,
 .pc-load-btn,
+.pc-template-save-btn,
+.pc-template-load-btn,
 .pc-manage-btn,
 .pc-settings-btn {
   flex: 1 1 0;
@@ -84,10 +86,84 @@ const CSS = `
 }
 
 .pc-save-btn,
-.pc-load-btn {
+.pc-load-btn,
+.pc-template-save-btn,
+.pc-template-load-btn {
   border: 1px solid var(--border-color, #444);
   background: var(--comfy-input-bg, #2a2a2e);
   color: var(--input-text, #ddd);
+}
+
+.pc-template-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.pc-template-card-actions .pc-popup-btn {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.pc-loaded-label.pc-loaded-template::before {
+  content: "Loaded template · ";
+}
+
+.pc-tpl-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 8px;
+  background: var(--comfy-input-bg, #1e1e22);
+}
+
+.pc-tpl-slot.is-off {
+  opacity: 0.55;
+}
+
+.pc-tpl-slot-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pc-tpl-slot-head .pc-popup-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pc-tpl-slot-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pc-tpl-slot-toolbar .pc-popup-btn {
+  flex: 1 1 0;
+  height: 26px;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.pc-tpl-slot-toolbar .pc-popup-btn svg,
+.pc-popup-fixed > .pc-popup-btn svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+  flex: 0 0 auto;
+}
+
+.pc-popup-fixed > .pc-popup-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 28px;
 }
 
 .pc-manage-btn,
@@ -105,6 +181,8 @@ const CSS = `
 .pc-add-btn:hover,
 .pc-save-btn:hover,
 .pc-load-btn:hover,
+.pc-template-save-btn:hover,
+.pc-template-load-btn:hover,
 .pc-manage-btn:hover,
 .pc-settings-btn:hover {
   filter: brightness(1.15);
@@ -112,10 +190,13 @@ const CSS = `
 
 .pc-add-btn svg,
 .pc-save-btn svg,
-.pc-load-btn svg {
+.pc-load-btn svg,
+.pc-template-save-btn svg,
+.pc-template-load-btn svg {
   width: 14px;
   height: 14px;
   display: block;
+  flex: 0 0 auto;
 }
 
 .pc-groups {
@@ -434,8 +515,8 @@ const CSS = `
   color: var(--descrip-text, #777);
 }
 
-.pc-loaded-label.pc-loaded-stack::before {
-  content: "Loaded stack · ";
+.pc-loaded-label.pc-loaded-preset::before {
+  content: "Loaded preset · ";
 }
 
 .pc-loaded-clear,

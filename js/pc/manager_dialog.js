@@ -1,28 +1,57 @@
-import { CHEVRON_ICON_SVG, COPY_ICON_SVG, EDIT_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
+import {
+  CHEVRON_ICON_SVG,
+  CLOSE_ICON_SVG,
+  COPY_ICON_SVG,
+  EDIT_ICON_SVG,
+  LOAD_ICON_SVG,
+  PLUS_ICON_SVG,
+  SAVE_ICON_SVG,
+  TEXT_ICON_SVG,
+  TRASH_ICON_SVG,
+} from "./icons.js";
 import { openConfirmPopup, openInputPopup, openPopup } from "./popup.js";
-import { hidePromptTip } from "./preview_tip.js";
+import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
+import { confirmReplacePair, openLoadPairPopup } from "./pair_load.js";
+import { openSavePairPopup } from "./pair_save.js";
+import { joinFields } from "./join.js";
 import {
   deleteCategory,
   deleteLayout,
   deleteLayoutFolder,
   deletePreset,
+  deleteTemplate,
+  deleteTemplateFolder,
   listCategories,
   listLayoutFolders,
   listLayouts,
   listPresets,
+  listTemplateFolders,
+  listTemplates,
   renameCategory,
   renameLayoutFolder,
+  renameTemplateFolder,
   saveLayout,
   savePreset,
+  saveTemplate,
   updateLayout,
   updatePreset,
+  updateTemplate,
   shelfNames,
 } from "./api.js";
-import { emptyShelfMatchesSearch, matchesLayoutPreset, matchesPromptPreset } from "./search.js";
+import {
+  emptyShelfMatchesSearch,
+  matchesLayoutPreset,
+  matchesPromptPreset,
+  matchesTemplatePreset,
+} from "./search.js";
 import { getUiPref, setUiPref, ensureUiPrefs } from "./prefs.js";
 import { bindPromptAutocomplete } from "./autocomplete.js";
 import { mountAutocompletePanel } from "./autocomplete_manager.js";
-import { nextDuplicateName } from "./titles.js";
+import { baseShelfName, nextDuplicateName } from "./titles.js";
+
+function slotHasPrompt(slot) {
+  return Boolean(String(slot?.positive || "").trim() || String(slot?.negative || "").trim());
+}
 
 const UNCATEGORISED = "Uncategorised";
 
@@ -592,6 +621,553 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
   });
 }
 
+function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
+  return openPopup({
+    nested: true,
+    centered: true,
+    anchor,
+    title: "Edit template",
+    width: 460,
+    render(body, { close, reposition }) {
+      const title = document.createElement("input");
+      title.className = "pc-popup-input";
+      title.type = "text";
+      title.placeholder = "template name";
+      title.value = template.name || "";
+
+      const folderRow = document.createElement("div");
+      folderRow.className = "pc-save-folder-row";
+
+      const folder = document.createElement("input");
+      folder.className = "pc-popup-input";
+      folder.type = "text";
+      folder.placeholder = UNCATEGORISED;
+      folder.value = template.folder || "";
+
+      const pickBtn = document.createElement("button");
+      pickBtn.type = "button";
+      pickBtn.className = "pc-popup-btn";
+      pickBtn.textContent = "Choose";
+
+      folderRow.append(folder, pickBtn);
+
+      const desc = document.createElement("textarea");
+      desc.className = "pc-popup-textarea";
+      desc.placeholder = "notes (optional)";
+      desc.rows = 2;
+      desc.value = template.description || "";
+
+      const addSlotBtn = document.createElement("button");
+      addSlotBtn.type = "button";
+      addSlotBtn.className = "pc-popup-btn";
+      addSlotBtn.innerHTML = `${PLUS_ICON_SVG}<span>Add pair</span>`;
+
+      const slotsWrap = document.createElement("div");
+      slotsWrap.className = "pc-popup-scroll";
+      slotsWrap.style.display = "flex";
+      slotsWrap.style.flexDirection = "column";
+      slotsWrap.style.gap = "8px";
+
+      const slotState = (template.slots || []).map((slot) => ({
+        title: (slot.title || "").trim(),
+        positive: slot.positive || "",
+        negative: slot.negative || "",
+        enabled: slot.enabled !== false,
+        loadedTitle: (slot.loadedTitle || "").trim(),
+        loadedCategory: (slot.loadedCategory || "").trim(),
+        loadedDescription: (slot.loadedDescription || "").trim(),
+      }));
+
+      function slotTitleError(name, exceptIndex) {
+        const next = (name || "").trim();
+        if (!next) return "Name is required";
+        const key = next.toLowerCase();
+        const taken = slotState.some(
+          (slot, index) => index !== exceptIndex && (slot.title || "").trim().toLowerCase() === key,
+        );
+        if (taken) return "Name already used";
+        return "";
+      }
+
+      function paintSlots() {
+        slotsWrap.replaceChildren();
+        if (!slotState.length) {
+          const empty = document.createElement("div");
+          empty.className = "pc-popup-message";
+          empty.textContent = "No pairs yet — add one or load from the library";
+          slotsWrap.appendChild(empty);
+          reposition();
+          return;
+        }
+        slotState.forEach((slot, index) => {
+          const card = document.createElement("div");
+          card.className = "pc-tpl-slot" + (slot.enabled ? "" : " is-off");
+
+          const head = document.createElement("div");
+          head.className = "pc-tpl-slot-head";
+
+          const toggle = document.createElement("div");
+          toggle.className = "pc-toggle" + (slot.enabled ? " on" : "");
+          toggle.setAttribute("role", "switch");
+          toggle.setAttribute("aria-checked", slot.enabled ? "true" : "false");
+          toggle.title = slot.enabled ? "Included on load" : "Skipped on load";
+          const knob = document.createElement("div");
+          knob.className = "pc-toggle-knob";
+          toggle.appendChild(knob);
+          toggle.addEventListener("click", (e) => {
+            e.stopPropagation();
+            slot.enabled = !slot.enabled;
+            paintSlots();
+          });
+
+          const nameInput = document.createElement("input");
+          nameInput.className = "pc-popup-input";
+          nameInput.type = "text";
+          nameInput.placeholder = "pair name";
+          nameInput.value = slot.title;
+          nameInput.addEventListener("input", () => {
+            slot.title = nameInput.value;
+          });
+
+          const removeBtn = makeIconBtn("pc-mgr-icon-btn danger", "Remove pair", TRASH_ICON_SVG, () => {
+            mgrConfirm({
+              anchor: removeBtn,
+              title: "Remove pair",
+              message: `Remove “${(slot.title || "").trim() || "pair"}” from this template?`,
+              confirmLabel: "Remove",
+              danger: true,
+              onConfirm: () => {
+                slotState.splice(index, 1);
+                paintSlots();
+              },
+            });
+          });
+
+          head.append(toggle, nameInput, removeBtn);
+
+          const toolbar = document.createElement("div");
+          toolbar.className = "pc-tpl-slot-toolbar";
+
+          const savePairBtn = document.createElement("button");
+          savePairBtn.type = "button";
+          savePairBtn.className = "pc-popup-btn";
+          savePairBtn.innerHTML = `${SAVE_ICON_SVG}<span>Save</span>`;
+          savePairBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openSavePairPopup({
+              nested: true,
+              anchor: savePairBtn,
+              group: slot,
+              onSaved: (name) => {
+                slot.loadedTitle = (name || "").trim();
+                paintSlots();
+              },
+            });
+          });
+
+          const loadPairBtn = document.createElement("button");
+          loadPairBtn.type = "button";
+          loadPairBtn.className = "pc-popup-btn";
+          loadPairBtn.innerHTML = `${LOAD_ICON_SVG}<span>Load</span>`;
+          loadPairBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openLoadPairPopup({
+              nested: true,
+              anchor: loadPairBtn,
+              category: baseShelfName(slot.title),
+              onPick: (preset) => {
+                const apply = () => {
+                  slot.positive = preset.positive || "";
+                  slot.negative = preset.negative || "";
+                  slot.loadedTitle = (preset.title || "").trim();
+                  slot.loadedCategory = (preset.category || "").trim();
+                  slot.loadedDescription = (preset.description || "").trim();
+                  paintSlots();
+                };
+                if (slotHasPrompt(slot)) {
+                  confirmReplacePair({
+                    nested: true,
+                    anchor: loadPairBtn,
+                    onConfirm: apply,
+                  });
+                  return;
+                }
+                apply();
+              },
+              onAppend: (preset) => {
+                slot.positive = joinFields([slot.positive, preset.positive]);
+                slot.negative = joinFields([slot.negative, preset.negative]);
+                slot.loadedTitle = "";
+                slot.loadedCategory = "";
+                slot.loadedDescription = "";
+                paintSlots();
+              },
+            });
+          });
+
+          toolbar.append(savePairBtn, loadPairBtn);
+
+          const loadedRow = document.createElement("div");
+          loadedRow.className = "pc-loaded-row";
+          const loadedName = (slot.loadedTitle || "").trim();
+          if (!loadedName) {
+            loadedRow.hidden = true;
+          } else {
+            const loadedLabel = document.createElement("span");
+            loadedLabel.className = "pc-loaded-label";
+            loadedLabel.textContent = loadedName;
+            loadedLabel.title = `Loaded: ${loadedName}`;
+
+            const notesBtn = document.createElement("button");
+            notesBtn.type = "button";
+            notesBtn.className = "pc-loaded-notes";
+            notesBtn.title = "View notes";
+            notesBtn.innerHTML = TEXT_ICON_SVG;
+            const notes = (slot.loadedDescription || "").trim();
+            notesBtn.hidden = !notes;
+            bindInfoTip(notesBtn, () => ({
+              title: "Notes",
+              text: notes,
+            }));
+
+            const clearBtn = document.createElement("button");
+            clearBtn.type = "button";
+            clearBtn.className = "pc-loaded-clear";
+            clearBtn.title = "Detach loaded name";
+            clearBtn.innerHTML = CLOSE_ICON_SVG;
+            clearBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              hidePromptTip();
+              slot.loadedTitle = "";
+              slot.loadedCategory = "";
+              slot.loadedDescription = "";
+              paintSlots();
+            });
+
+            loadedRow.append(loadedLabel, notesBtn, clearBtn);
+          }
+
+          const pos = makePromptField("positive", "positive", slot.positive);
+          const neg = makePromptField("negative", "negative", slot.negative);
+          pos.area.addEventListener("input", () => {
+            slot.positive = pos.area.value;
+          });
+          neg.area.addEventListener("input", () => {
+            slot.negative = neg.area.value;
+          });
+
+          card.append(head, toolbar, loadedRow, pos.wrap, neg.wrap);
+          slotsWrap.appendChild(card);
+        });
+        reposition();
+      }
+
+      paintSlots();
+
+      addSlotBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        mgrInput({
+          anchor: addSlotBtn,
+          title: "Add pair",
+          placeholder: "pair name",
+          confirmLabel: "Add",
+          validate: (value) => slotTitleError(value, -1),
+          onSubmit: (value) => {
+            slotState.push({
+              title: value.trim(),
+              positive: "",
+              negative: "",
+              enabled: true,
+              loadedTitle: "",
+              loadedCategory: "",
+              loadedDescription: "",
+            });
+            paintSlots();
+            return "";
+          },
+        });
+      });
+
+      const errorEl = document.createElement("div");
+      errorEl.className = "pc-popup-error";
+
+      const actions = document.createElement("div");
+      actions.className = "pc-popup-actions";
+
+      const confirm = document.createElement("button");
+      confirm.type = "button";
+      confirm.className = "pc-popup-btn primary";
+      confirm.textContent = "Save";
+
+      let overwrite = false;
+      let picker = null;
+
+      pickBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (picker) {
+          picker.close();
+          picker = null;
+          return;
+        }
+        picker = openNamePicker({
+          anchor: pickBtn,
+          title: "Folder",
+          items: folders,
+          current: folder.value.trim(),
+          includeUncategorised: true,
+          emptyUncategorised: true,
+          onPick: (name) => {
+            folder.value = name || "";
+          },
+          onClose: () => {
+            picker = null;
+          },
+        });
+      });
+
+      async function submit() {
+        const nextName = title.value.trim();
+        const nextSlots = slotState
+          .map((slot) => ({
+            title: (slot.title || "").trim(),
+            positive: slot.positive || "",
+            negative: slot.negative || "",
+            enabled: slot.enabled !== false,
+            loadedTitle: (slot.loadedTitle || "").trim(),
+            loadedCategory: (slot.loadedCategory || "").trim(),
+            loadedDescription: (slot.loadedDescription || "").trim(),
+          }))
+          .filter((slot) => slot.title && slotHasPrompt(slot));
+        if (!nextName) {
+          errorEl.textContent = "Name is required";
+          title.focus();
+          return;
+        }
+        if (!nextSlots.length) {
+          errorEl.textContent = "Add at least one pair with text";
+          return;
+        }
+        confirm.disabled = true;
+        try {
+          const result = await updateTemplate({
+            id: template.id,
+            name: nextName,
+            description: desc.value.trim(),
+            folder: folder.value.trim(),
+            slots: nextSlots,
+            overwrite,
+          });
+          if (result.conflicts?.length) {
+            errorEl.textContent = `Already exists: ${nextName}`;
+            confirm.textContent = "Overwrite";
+            confirm.classList.remove("primary");
+            confirm.classList.add("danger");
+            overwrite = true;
+            return;
+          }
+          if (!result.ok) {
+            errorEl.textContent = result.error || "Save failed";
+            return;
+          }
+          close();
+          onSaved?.();
+        } catch (err) {
+          errorEl.textContent = err?.message || "Save failed";
+        } finally {
+          confirm.disabled = false;
+        }
+      }
+
+      confirm.addEventListener("click", (e) => {
+        e.stopPropagation();
+        submit();
+      });
+      title.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submit();
+        }
+      });
+
+      actions.appendChild(confirm);
+
+      const fixed = document.createElement("div");
+      fixed.className = "pc-popup-fixed";
+      fixed.append(title, folderRow, desc, addSlotBtn);
+
+      const footer = document.createElement("div");
+      footer.className = "pc-popup-footer";
+      footer.append(errorEl, actions);
+
+      body.append(fixed, slotsWrap, footer);
+      requestAnimationFrame(() => title.focus());
+    },
+  });
+}
+
+function paintTemplatesTab(listEl, { templates, folders, showEmpty, query, openMap, reload }) {
+  listEl.replaceChildren();
+  const q = (query || "").trim();
+
+  const filtered = templates.filter((template) =>
+    matchesTemplatePreset(template, query, { emptyFolder: UNCATEGORISED }),
+  );
+
+  const grouped = groupByFolder(filtered, "folder");
+  if (showEmpty) {
+    for (const folder of folders) {
+      if ((folder.count || 0) === 0 && !grouped.has(folder.name)) {
+        grouped.set(folder.name, []);
+      }
+    }
+  }
+
+  const names = [...grouped.keys()]
+    .filter((name) => {
+      const items = grouped.get(name) || [];
+      if (items.length) return true;
+      if (!showEmpty) return false;
+      if (name.toLowerCase() === UNCATEGORISED.toLowerCase()) return false;
+      return emptyShelfMatchesSearch(name, query);
+    })
+    .sort((a, b) => {
+      const aEmpty = a.toLowerCase() === UNCATEGORISED.toLowerCase();
+      const bEmpty = b.toLowerCase() === UNCATEGORISED.toLowerCase();
+      if (aEmpty !== bEmpty) return aEmpty ? -1 : 1;
+      return a.localeCompare(b, undefined, { sensitivity: "base" });
+    });
+
+  if (!names.length) {
+    const empty = document.createElement("div");
+    empty.className = "pc-popup-message";
+    empty.textContent = q ? "No templates" : "No saved templates yet.";
+    listEl.appendChild(empty);
+    return;
+  }
+
+  const folderNames = shelfNames(folders);
+
+  for (const folderName of names) {
+    const items = grouped.get(folderName) || [];
+    listEl.appendChild(
+      makeFolderSection({
+        title: folderName,
+        items,
+        expanded: folderExpanded(folderName, { query: q, openMap }),
+        canManageFolder: folderName.toLowerCase() !== UNCATEGORISED.toLowerCase(),
+        onToggleExpand: (open) => openMap?.set(folderName, open),
+        onRenameFolder: (btn) => {
+          mgrInput({
+            anchor: btn,
+            title: "Rename folder",
+            placeholder: "folder name",
+            initialValue: folderName,
+            confirmLabel: "Rename",
+            validate: (value) => {
+              if (!value.trim()) return "Name is required";
+              return "";
+            },
+            onSubmit: async (value) => {
+              const next = value.trim();
+              const result = await renameTemplateFolder({ name: folderName, newName: next });
+              if (!result.ok) {
+                showMgrError(btn, "Rename folder", result.error);
+                return;
+              }
+              if (openMap?.has(folderName)) {
+                openMap.set(next, openMap.get(folderName));
+                openMap.delete(folderName);
+              }
+              reload?.();
+            },
+          });
+        },
+        onDeleteFolder: (btn) => {
+          mgrConfirm({
+            anchor: btn,
+            title: "Delete folder",
+            message: `Delete folder “${folderName}”?\n${items.length} template(s) will move to ${UNCATEGORISED}.`,
+            confirmLabel: "Delete",
+            danger: true,
+            onConfirm: async () => {
+              const result = await deleteTemplateFolder(folderName);
+              if (!result.ok) {
+                showMgrError(btn, "Delete folder", result.error);
+                return;
+              }
+              openMap?.delete(folderName);
+              reload?.();
+            },
+          });
+        },
+        renderItem: (template) => {
+          const slots = template.slots || [];
+          const on = slots.filter((slot) => slot?.enabled !== false).length;
+          const titles = slots
+            .map((slot) => (slot?.title || "").trim())
+            .filter(Boolean)
+            .join(" · ");
+          const meta = titles
+            ? `${titles} · ${on}/${slots.length} on`
+            : `${on}/${slots.length} slots on`;
+          return makeItemRow(template, {
+            name: template.name || "Untitled",
+            meta,
+            onEdit: (btn) =>
+              openEditTemplatePopup({
+                anchor: btn,
+                template,
+                folders: folderNames,
+                onSaved: () => reload?.(),
+              }),
+            onDuplicate: (btn) => {
+              const base = template.name || "Template";
+              const existing = templates.map((item) => item.name || "");
+              const nextName = nextDuplicateName(existing, base);
+              mgrConfirm({
+                anchor: btn,
+                title: "Duplicate template",
+                message: `Save a copy as “${nextName}”?`,
+                confirmLabel: "Duplicate",
+                onConfirm: async () => {
+                  const result = await saveTemplate({
+                    name: nextName,
+                    description: template.description || "",
+                    folder: template.folder || "",
+                    slots: template.slots || [],
+                  });
+                  if (!result.ok) {
+                    showMgrError(btn, "Duplicate", result.error);
+                    return;
+                  }
+                  reload?.();
+                },
+              });
+            },
+            onDelete: (btn) => {
+              mgrConfirm({
+                anchor: btn,
+                title: "Delete template",
+                message: `Delete “${template.name}”?`,
+                confirmLabel: "Delete",
+                danger: true,
+                onConfirm: async () => {
+                  const result = await deleteTemplate(template.id);
+                  if (!result.ok) {
+                    showMgrError(btn, "Delete", result.error);
+                    return;
+                  }
+                  reload?.();
+                },
+              });
+            },
+          });
+        },
+      }),
+    );
+  }
+}
+
 function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, reload }) {
   listEl.replaceChildren();
   const q = (query || "").trim();
@@ -919,7 +1495,7 @@ export async function openManagerPopup({ anchor }) {
   return openPopup({
     anchor,
     title: "Library manager",
-    width: acEnabled ? 380 : 360,
+    width: acEnabled ? 420 : 400,
     onClose: hidePromptTip,
     render(body, { setTitle, reposition }) {
       const tabs = document.createElement("div");
@@ -935,7 +1511,12 @@ export async function openManagerPopup({ anchor }) {
       promptsTab.className = "pc-mgr-tab";
       promptsTab.textContent = "Prompts";
 
-      tabs.append(stacksTab, promptsTab);
+      const templatesTab = document.createElement("button");
+      templatesTab.type = "button";
+      templatesTab.className = "pc-mgr-tab";
+      templatesTab.textContent = "Templates";
+
+      tabs.append(stacksTab, promptsTab, templatesTab);
 
       let suggestTab = null;
       if (acEnabled) {
@@ -1002,15 +1583,19 @@ export async function openManagerPopup({ anchor }) {
       let includeBody = searchInPromptsPref;
       let layouts = [];
       let presets = [];
+      let templates = [];
       let folders = [];
       let categories = [];
+      let templateFolders = [];
       let acPanel = null;
       const stacksOpen = new Map();
       const promptsOpen = new Map();
+      const templatesOpen = new Map();
 
       const titles = {
         stacks: "Library manager · Stacks",
         prompts: "Library manager · Prompts",
+        templates: "Library manager · Templates",
         suggest: "Library manager · Suggest",
       };
 
@@ -1018,6 +1603,7 @@ export async function openManagerPopup({ anchor }) {
         mode = next;
         stacksTab.classList.toggle("active", mode === "stacks");
         promptsTab.classList.toggle("active", mode === "prompts");
+        templatesTab.classList.toggle("active", mode === "templates");
         suggestTab?.classList.toggle("active", mode === "suggest");
         setTitle(titles[mode] || "Library manager");
 
@@ -1040,7 +1626,7 @@ export async function openManagerPopup({ anchor }) {
         emptyRow.style.display = "";
         status.style.display = "none";
         search.placeholder =
-          mode === "stacks" ? "name or folder\\slot" : "name or shelf\\keyword";
+          mode === "prompts" ? "name or shelf\\keyword" : "name or folder\\slot";
         bodyRow.style.display = mode === "prompts" ? "" : "none";
         paint();
       }
@@ -1055,6 +1641,15 @@ export async function openManagerPopup({ anchor }) {
             query: search.value,
             openMap: stacksOpen,
             reload: loadStacks,
+          });
+        } else if (mode === "templates") {
+          paintTemplatesTab(list, {
+            templates,
+            folders: templateFolders,
+            showEmpty,
+            query: search.value,
+            openMap: templatesOpen,
+            reload: loadTemplates,
           });
         } else {
           paintPromptsTab(list, {
@@ -1098,6 +1693,23 @@ export async function openManagerPopup({ anchor }) {
         paint();
       }
 
+      async function loadTemplates() {
+        status.textContent = "Loading…";
+        status.style.display = "";
+        const [templateResult, folderResult] = await Promise.all([
+          listTemplates(),
+          listTemplateFolders(),
+        ]);
+        if (!templateResult.ok) {
+          status.textContent = templateResult.error || "Failed to load templates";
+          return;
+        }
+        templates = templateResult.templates || [];
+        templateFolders = folderResult.folders || [];
+        status.style.display = "none";
+        paint();
+      }
+
       stacksTab.addEventListener("click", (e) => {
         e.stopPropagation();
         if (mode === "stacks") return;
@@ -1111,6 +1723,14 @@ export async function openManagerPopup({ anchor }) {
         if (mode === "prompts") return;
         setActiveTab("prompts");
         if (!presets.length) loadPrompts();
+        else paint();
+      });
+
+      templatesTab.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (mode === "templates") return;
+        setActiveTab("templates");
+        if (!templates.length) loadTemplates();
         else paint();
       });
 

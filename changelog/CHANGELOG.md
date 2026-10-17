@@ -6,6 +6,21 @@ Format: newest first.
 
 ---
 
+## [1.7.0] — 2026-10-17
+
+### Templates
+
+Full prompt packs for a node — separate from empty **Stacks** (planning canvas).
+
+- Library manager: **Templates** tab (folders, edit pairs like the node — add/remove, Save/Load pair, enable/disable, duplicate/delete)
+- Node: **Save template** / **Load template**
+- Load merges by slot name: keep node order; fill matching pairs; append missing; ignore slots not in the template
+- Empty pairs are not saved into a template; **Loaded** pair chips travel with the pack
+- **Loaded template** chip with notes / reload / detach
+- Saving a template also feeds autocomplete dictionaries
+
+---
+
 ## [1.6.1] — 2026-10-17
 
 ### Loaded stack chip

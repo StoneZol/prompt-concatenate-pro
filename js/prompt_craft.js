@@ -13,11 +13,14 @@ import { makeGroupCard } from "./pc/group_card.js";
 import { openConfirmPopup, openInputPopup } from "./pc/popup.js";
 import { openSavePresetsPopup } from "./pc/save_dialog.js";
 import { confirmReplaceGroups, openLoadPresetPopup } from "./pc/load_dialog.js";
+import { openSaveTemplatePopup } from "./pc/template_save.js";
+import { confirmReloadTemplate, openLoadTemplatePopup } from "./pc/template_load.js";
+import { mergeTemplateGroups } from "./pc/template_apply.js";
 import { openSavePairPopup } from "./pc/pair_save.js";
 import { confirmReplacePair, openLoadPairPopup } from "./pc/pair_load.js";
 import { openManagerPopup } from "./pc/manager_dialog.js";
 import { openSettingsPopup } from "./pc/settings_dialog.js";
-import { listLayouts, listPresets } from "./pc/api.js";
+import { listLayouts, listPresets, listTemplates } from "./pc/api.js";
 import {
   createShadowString,
   hideOnCanvasKeepInPanel,
@@ -36,8 +39,8 @@ ensureUiPrefs();
 
 const MIN_NODE_WIDTH = 400;
 const SOCKET_ROWS_HEIGHT = 56;
-const HEADER_HEIGHT = 112;
-const LOADED_STACK_ROW_HEIGHT = 26;
+const HEADER_HEIGHT = 152;
+const LOADED_CHIP_ROW_HEIGHT = 26;
 const CONTAINER_PADDING_V = 10;
 const GAP_BETWEEN_SECTIONS = 8;
 const GROUP_HEIGHT = 266;
@@ -52,7 +55,7 @@ function newGroupId() {
   return `pc_${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-3)}`;
 }
 
-function normalizeLoadedStack(raw) {
+function normalizeLoadedRef(raw) {
   if (!raw || typeof raw !== "object") return null;
   const title = (raw.title || "").trim();
   if (!title) return null;
@@ -66,17 +69,20 @@ function normalizeLoadedStack(raw) {
 function parseBlocksState(raw) {
   try {
     const data = raw ? JSON.parse(raw) : [];
-    if (Array.isArray(data)) return { groups: data, loadedStack: null };
+    if (Array.isArray(data)) {
+      return { groups: data, loadedStack: null, loadedTemplate: null };
+    }
     if (data && typeof data === "object") {
       return {
         groups: Array.isArray(data.groups) ? data.groups : [],
-        loadedStack: normalizeLoadedStack(data.loadedStack),
+        loadedStack: normalizeLoadedRef(data.loadedStack),
+        loadedTemplate: normalizeLoadedRef(data.loadedTemplate),
       };
     }
   } catch {
     /* ignore */
   }
-  return { groups: [], loadedStack: null };
+  return { groups: [], loadedStack: null, loadedTemplate: null };
 }
 
 function stampLabels(title) {
@@ -145,6 +151,7 @@ app.registerExtension({
       const initialState = parseBlocksState(dataWidget?.value);
       let groups = initialState.groups;
       let loadedStack = initialState.loadedStack;
+      let loadedTemplate = initialState.loadedTemplate;
       const cards = new Map();
       let uiWidget = null;
 
@@ -176,6 +183,21 @@ app.registerExtension({
 
       libraryRow.append(saveBtn, loadBtn);
 
+      const templateRow = document.createElement("div");
+      templateRow.className = "pc-header-row";
+
+      const saveTemplateBtn = document.createElement("button");
+      saveTemplateBtn.type = "button";
+      saveTemplateBtn.className = "pc-template-save-btn";
+      saveTemplateBtn.innerHTML = `${SAVE_ICON_SVG}<span>Save template</span>`;
+
+      const loadTemplateBtn = document.createElement("button");
+      loadTemplateBtn.type = "button";
+      loadTemplateBtn.className = "pc-template-load-btn";
+      loadTemplateBtn.innerHTML = `${LOAD_ICON_SVG}<span>Load template</span>`;
+
+      templateRow.append(saveTemplateBtn, loadTemplateBtn);
+
       const managerBtn = document.createElement("button");
       managerBtn.type = "button";
       managerBtn.className = "pc-manage-btn";
@@ -195,7 +217,7 @@ app.registerExtension({
       loadedStackRow.hidden = true;
 
       const loadedStackLabel = document.createElement("span");
-      loadedStackLabel.className = "pc-loaded-label pc-loaded-stack";
+      loadedStackLabel.className = "pc-loaded-label pc-loaded-preset";
 
       const loadedStackNotesBtn = document.createElement("button");
       loadedStackNotesBtn.type = "button";
@@ -211,13 +233,13 @@ app.registerExtension({
       const loadedStackResetBtn = document.createElement("button");
       loadedStackResetBtn.type = "button";
       loadedStackResetBtn.className = "pc-loaded-reset";
-      loadedStackResetBtn.title = "Reload last saved stack";
+      loadedStackResetBtn.title = "Reload last saved preset";
       loadedStackResetBtn.innerHTML = RESET_ICON_SVG;
 
       const loadedStackClearBtn = document.createElement("button");
       loadedStackClearBtn.type = "button";
       loadedStackClearBtn.className = "pc-loaded-clear";
-      loadedStackClearBtn.title = "Detach loaded stack";
+      loadedStackClearBtn.title = "Detach loaded preset";
       loadedStackClearBtn.innerHTML = CLOSE_ICON_SVG;
 
       loadedStackRow.append(
@@ -227,7 +249,44 @@ app.registerExtension({
         loadedStackClearBtn,
       );
 
-      header.append(addBtn, libraryRow, toolsRow, loadedStackRow);
+      const loadedTemplateRow = document.createElement("div");
+      loadedTemplateRow.className = "pc-loaded-row";
+      loadedTemplateRow.hidden = true;
+
+      const loadedTemplateLabel = document.createElement("span");
+      loadedTemplateLabel.className = "pc-loaded-label pc-loaded-template";
+
+      const loadedTemplateNotesBtn = document.createElement("button");
+      loadedTemplateNotesBtn.type = "button";
+      loadedTemplateNotesBtn.className = "pc-loaded-notes";
+      loadedTemplateNotesBtn.title = "View notes";
+      loadedTemplateNotesBtn.innerHTML = TEXT_ICON_SVG;
+      loadedTemplateNotesBtn.hidden = true;
+      bindInfoTip(loadedTemplateNotesBtn, () => ({
+        title: "Notes",
+        text: (loadedTemplate?.description || "").trim(),
+      }));
+
+      const loadedTemplateResetBtn = document.createElement("button");
+      loadedTemplateResetBtn.type = "button";
+      loadedTemplateResetBtn.className = "pc-loaded-reset";
+      loadedTemplateResetBtn.title = "Reload last saved template (merge)";
+      loadedTemplateResetBtn.innerHTML = RESET_ICON_SVG;
+
+      const loadedTemplateClearBtn = document.createElement("button");
+      loadedTemplateClearBtn.type = "button";
+      loadedTemplateClearBtn.className = "pc-loaded-clear";
+      loadedTemplateClearBtn.title = "Detach loaded template";
+      loadedTemplateClearBtn.innerHTML = CLOSE_ICON_SVG;
+
+      loadedTemplateRow.append(
+        loadedTemplateLabel,
+        loadedTemplateNotesBtn,
+        loadedTemplateResetBtn,
+        loadedTemplateClearBtn,
+      );
+
+      header.append(addBtn, libraryRow, templateRow, toolsRow, loadedStackRow, loadedTemplateRow);
 
       const groupsWrap = document.createElement("div");
       groupsWrap.className = "pc-groups";
@@ -245,13 +304,36 @@ app.registerExtension({
         }
         loadedStackRow.hidden = false;
         loadedStackLabel.textContent = folder ? `${name} · ${folder}` : name;
-        loadedStackLabel.title = folder ? `Loaded stack: ${name} (${folder})` : `Loaded stack: ${name}`;
+        loadedStackLabel.title = folder ? `Loaded preset: ${name} (${folder})` : `Loaded preset: ${name}`;
         loadedStackNotesBtn.hidden = !notes;
       }
 
+      function paintLoadedTemplate() {
+        const name = (loadedTemplate?.title || "").trim();
+        const folder = (loadedTemplate?.folder || "").trim();
+        const notes = (loadedTemplate?.description || "").trim();
+        if (!name) {
+          loadedTemplateRow.hidden = true;
+          loadedTemplateLabel.textContent = "";
+          loadedTemplateNotesBtn.hidden = true;
+          return;
+        }
+        loadedTemplateRow.hidden = false;
+        loadedTemplateLabel.textContent = folder ? `${name} · ${folder}` : name;
+        loadedTemplateLabel.title = folder
+          ? `Loaded template: ${name} (${folder})`
+          : `Loaded template: ${name}`;
+        loadedTemplateNotesBtn.hidden = !notes;
+      }
+
       function setLoadedStack(next) {
-        loadedStack = normalizeLoadedStack(next);
+        loadedStack = normalizeLoadedRef(next);
         paintLoadedStack();
+      }
+
+      function setLoadedTemplate(next) {
+        loadedTemplate = normalizeLoadedRef(next);
+        paintLoadedTemplate();
       }
 
       function clearLoadedStack() {
@@ -260,11 +342,22 @@ app.registerExtension({
         paintLoadedStack();
       }
 
+      function clearLoadedTemplate() {
+        if (!loadedTemplate) return;
+        loadedTemplate = null;
+        paintLoadedTemplate();
+      }
+
       function persist() {
         if (!dataWidget) return;
-        const payload = loadedStack
-          ? { groups, loadedStack }
-          : groups;
+        const payload =
+          loadedStack || loadedTemplate
+            ? {
+                groups,
+                ...(loadedStack ? { loadedStack } : {}),
+                ...(loadedTemplate ? { loadedTemplate } : {}),
+              }
+            : groups;
         dataWidget.value = JSON.stringify(payload);
         node.setDirtyCanvas(true, true);
         scheduleJoinDebugLog();
@@ -379,7 +472,9 @@ app.registerExtension({
 
       function fillDom() {
         syncWidth();
-        const headerExtra = loadedStack?.title ? LOADED_STACK_ROW_HEIGHT : 0;
+        const headerExtra =
+          (loadedStack?.title ? LOADED_CHIP_ROW_HEIGHT : 0) +
+          (loadedTemplate?.title ? LOADED_CHIP_ROW_HEIGHT : 0);
         const chromeHeight =
           HEADER_HEIGHT + headerExtra + GAP_BETWEEN_SECTIONS + CONTAINER_PADDING_V + BOTTOM_SLACK;
         const bodyH = Math.max((node.size?.[1] || 0) - SOCKET_ROWS_HEIGHT, MIN_UI_HEIGHT);
@@ -580,6 +675,7 @@ app.registerExtension({
           ...stampLabels(name),
         };
         groups.push(group);
+        // Stack structure drifted; template chip can stay (merge is by name).
         clearLoadedStack();
         persist();
         addShadows(group);
@@ -626,14 +722,37 @@ app.registerExtension({
         hideDataWidget(dataWidget);
       }
 
-      function applyLayout(layout) {
+      function rebuildFromGroups(nextGroups) {
         const ids = groups.map((group) => group.id);
-        groups = [];
+        groups = nextGroups;
         for (const id of ids) removeShadows(id);
+        for (const group of groups) addShadows(group);
+        persist();
+        renderCards();
+        fillDom();
+        hideDataWidget(dataWidget);
+      }
+
+      function applyTemplate(template) {
+        collectFromShadows();
+        const next = mergeTemplateGroups(groups, template.slots || [], {
+          newGroupId,
+          stampLabels,
+        });
+        setLoadedTemplate({
+          title: template.name,
+          folder: template.folder,
+          description: template.description,
+        });
+        rebuildFromGroups(next);
+      }
+
+      function applyLayout(layout) {
+        const next = [];
         for (const slot of layout.slots || []) {
           const name = (slot || "").trim();
           if (!name) continue;
-          groups.push({
+          next.push({
             id: newGroupId(),
             title: name,
             positive: "",
@@ -647,11 +766,8 @@ app.registerExtension({
           folder: layout.folder,
           description: layout.description,
         });
-        persist();
-        for (const group of groups) addShadows(group);
-        renderCards();
-        fillDom();
-        hideDataWidget(dataWidget);
+        clearLoadedTemplate();
+        rebuildFromGroups(next);
       }
 
       async function reloadLoadedStack(anchor) {
@@ -662,7 +778,7 @@ app.registerExtension({
         if (!result.ok) {
           openConfirmPopup({
             anchor,
-            title: "Reload stack",
+            title: "Reload preset",
             message: result.error || "Failed to load presets",
             confirmLabel: "OK",
             showCancel: false,
@@ -679,8 +795,8 @@ app.registerExtension({
         if (!layout) {
           openConfirmPopup({
             anchor,
-            title: "Reload stack",
-            message: "Saved stack not found. It may have been renamed or deleted.",
+            title: "Reload preset",
+            message: "Saved preset not found. It may have been renamed or deleted.",
             confirmLabel: "OK",
             showCancel: false,
             danger: false,
@@ -688,6 +804,42 @@ app.registerExtension({
           return;
         }
         applyLayout(layout);
+      }
+
+      async function reloadLoadedTemplate(anchor) {
+        const title = (loadedTemplate?.title || "").trim();
+        const folder = (loadedTemplate?.folder || "").trim();
+        if (!title) return;
+        const result = await listTemplates();
+        if (!result.ok) {
+          openConfirmPopup({
+            anchor,
+            title: "Reload template",
+            message: result.error || "Failed to load templates",
+            confirmLabel: "OK",
+            showCancel: false,
+            danger: false,
+          });
+          return;
+        }
+        const key = title.toLowerCase();
+        const folderKey = folder.toLowerCase();
+        const template = (result.templates || []).find((item) => {
+          if ((item.name || "").trim().toLowerCase() !== key) return false;
+          return (item.folder || "").trim().toLowerCase() === folderKey;
+        });
+        if (!template) {
+          openConfirmPopup({
+            anchor,
+            title: "Reload template",
+            message: "Saved template not found. It may have been renamed or deleted.",
+            confirmLabel: "OK",
+            showCancel: false,
+            danger: false,
+          });
+          return;
+        }
+        applyTemplate(template);
       }
 
       addBtn.addEventListener("click", (e) => {
@@ -715,12 +867,29 @@ app.registerExtension({
         hidePromptTip();
         openConfirmPopup({
           anchor: loadedStackResetBtn,
-          title: "Reload stack",
-          message: "Replace current groups with the saved stack? All prompts in this node will be cleared.",
+          title: "Reload preset",
+          message: "Replace current groups with the saved preset? All prompts in this node will be cleared.",
           confirmLabel: "Reload",
           cancelLabel: "Cancel",
           danger: true,
           onConfirm: () => reloadLoadedStack(loadedStackResetBtn),
+        });
+      });
+
+      loadedTemplateClearBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        clearLoadedTemplate();
+        persist();
+        fillDom();
+      });
+
+      loadedTemplateResetBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        confirmReloadTemplate({
+          anchor: loadedTemplateResetBtn,
+          onConfirm: () => reloadLoadedTemplate(loadedTemplateResetBtn),
         });
       });
 
@@ -755,6 +924,28 @@ app.registerExtension({
         });
       });
 
+      saveTemplateBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openSaveTemplatePopup({
+          anchor: saveTemplateBtn,
+          groups,
+          loadedTemplate,
+          onSaved: (saved) => {
+            setLoadedTemplate(saved);
+            persist();
+            fillDom();
+          },
+        });
+      });
+
+      loadTemplateBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openLoadTemplatePopup({
+          anchor: loadTemplateBtn,
+          onPick: (template) => applyTemplate(template),
+        });
+      });
+
       managerBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         openManagerPopup({ anchor: managerBtn });
@@ -784,7 +975,9 @@ app.registerExtension({
         const state = parseBlocksState(w?.value);
         groups = state.groups;
         loadedStack = state.loadedStack;
+        loadedTemplate = state.loadedTemplate;
         paintLoadedStack();
+        paintLoadedTemplate();
         rebuildShadows();
         renderCards();
         fillDom();
@@ -834,6 +1027,7 @@ app.registerExtension({
       }
 
       paintLoadedStack();
+      paintLoadedTemplate();
       renderCards();
       if (groups.length) rebuildShadows();
       fillDom();
