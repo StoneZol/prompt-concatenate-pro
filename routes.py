@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import queue
 import threading
 
@@ -20,6 +21,12 @@ TEMPLATE_FOLDERS_ROUTE = "/prompt_craft/template_folders"
 PREFS_ROUTE = "/prompt_craft/prefs"
 AUTOCOMPLETE_ROUTE = "/prompt_craft/autocomplete"
 RESOLVE_LORA_ROUTE = "/prompt_craft/resolve_lora"
+LORA_NOTE_ROUTE = "/prompt_craft/lora_note"
+CIVITAI_URL_ROUTE = "/prompt_craft/civitai_url"
+
+_NOTE_EXTS = (".txt", ".md", ".caption")
+_NOTE_MAX_BYTES = 65536
+_toolkit_db_path = None  # cached path or False when missing
 
 db.init_db()
 
@@ -529,6 +536,170 @@ async def resolve_lora(request):
     return web.json_response(result, status=status)
 
 
+def _read_lora_sidecar_note(filename: str) -> dict:
+    """On-demand sidecar note next to one LoRA (Name.txt / .md / .caption)."""
+    resolved = _resolve_comfy_lora_name(filename)
+    if not resolved.get("ok"):
+        # Still try raw relative path under loras roots.
+        rel = str(filename or "").replace("\\", "/").strip().lstrip("/")
+        if rel.lower().startswith("loras/"):
+            rel = rel[6:]
+        name = rel
+    else:
+        name = resolved["name"]
+
+    if not name or any(part == ".." for part in str(name).replace("\\", "/").split("/")):
+        return {"ok": False, "error": "Invalid path", "notes": "", "source": None}
+
+    try:
+        import folder_paths
+    except Exception:
+        return {"ok": False, "error": "folder_paths unavailable", "notes": "", "source": None}
+
+    full = folder_paths.get_full_path("loras", name)
+    if not full or not os.path.isfile(full):
+        return {"ok": False, "error": "LoRA file not found", "notes": "", "source": None}
+
+    roots = [
+        os.path.normcase(os.path.abspath(r))
+        for r in (folder_paths.get_folder_paths("loras") or [])
+    ]
+    abs_full = os.path.normcase(os.path.abspath(full))
+    if not any(abs_full == root or abs_full.startswith(root + os.sep) for root in roots):
+        return {"ok": False, "error": "Path outside loras", "notes": "", "source": None}
+
+    base, _ext = os.path.splitext(full)
+    for note_ext in _NOTE_EXTS:
+        note_path = base + note_ext
+        if not os.path.isfile(note_path):
+            continue
+        try:
+            with open(note_path, "r", encoding="utf-8", errors="replace") as handle:
+                text = handle.read(_NOTE_MAX_BYTES)
+        except Exception as exc:
+            return {"ok": False, "error": str(exc), "notes": "", "source": None}
+        return {
+            "ok": True,
+            "notes": text.strip(),
+            "source": os.path.basename(note_path),
+        }
+
+    return {"ok": True, "notes": "", "source": None}
+
+
+async def get_lora_note(request):
+    filename = request.rel_url.query.get("file") or ""
+    result = _read_lora_sidecar_note(filename)
+    status = 200 if result.get("ok") else 400
+    return web.json_response(result, status=status)
+
+
+def _find_toolkit_db():
+    """Soft-locate ComfyUI-Civitai-Toolkit SQLite (data/civitai_helper.db)."""
+    global _toolkit_db_path
+    if _toolkit_db_path is not None:
+        return _toolkit_db_path or None
+    try:
+        import folder_paths
+
+        base = getattr(folder_paths, "base_path", None) or os.getcwd()
+    except Exception:
+        base = os.getcwd()
+
+    hit = None
+    root = os.path.join(base, "custom_nodes")
+    if os.path.isdir(root):
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [
+                d
+                for d in dirnames
+                if d not in ("node_modules", ".git", "__pycache__", "web", "js", "dist")
+            ]
+            if "civitai_helper.db" in filenames and os.path.basename(dirpath) == "data":
+                hit = os.path.join(dirpath, "civitai_helper.db")
+                break
+
+    _toolkit_db_path = hit or False
+    return hit
+
+
+def _toolkit_setting(conn, key, default=None):
+    cur = conn.execute("SELECT value FROM settings WHERE key = ?", (key,))
+    row = cur.fetchone()
+    if not row:
+        return default
+    raw = row["value"] if hasattr(row, "keys") else row[0]
+    try:
+        return json.loads(raw)
+    except Exception:
+        return raw if raw is not None else default
+
+
+def _resolve_civitai_page_url(file_hash: str) -> dict:
+    """
+    On-demand Civitai page URL for one LoRA hash via Toolkit DB.
+    Does not scan the library or hit the network — one SQLite lookup.
+    """
+    h = str(file_hash or "").strip()
+    if not h:
+        return {"ok": False, "error": "Missing hash", "url": ""}
+
+    db_path = _find_toolkit_db()
+    if not db_path or not os.path.isfile(db_path):
+        return {"ok": False, "error": "Toolkit DB not found", "url": ""}
+
+    try:
+        import sqlite3
+
+        conn = sqlite3.connect(db_path, timeout=5)
+        conn.row_factory = sqlite3.Row
+        domain = "civitai.work" if _toolkit_setting(conn, "network_choice", "com") == "work" else "civitai.com"
+        cur = conn.execute(
+            "SELECT model_id, version_id, api_response FROM versions WHERE hash = ? COLLATE NOCASE",
+            (h,),
+        )
+        ver = cur.fetchone()
+        conn.close()
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "url": ""}
+
+    if not ver:
+        return {"ok": False, "error": "Hash not in Toolkit DB", "url": ""}
+
+    model_id = ver["model_id"]
+    version_id = ver["version_id"]
+    if (not model_id or not version_id) and ver["api_response"]:
+        try:
+            api = json.loads(ver["api_response"])
+            if not model_id:
+                model_id = api.get("modelId") or (api.get("model") or {}).get("id")
+            if not version_id:
+                version_id = api.get("id")
+        except Exception:
+            pass
+
+    if not model_id:
+        return {"ok": False, "error": "No Civitai model id", "url": ""}
+
+    url = f"https://{domain}/models/{int(model_id)}"
+    if version_id:
+        url += f"?modelVersionId={int(version_id)}"
+    return {
+        "ok": True,
+        "url": url,
+        "model_id": int(model_id),
+        "version_id": int(version_id) if version_id else None,
+        "domain": domain,
+    }
+
+
+async def get_civitai_url(request):
+    file_hash = request.rel_url.query.get("hash") or ""
+    result = _resolve_civitai_page_url(file_hash)
+    status = 200 if result.get("ok") else 404
+    return web.json_response(result, status=status)
+
+
 _existing = {getattr(route, "path", None) for route in PromptServer.instance.routes}
 if SAVE_ROUTE not in _existing:
     PromptServer.instance.routes.post(SAVE_ROUTE)(save_layout)
@@ -567,3 +738,7 @@ if AUTOCOMPLETE_ROUTE not in _existing:
     PromptServer.instance.routes.post(AUTOCOMPLETE_ROUTE)(autocomplete_mutate)
 if RESOLVE_LORA_ROUTE not in _existing:
     PromptServer.instance.routes.get(RESOLVE_LORA_ROUTE)(resolve_lora)
+if LORA_NOTE_ROUTE not in _existing:
+    PromptServer.instance.routes.get(LORA_NOTE_ROUTE)(get_lora_note)
+if CIVITAI_URL_ROUTE not in _existing:
+    PromptServer.instance.routes.get(CIVITAI_URL_ROUTE)(get_civitai_url)

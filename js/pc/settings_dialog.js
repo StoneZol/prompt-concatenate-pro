@@ -47,13 +47,12 @@ const SKIP_PAIR_REPLACE_HELP = {
 };
 
 const CIVITAI_TOOLKIT_HELP = {
-  title: "Civitai Toolkit import",
+  title: "Civitai Toolkit LoRA import",
   text:
     "Off by default. Saved in SQLite (all nodes).\n\n" +
-    "When on, each pair gets a Civitai button. Search the local Civitai Toolkit DB by filename or title, " +
-    "pick parsed trigger groups, then Append or Replace into positive. " +
-    "Each hit has cover preview, ? (Toolkit info) and i (pysssss View Lora info).\n\n" +
-    "Requires ComfyUI-Civitai-Toolkit (and Custom-Scripts for i). Soft dependency — Prompt Concatenate Pro works without them.",
+    "When on, each pair gets a Civitai button. Opens an overlay (closes only via X): search Toolkit LoRAs, " +
+    "pick trigger groups, Append / Replace into positive. Info shows description + on-demand sidecar notes (Name.txt).\n\n" +
+    "Requires ComfyUI-Civitai-Toolkit installed and scanned. Soft dependency — Prompt Concatenate Pro works without it.",
 };
 
 function makeSectionLabel(text, variant = "node") {
@@ -216,7 +215,7 @@ export async function openSettingsPopup({ anchor, nodeSettings, onUiChange } = {
       );
       list.appendChild(
         makeSettingRow({
-          label: "Civitai Toolkit import",
+          label: "Civitai Toolkit LoRA import",
           prefKey: "civitaiToolkitImport",
           badge: "experimental",
           help: CIVITAI_TOOLKIT_HELP,

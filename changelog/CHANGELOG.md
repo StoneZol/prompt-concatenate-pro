@@ -35,12 +35,12 @@ Wire any STRING prompts into the builder as a first-class pair: reorder, enable/
 
 ![Autocomplete: Tab to add typed segment](../docs/screenshots/2.1.0/1.png)
 
-### Civitai Toolkit import (experimental)
+### Civitai Toolkit LoRA import (experimental)
 
-- Settings · SQLite: **Civitai Toolkit import** — shows a **Civitai** button on each pair
-- Search the local Toolkit DB by filename / title; pick parsed trigger groups (collapsed + expand); **Append** or **Replace** into positive
-- Per result: cover preview (hover) + **`?`** Toolkit Local Manager info + **`i`** pysssss View Lora info (same pair as Ultimate LoRA Loader)
-- Soft dependency on [ComfyUI-Civitai-Toolkit](https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit) (works without it; popup explains if missing)
+- Settings · SQLite: **Civitai Toolkit LoRA import** — shows a **Civitai** button on each pair
+- Overlay browser (closes only via **X**): search Toolkit LoRAs, pick trigger groups (first 2 + Show more), **Append** / **Replace** into positive
+- Per result: cover preview + **Info** (Toolkit description + on-demand sidecar `Name.txt` notes — not a full-library scan)
+- Soft dependency on [ComfyUI-Civitai-Toolkit](https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit) (works without it; overlay explains if missing)
 
 ---
 

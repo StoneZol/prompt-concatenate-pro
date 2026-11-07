@@ -697,8 +697,6 @@ app.registerExtension({
             },
             onCivitaiLoad: (anchor) => {
               openCivitaiLoadPopup({
-                anchor,
-                node,
                 onApply: (text, mode) => {
                   if (mode === "replace") {
                     group.positive = text || "";
