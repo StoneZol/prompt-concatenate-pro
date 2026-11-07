@@ -1,16 +1,20 @@
-import { CHEVRON_ICON_SVG, CLOSE_ICON_SVG, COPY_ICON_SVG, IMAGE_ICON_SVG, TEXT_ICON_SVG } from "./icons.js";
+import { CHEVRON_ICON_SVG, CLOSE_ICON_SVG, COPY_ICON_SVG, IMAGE_ICON_SVG } from "./icons.js";
 import { injectPopupStyles } from "./popup.js";
 import {
+  buildLoraFolderTree,
   fetchCivitaiLoras,
   fetchCivitaiPageUrl,
   fetchLoraSidecarNotes,
+  flattenLoraTree,
+  getTreeNodeAtPath,
   modelCivitaiUrlFromFields,
   modelCoverUrl,
   modelDescriptionText,
   modelDisplayName,
   modelFileLabel,
+  modelMatchesQuery,
+  modelTags,
   parseTriggerGroups,
-  searchCivitaiLoras,
 } from "./civitai_toolkit.js";
 import { joinFields } from "./join.js";
 
@@ -59,10 +63,6 @@ function truncatePreview(text) {
   return { preview: `${s.slice(0, PREVIEW_CHARS - 1)}…`, clipped: true };
 }
 
-function selectionKey(modelIndex, groupIndex) {
-  return `${modelIndex}:${groupIndex}`;
-}
-
 function copyText(text, btn) {
   const value = String(text || "");
   if (!value || !btn) return;
@@ -78,7 +78,10 @@ function copyText(text, btn) {
   }).catch(() => {});
 }
 
-function openModelInfoOverlay(model) {
+/**
+ * LoRA detail: meta + notes + description + selectable trigger groups → Append / Replace.
+ */
+function openModelInfoOverlay(model, { onApply, onDone } = {}) {
   document.querySelector(".pc-civitai-info-overlay")?.remove();
 
   const title = modelDisplayName(model);
@@ -86,6 +89,7 @@ function openModelInfoOverlay(model) {
   const cover = modelCoverUrl(model);
   const description = modelDescriptionText(model);
   const base = (model.base_model || "").trim();
+  const groups = parseTriggerGroups(model.trained_words);
 
   const overlay = document.createElement("div");
   overlay.className = "pc-civitai-info-overlay";
@@ -199,6 +203,199 @@ function openModelInfoOverlay(model) {
   hero.append(imgWrap, meta);
   body.appendChild(hero);
 
+  const tags = modelTags(model);
+  if (tags.length) {
+    const tagsSection = document.createElement("div");
+    tagsSection.className = "pc-civitai-info-section pc-civitai-info-tags-section";
+    const tagsHead = document.createElement("div");
+    tagsHead.className = "pc-civitai-info-section-head";
+    const tagsLabel = document.createElement("div");
+    tagsLabel.className = "pc-civitai-info-label";
+    tagsLabel.textContent = `Civitai tags · ${tags.length}`;
+    tagsHead.appendChild(tagsLabel);
+    const tagsWrap = document.createElement("div");
+    tagsWrap.className = "pc-civitai-info-tags";
+    for (const tag of tags) {
+      const chip = document.createElement("span");
+      chip.className = "pc-civitai-tag";
+      chip.textContent = tag;
+      chip.title = tag;
+      tagsWrap.appendChild(chip);
+    }
+    tagsSection.append(tagsHead, tagsWrap);
+    body.appendChild(tagsSection);
+  }
+
+  // --- Trigger groups (Append / Replace targets) ---
+  const triggersSection = document.createElement("div");
+  triggersSection.className = "pc-civitai-info-section pc-civitai-info-triggers";
+
+  const triggersHead = document.createElement("div");
+  triggersHead.className = "pc-civitai-info-section-head";
+  const triggersLabel = document.createElement("div");
+  triggersLabel.className = "pc-civitai-info-label";
+  triggersLabel.textContent = groups.length
+    ? `Triggers · ${groups.length}`
+    : "Triggers";
+  triggersHead.appendChild(triggersLabel);
+
+  const groupsWrap = document.createElement("div");
+  groupsWrap.className = "pc-civitai-groups pc-civitai-info-groups";
+
+  /** @type {Set<number>} */
+  const selected = new Set();
+  /** @type {Map<number, string>} */
+  const selectedText = new Map();
+
+  const footer = document.createElement("div");
+  footer.className = "pc-civitai-info-footer";
+
+  const appendBtn = document.createElement("button");
+  appendBtn.type = "button";
+  appendBtn.className = "pc-popup-btn";
+  appendBtn.textContent = "Append";
+
+  const replaceBtn = document.createElement("button");
+  replaceBtn.type = "button";
+  replaceBtn.className = "pc-popup-btn primary";
+  replaceBtn.textContent = "Replace";
+
+  footer.append(appendBtn, replaceBtn);
+
+  function paintActions() {
+    const on = selected.size > 0;
+    appendBtn.disabled = !on;
+    replaceBtn.disabled = !on;
+  }
+
+  function collectedText() {
+    const parts = [];
+    for (const idx of [...selected].sort((a, b) => a - b)) {
+      const text = selectedText.get(idx);
+      if (text) parts.push(text);
+    }
+    return joinFields(parts);
+  }
+
+  function apply(mode) {
+    const text = collectedText();
+    if (!text) return;
+    onApply?.(text, mode);
+    overlay.remove();
+    onDone?.();
+  }
+
+  appendBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    apply("append");
+  });
+  replaceBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    apply("replace");
+  });
+  paintActions();
+
+  if (!groups.length) {
+    const empty = document.createElement("div");
+    empty.className = "pc-civitai-empty-groups";
+    empty.textContent = "No trigger groups";
+    groupsWrap.appendChild(empty);
+  } else {
+    const rows = groups.map((text, groupIndex) => {
+      const { preview, clipped } = truncatePreview(text);
+      const row = document.createElement("div");
+      row.className = "pc-civitai-group";
+      row.setAttribute("role", "button");
+      row.tabIndex = 0;
+      row.setAttribute("aria-pressed", "false");
+
+      const textEl = document.createElement("div");
+      textEl.className = "pc-civitai-group-text";
+      textEl.textContent = preview;
+
+      let expanded = false;
+      let expandBtn = null;
+      if (clipped) {
+        expandBtn = document.createElement("button");
+        expandBtn.type = "button";
+        expandBtn.className = "pc-civitai-expand";
+        expandBtn.title = "Show full";
+        expandBtn.innerHTML = CHEVRON_ICON_SVG;
+        expandBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          expanded = !expanded;
+          textEl.textContent = expanded ? text : preview;
+          textEl.classList.toggle("is-expanded", expanded);
+          expandBtn.classList.toggle("open", expanded);
+          expandBtn.title = expanded ? "Collapse" : "Show full";
+        });
+      }
+
+      function paintSelected() {
+        const on = selected.has(groupIndex);
+        row.classList.toggle("selected", on);
+        row.setAttribute("aria-pressed", on ? "true" : "false");
+      }
+
+      function toggleSelected() {
+        if (selected.has(groupIndex)) {
+          selected.delete(groupIndex);
+          selectedText.delete(groupIndex);
+        } else {
+          selected.add(groupIndex);
+          selectedText.set(groupIndex, text);
+        }
+        paintSelected();
+        paintActions();
+      }
+
+      row.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleSelected();
+      });
+      row.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleSelected();
+      });
+
+      paintSelected();
+      row.appendChild(textEl);
+      if (expandBtn) row.appendChild(expandBtn);
+      return row;
+    });
+
+    const extra = rows.length > GROUPS_PREVIEW;
+    let listExpanded = false;
+
+    function paintGroups() {
+      groupsWrap.replaceChildren();
+      const visible = listExpanded ? rows : rows.slice(0, GROUPS_PREVIEW);
+      for (const row of visible) groupsWrap.appendChild(row);
+      if (!extra) return;
+
+      const moreBtn = document.createElement("button");
+      moreBtn.type = "button";
+      moreBtn.className = "pc-civitai-more-groups";
+      const hidden = rows.length - GROUPS_PREVIEW;
+      moreBtn.textContent = listExpanded
+        ? "Show less"
+        : `Show ${hidden} more group${hidden === 1 ? "" : "s"}`;
+      moreBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        listExpanded = !listExpanded;
+        paintGroups();
+      });
+      groupsWrap.appendChild(moreBtn);
+    }
+
+    paintGroups();
+  }
+
+  triggersSection.append(triggersHead, groupsWrap);
+  body.appendChild(triggersSection);
+
   function makeSection(labelText) {
     const section = document.createElement("div");
     section.className = "pc-civitai-info-section";
@@ -238,7 +435,7 @@ function openModelInfoOverlay(model) {
   }
   body.appendChild(desc.section);
 
-  panel.append(head, body);
+  panel.append(head, body, footer);
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 
@@ -263,8 +460,8 @@ function openModelInfoOverlay(model) {
 }
 
 /**
- * Search Civitai Toolkit local DB for LoRA trigger groups → Append / Replace positive.
- * Custom overlay — closes only via X (not outside click).
+ * Browse / search Toolkit LoRAs. Click title → Info (triggers + Append / Replace).
+ * Closes only via X.
  */
 export async function openCivitaiLoadPopup({ onApply } = {}) {
   injectPopupStyles();
@@ -273,6 +470,7 @@ export async function openCivitaiLoadPopup({ onApply } = {}) {
   activeOverlay = null;
 
   const loaded = await fetchCivitaiLoras();
+  const tree = loaded.ok ? buildLoraFolderTree(loaded.models) : { __files__: [], __models__: {} };
 
   const overlay = document.createElement("div");
   overlay.className = "pc-civitai-overlay";
@@ -287,7 +485,7 @@ export async function openCivitaiLoadPopup({ onApply } = {}) {
 
   const title = document.createElement("div");
   title.className = "pc-civitai-modal-title";
-  title.textContent = "Civitai · triggers";
+  title.textContent = "Civitai · LoRAs";
 
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
@@ -297,10 +495,13 @@ export async function openCivitaiLoadPopup({ onApply } = {}) {
 
   head.append(title, closeBtn);
 
+  const crumbs = document.createElement("div");
+  crumbs.className = "pc-civitai-crumbs";
+
   const search = document.createElement("input");
   search.type = "search";
   search.className = "pc-popup-input pc-civitai-search";
-  search.placeholder = "Search filename or title…";
+  search.placeholder = "Browse · or search name / file / tag…";
   search.autocomplete = "off";
 
   const status = document.createElement("div");
@@ -309,29 +510,13 @@ export async function openCivitaiLoadPopup({ onApply } = {}) {
   const scroll = document.createElement("div");
   scroll.className = "pc-civitai-list";
 
-  const footer = document.createElement("div");
-  footer.className = "pc-civitai-modal-footer";
-
-  const appendBtn = document.createElement("button");
-  appendBtn.type = "button";
-  appendBtn.className = "pc-popup-btn";
-  appendBtn.textContent = "Append";
-
-  const replaceBtn = document.createElement("button");
-  replaceBtn.type = "button";
-  replaceBtn.className = "pc-popup-btn primary";
-  replaceBtn.textContent = "Replace";
-
-  footer.append(appendBtn, replaceBtn);
-  modal.append(head, search, status, scroll, footer);
+  modal.append(head, crumbs, search, status, scroll);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
   activeOverlay = overlay;
 
-  /** @type {Set<string>} */
-  const selected = new Set();
-  /** @type {Map<string, string>} */
-  const selectedText = new Map();
+  /** @type {string[]} */
+  let folderPath = [];
 
   function close() {
     hideCoverTip();
@@ -345,110 +530,17 @@ export async function openCivitaiLoadPopup({ onApply } = {}) {
     close();
   });
 
-  function paintActions() {
-    const on = selected.size > 0;
-    appendBtn.disabled = !on;
-    replaceBtn.disabled = !on;
+  function openInfo(model) {
+    hideCoverTip();
+    openModelInfoOverlay(model, {
+      onApply,
+      onDone: close,
+    });
   }
 
-  function collectedText() {
-    const parts = [];
-    for (const key of selected) {
-      const text = selectedText.get(key);
-      if (text) parts.push(text);
-    }
-    return joinFields(parts);
-  }
-
-  function apply(mode) {
-    const text = collectedText();
-    if (!text) return;
-    onApply?.(text, mode);
-    close();
-  }
-
-  appendBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    apply("append");
-  });
-  replaceBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    apply("replace");
-  });
-  paintActions();
-
-  function makeGroupRow(modelIndex, groupIndex, text) {
-    const key = selectionKey(modelIndex, groupIndex);
-    const { preview, clipped } = truncatePreview(text);
-
+  function makeLoraRow(model, pathHint = "") {
     const row = document.createElement("div");
-    row.className = "pc-civitai-group";
-    row.setAttribute("role", "button");
-    row.tabIndex = 0;
-    row.setAttribute("aria-pressed", "false");
-
-    const textEl = document.createElement("div");
-    textEl.className = "pc-civitai-group-text";
-    textEl.textContent = preview;
-
-    let expanded = false;
-    let expandBtn = null;
-    if (clipped) {
-      expandBtn = document.createElement("button");
-      expandBtn.type = "button";
-      expandBtn.className = "pc-civitai-expand";
-      expandBtn.title = "Show full";
-      expandBtn.innerHTML = CHEVRON_ICON_SVG;
-      expandBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        expanded = !expanded;
-        textEl.textContent = expanded ? text : preview;
-        expandBtn.classList.toggle("open", expanded);
-        expandBtn.title = expanded ? "Collapse" : "Show full";
-      });
-    }
-
-    function paintSelected() {
-      const on = selected.has(key);
-      row.classList.toggle("selected", on);
-      row.setAttribute("aria-pressed", on ? "true" : "false");
-    }
-
-    function toggleSelected() {
-      if (selected.has(key)) {
-        selected.delete(key);
-        selectedText.delete(key);
-      } else {
-        selected.add(key);
-        selectedText.set(key, text);
-      }
-      paintSelected();
-      paintActions();
-    }
-
-    row.addEventListener("click", (e) => {
-      e.stopPropagation();
-      toggleSelected();
-    });
-    row.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter" && e.key !== " ") return;
-      e.preventDefault();
-      e.stopPropagation();
-      toggleSelected();
-    });
-
-    paintSelected();
-    row.appendChild(textEl);
-    if (expandBtn) row.appendChild(expandBtn);
-    return row;
-  }
-
-  function makeModelCard(model, modelIndex) {
-    const card = document.createElement("div");
-    card.className = "pc-civitai-card";
-
-    const headRow = document.createElement("div");
-    headRow.className = "pc-civitai-head";
+    row.className = "pc-civitai-row";
 
     const coverUrl = modelCoverUrl(model);
     const previewBtn = document.createElement("button");
@@ -470,86 +562,116 @@ export async function openCivitaiLoadPopup({ onApply } = {}) {
     const titles = document.createElement("div");
     titles.className = "pc-civitai-titles";
 
-    const nameEl = document.createElement("div");
-    nameEl.className = "pc-civitai-title";
+    const nameEl = document.createElement("button");
+    nameEl.type = "button";
+    nameEl.className = "pc-civitai-title-btn";
     nameEl.textContent = modelDisplayName(model);
-    nameEl.title = modelDisplayName(model);
+    nameEl.title = "Open LoRA info";
+    nameEl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openInfo(model);
+    });
+
+    if (pathHint) {
+      const pathEl = document.createElement("div");
+      pathEl.className = "pc-civitai-file";
+      pathEl.textContent = pathHint;
+      pathEl.title = pathHint;
+      titles.appendChild(pathEl);
+    }
 
     const file = modelFileLabel(model);
+    titles.appendChild(nameEl);
     if (file) {
       const sub = document.createElement("div");
       sub.className = "pc-civitai-file";
       sub.textContent = file;
       sub.title = file;
-      titles.append(nameEl, sub);
-    } else {
-      titles.appendChild(nameEl);
+      titles.appendChild(sub);
     }
 
-    const infoBtn = document.createElement("button");
-    infoBtn.type = "button";
-    infoBtn.className = "pc-civitai-info-btn";
-    infoBtn.title = "Description & notes";
-    infoBtn.innerHTML = TEXT_ICON_SVG;
-    infoBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
-    infoBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      hideCoverTip();
-      openModelInfoOverlay(model);
+    const base = (model.base_model || "").trim();
+    if (base && base !== "N/A") {
+      const bm = document.createElement("div");
+      bm.className = "pc-civitai-base";
+      bm.textContent = base;
+      bm.title = base;
+      row.append(previewBtn, titles, bm);
+    } else {
+      row.append(previewBtn, titles);
+    }
+
+    row.addEventListener("click", (e) => {
+      if (e.target.closest(".pc-civitai-preview-btn")) return;
+      openInfo(model);
     });
 
-    headRow.append(previewBtn, titles, infoBtn);
-
-    const groups = parseTriggerGroups(model.trained_words);
-    const groupsWrap = document.createElement("div");
-    groupsWrap.className = "pc-civitai-groups";
-
-    if (!groups.length) {
-      const empty = document.createElement("div");
-      empty.className = "pc-civitai-empty-groups";
-      empty.textContent = "No trigger groups";
-      groupsWrap.appendChild(empty);
-    } else {
-      const rows = groups.map((text, groupIndex) =>
-        makeGroupRow(modelIndex, groupIndex, text),
-      );
-      const extra = rows.length > GROUPS_PREVIEW;
-      let expanded = false;
-
-      function paintGroups() {
-        groupsWrap.replaceChildren();
-        const visible = expanded ? rows : rows.slice(0, GROUPS_PREVIEW);
-        for (const row of visible) groupsWrap.appendChild(row);
-        if (!extra) return;
-
-        const moreBtn = document.createElement("button");
-        moreBtn.type = "button";
-        moreBtn.className = "pc-civitai-more-groups";
-        const hidden = rows.length - GROUPS_PREVIEW;
-        moreBtn.textContent = expanded
-          ? "Show less"
-          : `Show ${hidden} more group${hidden === 1 ? "" : "s"}`;
-        moreBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          expanded = !expanded;
-          paintGroups();
-        });
-        groupsWrap.appendChild(moreBtn);
-      }
-
-      paintGroups();
-    }
-
-    card.append(headRow, groupsWrap);
-    return card;
+    return row;
   }
 
-  function renderList(query) {
+  function makeFolderRow(name) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "pc-civitai-folder";
+    const icon = document.createElement("span");
+    icon.className = "pc-civitai-folder-icon";
+    icon.textContent = "📁";
+    const label = document.createElement("span");
+    label.className = "pc-civitai-folder-label";
+    label.textContent = name;
+    const arrow = document.createElement("span");
+    arrow.className = "pc-civitai-folder-arrow";
+    arrow.textContent = "▸";
+    row.append(icon, label, arrow);
+    row.addEventListener("click", (e) => {
+      e.stopPropagation();
+      folderPath = [...folderPath, name];
+      search.value = "";
+      render();
+    });
+    return row;
+  }
+
+  function paintCrumbs() {
+    crumbs.replaceChildren();
+    const root = document.createElement("button");
+    root.type = "button";
+    root.className = "pc-civitai-crumb" + (folderPath.length ? "" : " current");
+    root.textContent = "loras";
+    root.disabled = folderPath.length === 0;
+    root.addEventListener("click", (e) => {
+      e.stopPropagation();
+      folderPath = [];
+      search.value = "";
+      render();
+    });
+    crumbs.appendChild(root);
+
+    folderPath.forEach((seg, idx) => {
+      const sep = document.createElement("span");
+      sep.className = "pc-civitai-crumb-sep";
+      sep.textContent = "/";
+      crumbs.appendChild(sep);
+
+      const crumb = document.createElement("button");
+      crumb.type = "button";
+      const isCurrent = idx === folderPath.length - 1;
+      crumb.className = "pc-civitai-crumb" + (isCurrent ? " current" : "");
+      crumb.textContent = seg;
+      crumb.disabled = isCurrent;
+      crumb.addEventListener("click", (e) => {
+        e.stopPropagation();
+        folderPath = folderPath.slice(0, idx + 1);
+        search.value = "";
+        render();
+      });
+      crumbs.appendChild(crumb);
+    });
+  }
+
+  function render() {
     hideCoverTip();
-    selected.clear();
-    selectedText.clear();
-    paintActions();
+    paintCrumbs();
     scroll.replaceChildren();
 
     if (!loaded.ok) {
@@ -557,36 +679,79 @@ export async function openCivitaiLoadPopup({ onApply } = {}) {
       return;
     }
 
-    const q = (query || "").trim();
-    if (!q) {
-      status.textContent = "Type a filename or Civitai title to search.";
+    let node = getTreeNodeAtPath(tree, folderPath);
+    if (!node) {
+      folderPath = [];
+      node = tree;
+      paintCrumbs();
+    }
+
+    const q = search.value.trim();
+    const scopeLabel = folderPath.length ? folderPath.join("/") : "all folders";
+    search.placeholder = q
+      ? `Search in ${scopeLabel}…`
+      : `Browse ${scopeLabel} · or search name / file / tag…`;
+
+    if (q) {
+      const hits = flattenLoraTree(node)
+        .filter((item) => modelMatchesQuery(item.model, q))
+        .sort((a, b) =>
+          modelDisplayName(a.model).localeCompare(modelDisplayName(b.model), undefined, {
+            sensitivity: "base",
+          }),
+        );
+
+      if (!hits.length) {
+        status.textContent = `No matches in ${scopeLabel}`;
+        return;
+      }
+
+      status.textContent = `${hits.length} match${hits.length === 1 ? "" : "es"} · click title for triggers`;
+      for (const hit of hits) {
+        const hint = hit.folderPrefix.length ? hit.folderPrefix.join(" / ") : "";
+        scroll.appendChild(makeLoraRow(hit.model, hint));
+      }
       return;
     }
 
-    const hits = searchCivitaiLoras(loaded.models, q);
-    if (!hits.length) {
-      status.textContent = "No LoRAs matched.";
+    const subfolders = Object.keys(node)
+      .filter((k) => k !== "__files__" && k !== "__models__")
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+    const files = (node.__files__ || [])
+      .slice()
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+    if (!subfolders.length && !files.length) {
+      status.textContent = "No LoRAs here";
       return;
     }
 
-    status.textContent = `${hits.length} LoRA${hits.length === 1 ? "" : "s"}`;
-    hits.forEach((model, index) => {
-      scroll.appendChild(makeModelCard(model, index));
-    });
+    status.textContent = [
+      subfolders.length ? `${subfolders.length} folder${subfolders.length === 1 ? "" : "s"}` : "",
+      files.length ? `${files.length} LoRA${files.length === 1 ? "" : "s"}` : "",
+      "click title for triggers",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    for (const folder of subfolders) {
+      scroll.appendChild(makeFolderRow(folder));
+    }
+    for (const file of files) {
+      const model = node.__models__?.[file];
+      if (!model) continue;
+      scroll.appendChild(makeLoraRow(model));
+    }
   }
 
   let timer = null;
   search.addEventListener("input", () => {
     clearTimeout(timer);
-    timer = setTimeout(() => renderList(search.value), 120);
+    timer = setTimeout(() => render(), 120);
   });
   search.addEventListener("keydown", (e) => e.stopPropagation());
 
-  if (!loaded.ok) {
-    status.textContent = loaded.error || "Toolkit unavailable";
-  } else {
-    renderList("");
-  }
-
+  render();
   requestAnimationFrame(() => search.focus());
 }

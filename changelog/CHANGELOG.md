@@ -38,8 +38,8 @@ Wire any STRING prompts into the builder as a first-class pair: reorder, enable/
 ### Civitai Toolkit LoRA import (experimental)
 
 - Settings · SQLite: **Civitai Toolkit LoRA import** — shows a **Civitai** button on each pair
-- Overlay browser (closes only via **X**): search Toolkit LoRAs, pick trigger groups (first 2 + Show more), **Append** / **Replace** into positive
-- Per result: cover preview + **Info** (Toolkit description + on-demand sidecar `Name.txt` notes — not a full-library scan)
+- Overlay browser (closes only via **X**): folder browse from LoRA paths (loader-style crumbs) + search in current folder (name / file / tag / base)
+- Click LoRA title → **Info**: cover/meta, Civitai tags, selectable trigger groups (hard-capped), **Append** / **Replace**, description + on-demand sidecar notes + Civitai link
 - Soft dependency on [ComfyUI-Civitai-Toolkit](https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit) (works without it; overlay explains if missing)
 
 ---

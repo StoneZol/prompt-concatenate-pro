@@ -38,7 +38,7 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 
 - **Group cards** — title, positive, negative, drag reorder, collapse, duplicate, enable toggle, **Clear**
 - **External prompt** (This node Settings) — one wired pair (`external_pos` / `external_neg`) in the stack
-- **Civitai Toolkit LoRA import** (Settings, experimental) — overlay search of local Toolkit LoRAs; pick trigger groups → Append / Replace; Info = description + on-demand `Name.txt` notes
+- **Civitai Toolkit LoRA import** (Settings, experimental) — folder browse + search; click LoRA title → Info with triggers → Append / Replace; notes on demand
 - **Add group** — type a new name, or pick a library shelf that already has saved pairs (exact name)
 - **Join engine** — merges enabled groups with `, `, skips empty, normalizes commas and spacing
 - **Pin to sidebar** — `Group \| positive` / `Group \| negative` in Inputs / Favorites
@@ -195,7 +195,7 @@ Pin from the node **Inputs** panel or **Favorites**. Edits sync both ways with t
 **Saved · SQLite** (all Prompt Concatenate Pro nodes):
 
 - **Skip pair overwrite confirms** — Load pair replace + Clear without asking (off by default; Delete / presets untouched)
-- **Civitai Toolkit LoRA import** (experimental) — **Civitai** on pairs; overlay search → trigger groups → Append / Replace; Info loads sidecar notes on demand (needs Toolkit)
+- **Civitai Toolkit LoRA import** (experimental) — **Civitai** on pairs; folder browse + search; title → Info (triggers + Append / Replace + notes) (needs Toolkit)
 - **Prompt autocomplete** — caret suggestions + Suggest tab from your library
 
 ---

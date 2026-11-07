@@ -50,8 +50,9 @@ const CIVITAI_TOOLKIT_HELP = {
   title: "Civitai Toolkit LoRA import",
   text:
     "Off by default. Saved in SQLite (all nodes).\n\n" +
-    "When on, each pair gets a Civitai button. Opens an overlay (closes only via X): search Toolkit LoRAs, " +
-    "pick trigger groups, Append / Replace into positive. Info shows description + on-demand sidecar notes (Name.txt).\n\n" +
+    "When on, each pair gets a Civitai button. Opens an overlay (closes only via X): browse LoRA folders " +
+    "(same path layout as the loader) or search name / file / tag / base. Click a LoRA title to open Info — " +
+    "pick trigger groups there, then Append / Replace into positive. Info also shows Civitai tags, description + on-demand notes.\n\n" +
     "Requires ComfyUI-Civitai-Toolkit installed and scanned. Soft dependency — Prompt Concatenate Pro works without it.",
 };
 
