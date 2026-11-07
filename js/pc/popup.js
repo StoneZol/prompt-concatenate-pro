@@ -242,6 +242,10 @@ const CSS = `
   color: var(--input-text, #ddd);
 }
 
+.pc-settings-row-disabled {
+  opacity: 0.55;
+}
+
 .pc-settings-label {
   flex: 1 1 auto;
   line-height: 1.35;

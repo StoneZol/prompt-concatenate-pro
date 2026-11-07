@@ -1145,6 +1145,8 @@ UI_PREF_KEYS = (
     "embedClipMeta",
     "promptAutocomplete",
     "managerTab",
+    "externalPrompt",
+    "externalDebugSnapshot",
 )
 UI_PREF_DEFAULTS = {
     "otherCollections": False,
@@ -1153,6 +1155,8 @@ UI_PREF_DEFAULTS = {
     "embedClipMeta": False,
     "promptAutocomplete": False,
     "managerTab": "presets",
+    "externalPrompt": False,
+    "externalDebugSnapshot": False,
 }
 _MANAGER_TAB_VALUES = frozenset({"presets", "prompts", "templates", "suggest"})
 

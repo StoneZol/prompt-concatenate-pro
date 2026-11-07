@@ -348,6 +348,26 @@ const CSS = `
   min-width: 0;
 }
 
+.pc-group-external {
+  border-color: #5a6a50;
+  background: rgba(40, 55, 40, 0.35);
+}
+
+.pc-external-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.pc-external-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--descrip-text, #999);
+  line-height: 1.3;
+}
+
 .pc-group-head {
   display: flex;
   align-items: center;

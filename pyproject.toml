@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-prompt-craft"
 description = "Modular prompt library for ComfyUI: group cards → str_pos/str_neg, pin to sidebar, local SQLite presets (structure), templates (full packs), pairs, manager, optional autocomplete from your own library."
-version = "2.0.0"
+version = "2.1.0"
 license = { file = "LICENSE" }
 requires-python = ">=3.8"
 dependencies = []

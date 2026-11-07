@@ -1,3 +1,5 @@
+import { isExternalGroup } from "./external.js";
+
 const DEFAULT_SEPARATOR = ", ";
 
 export function normalizePrompt(text) {
@@ -27,8 +29,16 @@ export function joinFields(parts, separator = DEFAULT_SEPARATOR) {
 export function craftOutput(groups) {
   const enabled = (groups || []).filter((group) => group.enabled !== false);
   return {
-    str_pos: joinFields(enabled.map((group) => group.positive)),
-    str_neg: joinFields(enabled.map((group) => group.negative)),
+    str_pos: joinFields(
+      enabled.map((group) =>
+        isExternalGroup(group) ? group.lastPositive || "" : group.positive,
+      ),
+    ),
+    str_neg: joinFields(
+      enabled.map((group) =>
+        isExternalGroup(group) ? group.lastNegative || "" : group.negative,
+      ),
+    ),
   };
 }
 

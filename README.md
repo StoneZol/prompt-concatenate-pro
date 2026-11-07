@@ -11,6 +11,7 @@ Built-in **SQLite library** (no cloud, no external tag DB):
 | **Preset** | Slot names + order only | Empty canvas: `Base · Scene · Character · Style` |
 | **Template** | Full prompt pack (non-empty pairs) | Drop a look onto the node; merge by slot name |
 | **Pair** | One pos/neg (+ notes) in a **group** shelf | Reuse “alisa…”, “sunset room…”, etc. |
+| **External** | Wired `external_pos` / `external_neg` slot | Drop outside prompts into the stack |
 | **Group** | Live card on the node | Edit, pin to sidebar, Save/Load pair |
 
 **Manage library** covers Presets, Prompts, Templates, and (optional) Suggest — last opened tab and prefs persist in SQLite.
@@ -36,6 +37,7 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 ## Features
 
 - **Group cards** — title, positive, negative, drag reorder, collapse, duplicate, enable toggle, **Clear**
+- **External prompt** (Settings) — one wired pair (`external_pos` / `external_neg`) in the stack; optional debug snapshot tip
 - **Add group** — type a new name, or pick a library shelf that already has saved pairs (exact name)
 - **Join engine** — merges enabled groups with `, `, skips empty, normalizes commas and spacing
 - **Pin to sidebar** — `Group \| positive` / `Group \| negative` in Inputs / Favorites
@@ -138,6 +140,10 @@ Sidebar labels (`Skin | positive`) are stamped **when the group is created**. Re
 
 **Save / Load pair** on a card. Live in a **group** shelf (collection). Title, notes, positive, negative.
 
+### External
+
+Optional wired slot (Settings → **External prompt**). Fixed id, title `External`, content only from node inputs. Enable / reorder in the list; no library actions.
+
 ### Folders vs group shelves
 
 | Term | Used for | Table |
@@ -182,6 +188,8 @@ Pin from the node **Inputs** panel or **Favorites**. Edits sync both ways with t
 
 - **Embed prompts in CLIP for PNG meta** — on queue, write joined text into stock CLIP widgets (off by default so PNG-loaded workflows keep wires)
 - **Prompt autocomplete** — experimental; enables caret suggestions + Suggest tab
+- **External prompt** — adds one **External** pair + `external_pos` / `external_neg` inputs; reorder / enable like other groups; no Save / Load. Presets remember its position.
+- **Write external debug snapshot** — only when External is on (`debug`); after a run, External’s info tip shows last received text. Off by default — past values can stick in workflow / PNG meta.
 
 ---
 

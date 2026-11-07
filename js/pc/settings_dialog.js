@@ -25,12 +25,43 @@ const AUTOCOMPLETE_HELP = {
     "if nothing matches, Tab saves the typed segment. Esc closes; Enter still inserts a newline.",
 };
 
-function makeSettingRow({ label, prefKey, help, badge, onToggle }) {
+const EXTERNAL_PROMPT_HELP = {
+  title: "External prompt",
+  text:
+    "Off by default.\n\n" +
+    "When on, the node gets an External pair in the group list and two STRING inputs " +
+    "(external_pos / external_neg). Wire any prompts into them — External can be reordered " +
+    "and enabled/disabled like other pairs, but has no Save / Load.\n\n" +
+    "Layout presets store External’s position (special id). If this toggle is off when you " +
+    "load a preset, that slot is skipped.",
+};
+
+const EXTERNAL_DEBUG_HELP = {
+  title: "Write external debug snapshot",
+  text:
+    "Debug only. Requires External prompt.\n\n" +
+    "When on, after each run the External card’s info tip shows the text that arrived on " +
+    "the inputs. Snapshots are kept in memory for the session tip — avoid relying on them " +
+    "in saved workflows.\n\n" +
+    "Past generations can still stick in workflow / PNG meta if other tools serialize node " +
+    "state. Keep this off for normal work; turn on only while debugging wires.",
+};
+
+function makeSettingRow({
+  label,
+  prefKey,
+  help,
+  badge,
+  disabled = false,
+  onToggle,
+  getEnabled,
+  setEnabledVisual,
+}) {
   const row = document.createElement("div");
   row.className = "pc-toggle-row pc-settings-row";
 
   const toggle = document.createElement("div");
-  const on = Boolean(getUiPref(prefKey));
+  const on = Boolean(getEnabled ? getEnabled() : getUiPref(prefKey));
   toggle.className = "pc-toggle" + (on ? " on" : "");
   toggle.setAttribute("role", "switch");
   toggle.setAttribute("aria-checked", on ? "true" : "false");
@@ -61,42 +92,67 @@ function makeSettingRow({ label, prefKey, help, badge, onToggle }) {
 
   let enabled = on;
   let locked = false;
-  toggle.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    if (locked) return;
-    enabled = !enabled;
+  let isDisabled = Boolean(disabled);
+
+  function applyDisabled() {
+    row.classList.toggle("pc-settings-row-disabled", isDisabled);
+    toggle.style.pointerEvents = isDisabled || locked ? "none" : "";
+    toggle.style.opacity = isDisabled ? "0.4" : locked ? "0.55" : "";
+    toggle.setAttribute("aria-disabled", isDisabled ? "true" : "false");
+  }
+
+  function paintEnabled(next) {
+    enabled = Boolean(next);
     toggle.classList.toggle("on", enabled);
     toggle.setAttribute("aria-checked", enabled ? "true" : "false");
-    setUiPref(prefKey, enabled);
+  }
+
+  toggle.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (locked || isDisabled) return;
+    enabled = !enabled;
+    paintEnabled(enabled);
+    if (prefKey) setUiPref(prefKey, enabled);
     const result = onToggle?.(enabled, {
       setBusy(next) {
         locked = Boolean(next);
-        toggle.style.pointerEvents = locked ? "none" : "";
-        toggle.style.opacity = locked ? "0.55" : "";
+        applyDisabled();
       },
     });
     if (result && typeof result.then === "function") {
       locked = true;
-      toggle.style.pointerEvents = "none";
-      toggle.style.opacity = "0.55";
+      applyDisabled();
       try {
         await result;
       } finally {
         locked = false;
-        toggle.style.pointerEvents = "";
-        toggle.style.opacity = "";
+        applyDisabled();
       }
     }
   });
 
+  applyDisabled();
   row.append(toggle, labelEl, infoBtn);
-  return row;
+
+  setEnabledVisual?.(paintEnabled);
+
+  return {
+    el: row,
+    setDisabled(next) {
+      isDisabled = Boolean(next);
+      applyDisabled();
+    },
+    setOn(next) {
+      paintEnabled(next);
+    },
+    isOn: () => enabled,
+  };
 }
 
 /**
  * Node settings: toggles with info tips (same peek pattern as Load pair).
  */
-export async function openSettingsPopup({ anchor } = {}) {
+export async function openSettingsPopup({ anchor, onExternalPromptChange } = {}) {
   await ensureUiPrefs();
 
   openPopup({
@@ -112,7 +168,7 @@ export async function openSettingsPopup({ anchor } = {}) {
           label: "Embed prompts in CLIP for PNG meta",
           prefKey: "embedClipMeta",
           help: EMBED_CLIP_META_HELP,
-        }),
+        }).el,
       );
 
       const acBusy = makeBusyLine({ className: "pc-settings-busy" });
@@ -156,9 +212,43 @@ export async function openSettingsPopup({ anchor } = {}) {
               setBusy?.(false);
             }
           },
-        }),
+        }).el,
       );
       list.appendChild(acBusy.el);
+
+      const featureOn = Boolean(getUiPref("externalPrompt"));
+      let debugRow = null;
+
+      const externalRow = makeSettingRow({
+        label: "External prompt",
+        prefKey: "externalPrompt",
+        help: EXTERNAL_PROMPT_HELP,
+        onToggle(enabled) {
+          if (!enabled) {
+            setUiPref("externalDebugSnapshot", false);
+            debugRow?.setOn(false);
+          }
+          debugRow?.setDisabled(!enabled);
+          onExternalPromptChange?.(enabled);
+        },
+      });
+      list.appendChild(externalRow.el);
+
+      debugRow = makeSettingRow({
+        label: "Write external debug snapshot",
+        prefKey: "externalDebugSnapshot",
+        help: EXTERNAL_DEBUG_HELP,
+        badge: "debug",
+        disabled: !featureOn,
+        getEnabled: () =>
+          featureOn && Boolean(getUiPref("externalDebugSnapshot")),
+      });
+      // Sync visual with coerced state when feature was off.
+      if (!featureOn && getUiPref("externalDebugSnapshot")) {
+        setUiPref("externalDebugSnapshot", false);
+        debugRow.setOn(false);
+      }
+      list.appendChild(debugRow.el);
 
       const footer = document.createElement("div");
       footer.className = "pc-settings-footer";

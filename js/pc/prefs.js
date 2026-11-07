@@ -14,6 +14,10 @@ const DEFAULTS = {
   promptAutocomplete: false,
   /** Last Library manager tab: presets | prompts | templates | suggest */
   managerTab: "presets",
+  /** Show External pair + STRING inputs on the node. */
+  externalPrompt: false,
+  /** After queue, snapshot wired external text onto the card (debug; can stick in meta). */
+  externalDebugSnapshot: false,
 };
 
 let cache = { ...DEFAULTS };
@@ -60,6 +64,7 @@ function applyPrefs(prefs) {
   for (const key of Object.keys(DEFAULTS)) {
     cache[key] = coercePref(key, cache[key]);
   }
+  if (!cache.externalPrompt) cache.externalDebugSnapshot = false;
   loaded = true;
   return cache;
 }
@@ -100,7 +105,14 @@ export function getUiPref(key) {
 export function setUiPref(key, value) {
   if (!Object.prototype.hasOwnProperty.call(DEFAULTS, key)) return;
   cache[key] = coercePref(key, value);
-  updateUiPrefs({ [key]: cache[key] }).then((result) => {
+  if (key === "externalPrompt" && !cache.externalPrompt) {
+    cache.externalDebugSnapshot = false;
+  }
+  const patch =
+    key === "externalPrompt" && !cache.externalPrompt
+      ? { externalPrompt: false, externalDebugSnapshot: false }
+      : { [key]: cache[key] };
+  updateUiPrefs(patch).then((result) => {
     if (result?.ok && result.prefs) applyPrefs(result.prefs);
   });
 }

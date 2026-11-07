@@ -1,5 +1,6 @@
 import { openConfirmPopup, openPopup } from "./popup.js";
 import { listLayoutFolders, saveLayout, shelfNames } from "./api.js";
+import { displaySlotName, slotNameForGroup } from "./external.js";
 
 const UNCATEGORISED = "Uncategorised";
 
@@ -64,9 +65,7 @@ function openFolderPicker({ anchor, folders, current, onPick, onClose }) {
 }
 
 export function openSavePresetsPopup({ anchor, groups, loadedStack, onSaved }) {
-  const slots = (groups || [])
-    .map((group) => (group.title || "").trim())
-    .filter(Boolean);
+  const slots = (groups || []).map(slotNameForGroup).filter(Boolean);
 
   if (!slots.length) {
     openConfirmPopup({
@@ -87,7 +86,7 @@ export function openSavePresetsPopup({ anchor, groups, loadedStack, onSaved }) {
     render(body, { close }) {
       const hint = document.createElement("div");
       hint.className = "pc-save-slots";
-      hint.textContent = slots.join(" · ");
+      hint.textContent = slots.map(displaySlotName).join(" · ");
 
       const title = document.createElement("input");
       title.className = "pc-popup-input";

@@ -6,6 +6,19 @@ Format: newest first.
 
 ---
 
+## [2.1.0] — 2026-11-07
+
+### External prompt slot
+
+Wire any STRING prompts into the builder as a first-class pair: reorder, enable/disable, no library Save/Load.
+
+- Settings: **External prompt** — adds one **External** card + `external_pos` / `external_neg` inputs
+- Settings: **Write external debug snapshot** (active only when External is on, badge `debug`) — after a run, the card info tip shows what arrived; keep off for normal work (past values can stick in workflow / PNG meta)
+- Presets store External’s position via a fixed id; load skips that slot if External is off
+- Templates ignore External (not saved into packs)
+
+---
+
 ## [2.0.0] — 2026-10-17
 
 ### Templates, autocomplete, library polish
