@@ -21,6 +21,7 @@ Wire any STRING prompts into the builder as a first-class pair: reorder, enable/
 
 - Positive / negative textareas remember their resized height in the node’s `blocks_data` (survives workflow switches)
 - Settings: **Skip pair overwrite confirms** — Load pair replace + Clear pair without dialogs (off by default)
+- Autocomplete: when longer matches exist but the typed segment is new (`pov` vs `pov on kneel`), an **Add** row appears at the bottom — Tab saves it to the dictionary
 
 ---
 

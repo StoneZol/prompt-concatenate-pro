@@ -22,7 +22,8 @@ const AUTOCOMPLETE_HELP = {
     "Dictionaries are stored per side (pos/neg) in letter buckets.\n\n" +
     "Manage the dictionary in Library manager → Suggest. " +
     "Scrollable list at the caret (letter bucket only). Tab accepts a suggestion; " +
-    "if nothing matches, Tab saves the typed segment. Esc closes; Enter still inserts a newline.",
+    "if nothing matches (or only longer hits like “pov on kneel” for typed “pov”), " +
+    "an Add row at the bottom saves the typed segment with Tab. Esc closes; Enter still inserts a newline.",
 };
 
 const EXTERNAL_PROMPT_HELP = {
