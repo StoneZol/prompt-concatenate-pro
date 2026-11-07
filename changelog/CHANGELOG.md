@@ -35,6 +35,13 @@ Wire any STRING prompts into the builder as a first-class pair: reorder, enable/
 
 ![Autocomplete: Tab to add typed segment](../docs/screenshots/2.1.0/1.png)
 
+### Civitai Toolkit import (experimental)
+
+- Settings · SQLite: **Civitai Toolkit import** — shows a **Civitai** button on each pair
+- Search the local Toolkit DB by filename / title; pick parsed trigger groups (collapsed + expand); **Append** or **Replace** into positive
+- Per result: cover preview icon (hover) + **Info** (description + sidecar note next to the LoRA: `Name.txt` / `.md`, Toolkit-style)
+- Soft dependency on [ComfyUI-Civitai-Toolkit](https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit) (works without it; popup explains if missing)
+
 ---
 
 ## [2.0.0] — 2026-10-17

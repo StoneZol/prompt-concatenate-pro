@@ -4,6 +4,7 @@ import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
 import { bindPromptAutocomplete } from "./autocomplete.js";
 import { EXTERNAL_TITLE, isExternalGroup } from "./external.js";
 import { confirmClearPair } from "./pair_load.js";
+import { getUiPref } from "./prefs.js";
 
 function isEnabled(group) {
   return group.enabled !== false;
@@ -62,7 +63,7 @@ function makeField(group, key, labelText, { onChange, onPrompt }) {
   return { wrap, area };
 }
 
-export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, onRename, onReorder, onDrop, onSavePair, onLoadPair, onReloadLoaded, onDuplicate }) {
+export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, onRename, onReorder, onDrop, onSavePair, onLoadPair, onCivitaiLoad, onReloadLoaded, onDuplicate }) {
   const card = document.createElement("div");
   card.className = "pc-group" + (isExternalGroup(group) ? " pc-group-external" : "");
   card.dataset.groupId = group.id;
@@ -291,7 +292,22 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     const spacer = document.createElement("div");
     spacer.className = "pc-group-toolbar-spacer";
 
-    toolbar.append(savePairBtn, loadPairBtn, clearPairBtn, spacer, removeBtn);
+    toolbar.append(savePairBtn, loadPairBtn);
+
+    if (getUiPref("civitaiToolkitImport")) {
+      const civitaiBtn = document.createElement("button");
+      civitaiBtn.type = "button";
+      civitaiBtn.className = "pc-pair-civitai-btn";
+      civitaiBtn.title = "Import triggers from Civitai Toolkit";
+      civitaiBtn.innerHTML = `<span>Civitai</span>`;
+      civitaiBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onCivitaiLoad?.(civitaiBtn);
+      });
+      toolbar.appendChild(civitaiBtn);
+    }
+
+    toolbar.append(clearPairBtn, spacer, removeBtn);
 
     const loadedRow = document.createElement("div");
     loadedRow.className = "pc-loaded-row";

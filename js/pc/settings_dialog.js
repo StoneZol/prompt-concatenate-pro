@@ -46,6 +46,16 @@ const SKIP_PAIR_REPLACE_HELP = {
     "Does not affect Delete group, preset/template replace, or Suggest rename.",
 };
 
+const CIVITAI_TOOLKIT_HELP = {
+  title: "Civitai Toolkit import",
+  text:
+    "Off by default. Saved in SQLite (all nodes).\n\n" +
+    "When on, each pair gets a Civitai button. Search the local Civitai Toolkit DB by filename or title, " +
+    "pick parsed trigger groups, then Append or Replace into positive. Info shows description + sidecar note " +
+    "(Name.txt next to the LoRA, same as Toolkit).\n\n" +
+    "Requires ComfyUI-Civitai-Toolkit installed and scanned. Soft dependency — Prompt Concatenate Pro works without it.",
+};
+
 function makeSectionLabel(text, variant = "node") {
   const el = document.createElement("div");
   el.className = `pc-settings-section pc-settings-section-${variant}`;
@@ -160,8 +170,9 @@ function makeSettingRow({
  * @param {(v: boolean) => void} nodeSettings.setEmbedClipMeta
  * @param {() => boolean} nodeSettings.getExternalPrompt
  * @param {(v: boolean) => void} nodeSettings.setExternalPrompt
+ * @param {() => void} [onUiChange] re-render node chrome after global UI prefs change
  */
-export async function openSettingsPopup({ anchor, nodeSettings } = {}) {
+export async function openSettingsPopup({ anchor, nodeSettings, onUiChange } = {}) {
   await ensureUiPrefs();
 
   openPopup({
@@ -201,6 +212,17 @@ export async function openSettingsPopup({ anchor, nodeSettings } = {}) {
           label: "Skip pair overwrite confirms",
           prefKey: "skipPairReplaceConfirm",
           help: SKIP_PAIR_REPLACE_HELP,
+        }).el,
+      );
+      list.appendChild(
+        makeSettingRow({
+          label: "Civitai Toolkit import",
+          prefKey: "civitaiToolkitImport",
+          badge: "experimental",
+          help: CIVITAI_TOOLKIT_HELP,
+          onToggle() {
+            onUiChange?.();
+          },
         }).el,
       );
 

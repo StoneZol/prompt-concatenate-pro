@@ -37,7 +37,8 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 ## Features
 
 - **Group cards** — title, positive, negative, drag reorder, collapse, duplicate, enable toggle, **Clear**
-- **External prompt** (session Settings) — one wired pair (`external_pos` / `external_neg`) in the stack
+- **External prompt** (This node Settings) — one wired pair (`external_pos` / `external_neg`) in the stack
+- **Civitai Toolkit import** (Settings, experimental) — search local Toolkit LoRAs, pick trigger groups → Append / Replace into positive
 - **Add group** — type a new name, or pick a library shelf that already has saved pairs (exact name)
 - **Join engine** — merges enabled groups with `, `, skips empty, normalizes commas and spacing
 - **Pin to sidebar** — `Group \| positive` / `Group \| negative` in Inputs / Favorites
@@ -48,7 +49,7 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 - **Smart search** — AND tokens; `shelf\keyword` filters a collection first
 - **Library manager** — Presets / Prompts / Templates (+ **Suggest** when autocomplete is on); duplicate, rename, move, delete; last tab remembered
 - **Prompt autocomplete** (Settings) — suggests segments from **your** library; caret popup (**Tab** accept / Add); Suggest tab + rebuild
-- **PNG-friendly prompts** — session Settings: on queue, write joined text into stock CLIP `text`; wires restore after (off by default)
+- **PNG-friendly prompts** — This node Settings: on queue, write joined text into stock CLIP `text`; wires restore after (off by default)
 - **Local SQLite** — `db/presets.sqlite` (+ `db/autocomplete/` when Suggest is used)
 
 ---
@@ -194,6 +195,7 @@ Pin from the node **Inputs** panel or **Favorites**. Edits sync both ways with t
 **Saved · SQLite** (all Prompt Concatenate Pro nodes):
 
 - **Skip pair overwrite confirms** — Load pair replace + Clear without asking (off by default; Delete / presets untouched)
+- **Civitai Toolkit import** (experimental) — **Civitai** on pairs; search Toolkit LoRAs → pick trigger groups → Append / Replace positive (needs Toolkit)
 - **Prompt autocomplete** — caret suggestions + Suggest tab from your library
 
 ---

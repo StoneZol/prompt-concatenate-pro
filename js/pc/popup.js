@@ -161,8 +161,13 @@ const CSS = `
   font-size: 12px;
 }
 
-.pc-popup-btn:hover {
+.pc-popup-btn:hover:not(:disabled) {
   filter: brightness(1.15);
+}
+
+.pc-popup-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .pc-popup-btn.primary {
@@ -414,6 +419,250 @@ const CSS = `
   letter-spacing: 0.02em;
   vertical-align: middle;
   text-transform: lowercase;
+}
+
+.pc-civitai-list {
+  gap: 10px;
+  min-height: 120px;
+  max-height: min(52vh, 420px);
+}
+
+.pc-civitai-footer {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pc-civitai-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #444);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.pc-civitai-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pc-civitai-titles {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pc-civitai-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--input-text, #eee);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-civitai-file {
+  font-size: 11px;
+  color: var(--descrip-text, #888);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-civitai-preview-btn,
+.pc-civitai-info-btn {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--descrip-text, #777);
+  cursor: pointer;
+}
+
+.pc-civitai-preview-btn svg,
+.pc-civitai-info-btn svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+.pc-civitai-preview-btn.has-preview {
+  color: #9fd4f0;
+}
+
+.pc-civitai-preview-btn.has-preview:hover,
+.pc-civitai-info-btn:hover {
+  color: var(--input-text, #ddd);
+  background: var(--comfy-input-bg, #2a2a2e);
+  border-color: var(--border-color, #444);
+}
+
+.pc-civitai-cover-tip {
+  position: fixed;
+  z-index: 12050;
+  width: 220px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #555);
+  background: var(--comfy-menu-bg, #1e1e1e);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.pc-civitai-cover-tip img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #111;
+}
+
+.pc-civitai-info {
+  gap: 10px;
+  max-height: min(60vh, 480px);
+}
+
+.pc-civitai-info-cover {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #444);
+  background: #111;
+}
+
+.pc-civitai-info-cover img {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+}
+
+.pc-civitai-info-file {
+  font-size: 11px;
+  color: var(--descrip-text, #888);
+  word-break: break-all;
+}
+
+.pc-civitai-info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pc-civitai-info-section.is-empty .pc-civitai-info-text {
+  color: var(--descrip-text, #777);
+  font-style: italic;
+}
+
+.pc-civitai-info-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--descrip-text, #aaa);
+}
+
+.pc-civitai-info-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--input-text, #ddd);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pc-civitai-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pc-civitai-empty-groups {
+  font-size: 11px;
+  color: var(--descrip-text, #777);
+  font-style: italic;
+  padding: 2px 0;
+}
+
+.pc-civitai-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #555);
+  background: var(--comfy-input-bg, #2a2a2e);
+  color: var(--input-text, #ddd);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.pc-civitai-group:hover {
+  border-color: #6d5aa8;
+}
+
+.pc-civitai-group.selected {
+  border-color: #9b87d8;
+  background: #2f2b3d;
+  color: #e8e4f5;
+  box-shadow: inset 0 0 0 1px rgba(155, 135, 216, 0.35);
+}
+
+.pc-civitai-group-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pc-civitai-expand {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: -2px -2px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--descrip-text, #999);
+  cursor: pointer;
+}
+
+.pc-civitai-expand:hover {
+  color: var(--input-text, #ddd);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pc-civitai-expand svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  transition: transform 0.12s ease;
+}
+
+.pc-civitai-expand.open svg {
+  transform: rotate(180deg);
 }
 
 .pc-mgr-list-suggest {

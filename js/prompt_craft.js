@@ -19,6 +19,7 @@ import { confirmReloadTemplate, openLoadTemplatePopup } from "./pc/template_load
 import { mergeTemplateGroups } from "./pc/template_apply.js";
 import { openSavePairPopup } from "./pc/pair_save.js";
 import { confirmReplacePair, openLoadPairPopup } from "./pc/pair_load.js";
+import { openCivitaiLoadPopup } from "./pc/civitai_load.js";
 import { openManagerPopup } from "./pc/manager_dialog.js";
 import { openSettingsPopup } from "./pc/settings_dialog.js";
 import { listLayouts, listPresets, listTemplates } from "./pc/api.js";
@@ -694,6 +695,25 @@ app.registerExtension({
                 },
               });
             },
+            onCivitaiLoad: (anchor) => {
+              openCivitaiLoadPopup({
+                anchor,
+                onApply: (text, mode) => {
+                  if (mode === "replace") {
+                    group.positive = text || "";
+                  } else {
+                    group.positive = joinFields([group.positive, text]);
+                  }
+                  group.loadedTitle = "";
+                  group.loadedCategory = "";
+                  group.loadedDescription = "";
+                  card.setField("positive", group.positive);
+                  card.setLoadedTitle("");
+                  writeShadow(group, "positive", group.positive);
+                  persist();
+                },
+              });
+            },
             onReloadLoaded: async (anchor) => {
               const title = (group.loadedTitle || "").trim();
               const category = (group.loadedCategory || "").trim();
@@ -1054,6 +1074,7 @@ app.registerExtension({
         e.stopPropagation();
         openSettingsPopup({
           anchor: settingsBtn,
+          onUiChange: () => renderCards(),
           nodeSettings: {
             getEmbedClipMeta: () => embedClipMeta,
             setEmbedClipMeta: (value) => {
