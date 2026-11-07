@@ -14,7 +14,7 @@ import { openConfirmPopup, openInputPopup, openPopup } from "./popup.js";
 import { openAddGroupPopup } from "./add_group.js";
 import { EXTERNAL_GROUP_ID, EXTERNAL_TITLE, displaySlotName, isExternalSlotName } from "./external.js";
 import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
-import { confirmReplacePair, openLoadPairPopup } from "./pair_load.js";
+import { confirmClearPair, confirmReplacePair, openLoadPairPopup } from "./pair_load.js";
 import { openSavePairPopup } from "./pair_save.js";
 import { joinFields } from "./join.js";
 import {
@@ -897,12 +897,9 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             hidePromptTip();
             const hasText = slotHasPrompt(slot) || Boolean((slot.loadedTitle || "").trim());
             if (!hasText) return;
-            mgrConfirm({
+            confirmClearPair({
+              nested: true,
               anchor: clearPairBtn,
-              title: "Clear pair",
-              message: "Clear positive / negative for this pair?",
-              confirmLabel: "Clear",
-              danger: true,
               onConfirm: () => {
                 slot.positive = "";
                 slot.negative = "";

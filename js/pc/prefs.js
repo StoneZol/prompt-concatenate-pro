@@ -18,6 +18,8 @@ const DEFAULTS = {
   externalPrompt: false,
   /** After queue, snapshot wired external text onto the card (debug; can stick in meta). */
   externalDebugSnapshot: false,
+  /** Skip Load-pair replace + Clear-pair confirms. */
+  skipPairReplaceConfirm: false,
 };
 
 let cache = { ...DEFAULTS };

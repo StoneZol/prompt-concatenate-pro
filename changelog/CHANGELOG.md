@@ -17,6 +17,11 @@ Wire any STRING prompts into the builder as a first-class pair: reorder, enable/
 - Presets store External’s position via a fixed id; load skips that slot if External is off
 - Templates ignore External (not saved into packs)
 
+### Pair UX
+
+- Positive / negative textareas remember their resized height in the node’s `blocks_data` (survives workflow switches)
+- Settings: **Skip pair overwrite confirms** — Load pair replace + Clear pair without dialogs (off by default)
+
 ---
 
 ## [2.0.0] — 2026-10-17

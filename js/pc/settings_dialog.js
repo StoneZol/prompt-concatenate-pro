@@ -47,6 +47,15 @@ const EXTERNAL_DEBUG_HELP = {
     "state. Keep this off for normal work; turn on only while debugging wires.",
 };
 
+const SKIP_PAIR_REPLACE_HELP = {
+  title: "Skip pair overwrite confirms",
+  text:
+    "Off by default.\n\n" +
+    "When on, skips “Replace current prompts?” on Load pair and “Clear positive / negative?” on Clear. " +
+    "Applies on the node and in Edit template.\n\n" +
+    "Does not affect Delete group, preset/template replace, or Suggest rename.",
+};
+
 function makeSettingRow({
   label,
   prefKey,
@@ -168,6 +177,14 @@ export async function openSettingsPopup({ anchor, onExternalPromptChange } = {})
           label: "Embed prompts in CLIP for PNG meta",
           prefKey: "embedClipMeta",
           help: EMBED_CLIP_META_HELP,
+        }).el,
+      );
+
+      list.appendChild(
+        makeSettingRow({
+          label: "Skip pair overwrite confirms",
+          prefKey: "skipPairReplaceConfirm",
+          help: SKIP_PAIR_REPLACE_HELP,
         }).el,
       );
 

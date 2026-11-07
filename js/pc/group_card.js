@@ -3,9 +3,16 @@ import { openConfirmPopup } from "./popup.js";
 import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
 import { bindPromptAutocomplete } from "./autocomplete.js";
 import { EXTERNAL_TITLE, isExternalGroup } from "./external.js";
+import { confirmClearPair } from "./pair_load.js";
 
 function isEnabled(group) {
   return group.enabled !== false;
+}
+
+const TEXTAREA_MIN_HEIGHT = 72;
+
+function heightKeyFor(fieldKey) {
+  return fieldKey === "positive" ? "heightPositive" : "heightNegative";
 }
 
 function makeField(group, key, labelText, { onChange, onPrompt }) {
@@ -27,6 +34,32 @@ function makeField(group, key, labelText, { onChange, onPrompt }) {
     onChange?.();
   });
   bindPromptAutocomplete(area, key);
+
+  const heightKey = heightKeyFor(key);
+  const saved = Number(group[heightKey]);
+  if (Number.isFinite(saved) && saved >= TEXTAREA_MIN_HEIGHT) {
+    area.style.height = `${Math.round(saved)}px`;
+  }
+
+  // Remember vertical resize across workflow switches (stored in blocks_data).
+  let applying = true;
+  let heightTimer = 0;
+  const ro = new ResizeObserver(() => {
+    if (applying) return;
+    const h = Math.round(area.getBoundingClientRect().height);
+    if (!Number.isFinite(h) || h < TEXTAREA_MIN_HEIGHT) return;
+    if (group[heightKey] === h) return;
+    clearTimeout(heightTimer);
+    heightTimer = setTimeout(() => {
+      if (group[heightKey] === h) return;
+      group[heightKey] = h;
+      onChange?.();
+    }, 120);
+  });
+  ro.observe(area);
+  requestAnimationFrame(() => {
+    applying = false;
+  });
 
   wrap.append(label, area);
   return { wrap, area };
@@ -360,13 +393,8 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
         Boolean((group.negative || "").trim()) ||
         Boolean((group.loadedTitle || "").trim());
       if (!hasText) return;
-      openConfirmPopup({
+      confirmClearPair({
         anchor: clearPairBtn,
-        title: "Clear pair",
-        message: "Clear positive / negative for this pair?",
-        confirmLabel: "Clear",
-        cancelLabel: "Cancel",
-        danger: true,
         onConfirm: () => {
           group.positive = "";
           group.negative = "";

@@ -187,6 +187,7 @@ Pin from the node **Inputs** panel or **Favorites**. Edits sync both ways with t
 ## Settings
 
 - **Embed prompts in CLIP for PNG meta** — on queue, write joined text into stock CLIP widgets (off by default so PNG-loaded workflows keep wires)
+- **Skip pair overwrite confirms** — Load pair replace + Clear without asking (off by default; Delete / presets untouched)
 - **Prompt autocomplete** — experimental; enables caret suggestions + Suggest tab
 - **External prompt** — adds one **External** pair + `external_pos` / `external_neg` inputs; reorder / enable like other groups; no Save / Load. Presets remember its position.
 - **Write external debug snapshot** — only when External is on (`debug`); after a run, External’s info tip shows last received text. Off by default — past values can stick in workflow / PNG meta.

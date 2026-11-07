@@ -524,12 +524,33 @@ export async function openLoadPairPopup({
 }
 
 export function confirmReplacePair({ anchor, onConfirm, nested = false }) {
+    if (getUiPref("skipPairReplaceConfirm")) {
+        onConfirm?.();
+        return;
+    }
     openConfirmPopup({
         nested,
         anchor,
         title: "Load pair",
         message: "Replace current prompts with this pair?",
         confirmLabel: "Replace",
+        cancelLabel: "Cancel",
+        danger: true,
+        onConfirm,
+    });
+}
+
+export function confirmClearPair({ anchor, onConfirm, nested = false }) {
+    if (getUiPref("skipPairReplaceConfirm")) {
+        onConfirm?.();
+        return;
+    }
+    openConfirmPopup({
+        nested,
+        anchor,
+        title: "Clear pair",
+        message: "Clear positive / negative for this pair?",
+        confirmLabel: "Clear",
         cancelLabel: "Cancel",
         danger: true,
         onConfirm,
