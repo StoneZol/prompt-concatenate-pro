@@ -469,7 +469,20 @@ const CSS = `
   border-top: 1px solid var(--border-color, #444);
 }
 
+.pc-civitai-modal-top {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color, #444);
+  background: var(--comfy-menu-bg, #1e1e1e);
+  z-index: 1;
+}
+
 .pc-civitai-modal-head {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -514,18 +527,19 @@ const CSS = `
 }
 
 .pc-civitai-crumbs {
+  flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 2px 4px;
   min-width: 0;
-  max-height: 52px;
-  overflow: hidden;
+  max-height: none;
+  overflow: visible;
 }
 
 .pc-civitai-crumb {
   flex: 0 1 auto;
-  max-width: 140px;
+  max-width: 180px;
   height: 24px;
   padding: 0 6px;
   border: 1px solid transparent;
@@ -541,18 +555,19 @@ const CSS = `
   cursor: pointer;
 }
 
-.pc-civitai-crumb:disabled,
-.pc-civitai-crumb.current {
+.pc-civitai-crumb.is-current {
   color: var(--input-text, #ddd);
   cursor: default;
 }
 
-.pc-civitai-crumb:not(:disabled):hover {
+.pc-civitai-crumb:not(.is-current):hover {
   background: rgba(154, 180, 255, 0.12);
   border-color: rgba(154, 180, 255, 0.35);
+  text-decoration: underline;
 }
 
 .pc-civitai-crumb-sep {
+  flex: 0 0 auto;
   color: var(--descrip-text, #666);
   font-size: 12px;
   user-select: none;
@@ -566,18 +581,47 @@ const CSS = `
 .pc-civitai-status {
   margin: 0;
   min-height: 1.2em;
+  flex: 0 0 auto;
 }
 
 .pc-civitai-list {
   flex: 1 1 auto;
-  min-height: 160px;
-  max-height: none;
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-right: 2px;
+  gap: 6px;
+  padding: 8px 2px 2px 0;
+}
+
+.pc-civitai-search-group {
+  flex: 0 0 auto;
+  display: block;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 6px 8px 4px;
+  border: none;
+  border-bottom: 1px solid var(--border-color, #38383c);
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  color: #a78bfa;
+  font-family: inherit;
+  font-size: 11px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+  box-sizing: border-box;
+}
+
+.pc-civitai-search-group.clickable {
+  cursor: pointer;
+}
+
+.pc-civitai-search-group.clickable:hover {
+  background: rgba(167, 139, 250, 0.1);
 }
 
 .pc-civitai-folder {
@@ -735,8 +779,6 @@ const CSS = `
   flex-wrap: wrap;
   gap: 4px;
   min-width: 0;
-  max-height: 72px;
-  overflow-y: auto;
   padding: 2px 0;
 }
 
@@ -848,8 +890,8 @@ const CSS = `
 }
 
 .pc-civitai-group-text.is-expanded {
-  max-height: 140px;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .pc-civitai-expand {
@@ -969,31 +1011,15 @@ const CSS = `
 }
 
 .pc-civitai-info-section {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-height: 0;
+  min-width: 0;
 }
 
-.pc-civitai-info-section.is-empty .pc-civitai-info-text {
-  color: var(--descrip-text, #777);
-  font-style: italic;
-}
-
-.pc-civitai-info-desc {
-  flex: 0 1 auto;
-  min-height: 0;
-}
-
-.pc-civitai-info-triggers {
-  flex: 0 1 auto;
-  min-height: 0;
-}
-
-.pc-civitai-info-groups {
-  max-height: 220px;
-  overflow-x: hidden;
-  overflow-y: auto;
+.pc-civitai-info-notes-slot:empty {
+  display: none;
 }
 
 .pc-civitai-info-section-head {
@@ -1055,19 +1081,32 @@ const CSS = `
   color: var(--input-text, #ddd);
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
   padding: 8px 10px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.22);
   border: 1px solid var(--border-color, #3a3a3e);
-  max-height: 120px;
-  overflow-y: auto;
   box-sizing: border-box;
 }
 
-.pc-civitai-info-desc .pc-civitai-info-text {
-  flex: 1 1 auto;
-  min-height: 120px;
-  max-height: 220px;
+.pc-civitai-desc-more {
+  align-self: flex-start;
+  height: 24px;
+  margin-top: 2px;
+  padding: 0 8px;
+  border: 1px dashed var(--border-color, #555);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--descrip-text, #aaa);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.pc-civitai-desc-more:hover {
+  color: var(--input-text, #ddd);
+  border-color: #6d5aa8;
+  background: rgba(109, 90, 168, 0.12);
 }
 
 .pc-mgr-list-suggest {
