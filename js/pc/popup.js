@@ -1,6 +1,25 @@
+import { CLOSE_ICON_SVG } from "./icons.js";
+
 const STYLE_ID = "pc-popup-styles";
 
 const CSS = `
+.pc-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(3px);
+}
+
+.pc-popup-backdrop.pc-popup-nested {
+  z-index: 12100;
+}
+
 .pc-popup-root {
   position: fixed;
   z-index: 11000;
@@ -21,6 +40,17 @@ const CSS = `
   overflow: hidden;
 }
 
+.pc-popup-backdrop > .pc-popup-root {
+  position: relative;
+  z-index: auto;
+  width: min(420px, 100%);
+  max-width: min(520px, calc(100vw - 32px));
+  height: auto;
+  max-height: min(88vh, 760px);
+  padding: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
 .pc-popup-nested {
   z-index: 11100;
 }
@@ -32,12 +62,86 @@ const CSS = `
   overflow: hidden;
 }
 
+.pc-popup-backdrop > .pc-popup-centered {
+  width: min(520px, 100%);
+  max-width: min(560px, calc(100vw - 32px));
+  /* Don't use fit-content here — it grows past max-height and kills scroll. */
+  height: auto;
+  max-height: min(88vh, 760px);
+}
+
+/* List / editor dialogs: stable shell height so tabs don't jump. */
+.pc-popup-backdrop > .pc-popup-root:has(.pc-mgr-list),
+.pc-popup-backdrop > .pc-popup-root:has(.pc-preset-list),
+.pc-popup-backdrop > .pc-popup-root:has(.pc-popup-scroll) {
+  height: min(88vh, 720px);
+  max-height: min(88vh, 720px);
+}
+
+.pc-popup-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 0 10px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--border-color, #444);
+}
+
+.pc-popup-close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--descrip-text, #999);
+  cursor: pointer;
+}
+
+.pc-popup-close:hover {
+  color: #f88;
+  border-color: var(--border-color, #555);
+  background: rgba(255, 80, 80, 0.08);
+}
+
+.pc-popup-close svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
 .pc-popup-centered .pc-popup-body {
   flex: 0 1 auto;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  gap: 0;
+}
+
+.pc-popup-backdrop .pc-popup-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  gap: 8px;
+}
+
+/* Editors / manager: outer body does not scroll — inner list/scroll does. */
+.pc-popup-backdrop .pc-popup-body:has(> .pc-popup-fixed),
+.pc-popup-backdrop .pc-popup-body:has(.pc-mgr-list),
+.pc-popup-backdrop .pc-popup-body:has(.pc-preset-list) {
+  overflow: hidden;
+}
+
+.pc-popup-backdrop .pc-popup-body:has(> .pc-popup-fixed) {
   gap: 0;
 }
 
@@ -59,10 +163,37 @@ const CSS = `
   padding-right: 2px;
 }
 
-/* Centered editors: size to content; don't leave a hole above the footer Save. */
+/* Floating centered editors (non-blocking): cap scroll height. */
 .pc-popup-centered .pc-popup-scroll {
   flex: 0 1 auto;
   max-height: min(72vh, 640px);
+}
+
+.pc-popup-backdrop .pc-popup-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.pc-popup-backdrop .pc-mgr-tabs,
+.pc-popup-backdrop .pc-toggle-row,
+.pc-popup-backdrop .pc-popup-body > .pc-popup-input,
+.pc-popup-backdrop .pc-popup-body > .pc-popup-message {
+  flex: 0 0 auto;
+}
+
+.pc-popup-backdrop .pc-mgr-list,
+.pc-popup-backdrop .pc-preset-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.pc-popup-backdrop .pc-mgr-list-suggest.pc-ac-mgr-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .pc-popup-title.pc-popup-drag {
@@ -100,6 +231,18 @@ const CSS = `
   color: var(--descrip-text, #aaa);
   padding: 2px 4px 8px;
   user-select: none;
+}
+
+.pc-popup-head .pc-popup-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--input-text, #ddd);
+  padding: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pc-popup-body {
@@ -1111,18 +1254,38 @@ const CSS = `
 
 .pc-mgr-list-suggest {
   min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .pc-ac-mgr-panel {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
   width: 100%;
+}
+
+.pc-ac-mgr-panel > .pc-ac-mgr-toolbar,
+.pc-ac-mgr-panel > .pc-ac-mgr-search,
+.pc-ac-mgr-panel > .pc-ac-mgr-add,
+.pc-ac-mgr-panel > .pc-ac-mgr-footer {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+}
+
+.pc-ac-mgr-search {
+  height: 30px;
+  min-height: 30px;
+  box-sizing: border-box;
 }
 
 /* Side switcher — not a second row of main mgr tabs */
 .pc-ac-mgr-tabs {
+  flex: 0 0 auto;
   display: inline-flex;
   align-self: flex-start;
   gap: 0;
@@ -1151,24 +1314,48 @@ const CSS = `
 }
 
 .pc-ac-mgr-add {
+  flex: 0 0 auto;
   display: flex;
+  align-items: center;
   gap: 6px;
-  margin: 6px 0;
+  margin: 2px 0 6px;
 }
 
 .pc-ac-mgr-add .pc-popup-input {
   flex: 1 1 auto;
   min-width: 0;
+  height: 30px;
+  min-height: 30px;
 }
 
 .pc-ac-mgr-list {
-  max-height: 280px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin: 4px 0;
-  min-height: 120px;
+}
+
+.pc-ac-mgr-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color, #444);
+}
+
+.pc-ac-mgr-footer .pc-popup-actions {
+  align-self: stretch;
+  justify-content: flex-end;
+}
+
+.pc-ac-mgr-footer .pc-popup-message {
+  margin: 0;
 }
 
 .pc-ac-mgr-bucket-body {
@@ -1827,9 +2014,10 @@ function bindPopupDrag(root, handle, onMoved) {
 }
 
 /**
- * Floating popup anchored to an element or screen point.
- * A non-nested open closes the whole stack. Nested opens stack on top;
- * Escape / outside-click closes only the top dialog.
+ * Modal / floating popup.
+ * Default: blocking overlay (dimmed backdrop, close via X or Escape — not outside click).
+ * Pass `blocking: false` for the old anchored floating card (outside-click closes).
+ * A non-nested open closes the whole stack. Nested opens stack on top.
  *
  * @param {object} opts
  * @param {HTMLElement} [opts.anchor]
@@ -1838,7 +2026,8 @@ function bindPopupDrag(root, handle, onMoved) {
  * @param {number} [opts.width]
  * @param {boolean} [opts.nested]
  * @param {boolean} [opts.centered]
- * @param {boolean} [opts.draggable] — drag window by title (opt-in)
+ * @param {boolean} [opts.blocking] — default true; backdrop + X, no outside-click close
+ * @param {boolean} [opts.draggable] — drag by title (ignored when blocking)
  * @param {(body: HTMLElement, api: { close: () => void, root: HTMLElement, setTitle: (t: string) => void }) => void} opts.render
  * @param {() => void} [opts.onClose]
  */
@@ -1849,10 +2038,11 @@ export function openPopup(opts) {
             popupStack[popupStack.length - 1].close();
     }
 
+    const blocking = opts.blocking !== false;
+
     const root = document.createElement("div");
     root.className = "pc-popup-root";
-    if (opts.nested) root.classList.add("pc-popup-nested");
-    if (opts.centered)
+    if (opts.centered || blocking)
         root.classList.add("pc-popup-centered");
     if (opts.width) root.style.width = `${opts.width}px`;
     root.addEventListener("pointerdown", (e) =>
@@ -1872,11 +2062,47 @@ export function openPopup(opts) {
     const body = document.createElement("div");
     body.className = "pc-popup-body";
 
-    root.append(titleEl, body);
+    let backdrop = null;
+    let host = root;
+
+    if (blocking) {
+        backdrop = document.createElement("div");
+        backdrop.className = "pc-popup-backdrop";
+        if (opts.nested) backdrop.classList.add("pc-popup-nested");
+        backdrop.addEventListener("pointerdown", (e) => {
+            e.stopPropagation();
+        });
+        backdrop.addEventListener(
+            "wheel",
+            (e) => e.stopPropagation(),
+            { passive: true },
+        );
+
+        const head = document.createElement("div");
+        head.className = "pc-popup-head";
+
+        const closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "pc-popup-close";
+        closeBtn.title = "Close";
+        closeBtn.innerHTML = CLOSE_ICON_SVG;
+        closeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            close();
+        });
+
+        head.append(titleEl, closeBtn);
+        root.append(head, body);
+        backdrop.appendChild(root);
+        host = backdrop;
+    } else {
+        if (opts.nested) root.classList.add("pc-popup-nested");
+        root.append(titleEl, body);
+    }
 
     let closed = false;
     let userMoved = false;
-    const draggable = Boolean(opts.draggable);
+    const draggable = Boolean(opts.draggable) && !blocking;
 
     function close() {
         if (closed) return;
@@ -1899,11 +2125,12 @@ export function openPopup(opts) {
             onKey,
             true,
         );
-        root.remove();
+        host.remove();
         opts.onClose?.();
     }
 
     function onDocDown(e) {
+        if (blocking) return;
         if (popupStack[popupStack.length - 1] !== api)
             return;
         if (e.target?.closest?.(".pc-prompt-tip")) return;
@@ -1939,7 +2166,7 @@ export function openPopup(opts) {
         close,
         root,
         reposition() {
-            if (closed || !root.isConnected) return;
+            if (closed || !root.isConnected || blocking) return;
             if (userMoved) {
                 const rect = root.getBoundingClientRect();
                 clampPopupPosition(root, rect.left, rect.top);
@@ -1960,13 +2187,16 @@ export function openPopup(opts) {
     }
 
     popupStack.push(api);
+    document.body.appendChild(host);
     opts.render?.(body, api);
-    placePopup(root, opts);
-    document.addEventListener(
-        "pointerdown",
-        onDocDown,
-        true,
-    );
+    if (!blocking) placePopup(root, opts);
+    if (!blocking) {
+        document.addEventListener(
+            "pointerdown",
+            onDocDown,
+            true,
+        );
+    }
     document.addEventListener("keydown", onKey, true);
     return api;
 }
