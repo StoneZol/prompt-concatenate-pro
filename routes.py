@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 import queue
 import threading
 
@@ -20,57 +19,7 @@ TEMPLATES_ROUTE = "/prompt_craft/templates"
 TEMPLATE_FOLDERS_ROUTE = "/prompt_craft/template_folders"
 PREFS_ROUTE = "/prompt_craft/prefs"
 AUTOCOMPLETE_ROUTE = "/prompt_craft/autocomplete"
-LORA_NOTE_ROUTE = "/prompt_craft/lora_note"
-
-_NOTE_EXTS = (".txt", ".md", ".caption")
-_NOTE_MAX_BYTES = 65536
-
-
-def _read_lora_sidecar_note(filename: str) -> dict:
-    """Read Toolkit-style sidecar note next to a LoRA (same basename + .txt/.md)."""
-    rel = str(filename or "").replace("\\", "/").strip().lstrip("/")
-    if not rel or any(part == ".." for part in rel.split("/")):
-        return {"ok": False, "error": "Invalid path", "notes": ""}
-
-    try:
-        import folder_paths
-    except Exception:
-        return {"ok": False, "error": "folder_paths unavailable", "notes": ""}
-
-    full = folder_paths.get_full_path("loras", rel)
-    if not full or not os.path.isfile(full):
-        # Toolkit sometimes omits extension in relative paths — try as-is under loras roots.
-        for root in folder_paths.get_folder_paths("loras") or []:
-            candidate = os.path.normpath(os.path.join(root, rel.replace("/", os.sep)))
-            if os.path.isfile(candidate):
-                full = candidate
-                break
-    if not full or not os.path.isfile(full):
-        return {"ok": False, "error": "LoRA file not found", "notes": ""}
-
-    # Stay inside configured loras roots.
-    roots = [os.path.normcase(os.path.abspath(r)) for r in (folder_paths.get_folder_paths("loras") or [])]
-    abs_full = os.path.normcase(os.path.abspath(full))
-    if not any(abs_full == root or abs_full.startswith(root + os.sep) for root in roots):
-        return {"ok": False, "error": "Path outside loras", "notes": ""}
-
-    base, _ext = os.path.splitext(full)
-    for note_ext in _NOTE_EXTS:
-        note_path = base + note_ext
-        if not os.path.isfile(note_path):
-            continue
-        try:
-            with open(note_path, "r", encoding="utf-8", errors="replace") as handle:
-                text = handle.read(_NOTE_MAX_BYTES)
-        except Exception as exc:
-            return {"ok": False, "error": str(exc), "notes": ""}
-        return {
-            "ok": True,
-            "notes": text.strip(),
-            "source": os.path.basename(note_path),
-        }
-
-    return {"ok": True, "notes": "", "source": None}
+RESOLVE_LORA_ROUTE = "/prompt_craft/resolve_lora"
 
 db.init_db()
 
@@ -530,10 +479,53 @@ async def autocomplete_mutate(request):
     return web.json_response(result, status=status)
 
 
-async def get_lora_note(request):
+def _resolve_comfy_lora_name(filename: str) -> dict:
+    """Map Toolkit / arbitrary LoRA path → exact folder_paths loras name (for pysssss)."""
+    raw = str(filename or "").replace("\\", "/").strip().lstrip("/")
+    if not raw or any(part == ".." for part in raw.split("/")):
+        return {"ok": False, "error": "Invalid path", "name": ""}
+
+    want = raw.lower()
+    if want.startswith("loras/"):
+        want = want[6:]
+    # Drop drive / absolute prefix if a /loras/ segment exists.
+    if ":" in want:
+        idx = want.rfind("/loras/")
+        if idx >= 0:
+            want = want[idx + len("/loras/") :]
+    want_no_ext = want.rsplit(".", 1)[0] if "." in want.split("/")[-1] else want
+    want_base = want.split("/")[-1]
+    want_base_no_ext = want_base.rsplit(".", 1)[0] if "." in want_base else want_base
+
+    try:
+        import folder_paths
+    except Exception:
+        return {"ok": False, "error": "folder_paths unavailable", "name": ""}
+
+    files = folder_paths.get_filename_list("loras") or []
+    normed = [(f, str(f).replace("\\", "/")) for f in files]
+
+    def match(pred):
+        for original, forward in normed:
+            if pred(forward.lower(), forward):
+                return original
+        return None
+
+    hit = match(lambda low, _fwd: low == want or low.rsplit(".", 1)[0] == want_no_ext)
+    if hit is None:
+        hit = match(
+            lambda low, _fwd: low.split("/")[-1] == want_base
+            or low.split("/")[-1].rsplit(".", 1)[0] == want_base_no_ext
+        )
+    if hit is None:
+        return {"ok": False, "error": "LoRA not in Comfy loras list", "name": ""}
+    return {"ok": True, "name": hit}
+
+
+async def resolve_lora(request):
     filename = request.rel_url.query.get("file") or ""
-    result = _read_lora_sidecar_note(filename)
-    status = 200 if result.get("ok") else 400
+    result = _resolve_comfy_lora_name(filename)
+    status = 200 if result.get("ok") else 404
     return web.json_response(result, status=status)
 
 
@@ -573,5 +565,5 @@ if AUTOCOMPLETE_ROUTE not in _existing:
     PromptServer.instance.routes.get(f"{AUTOCOMPLETE_ROUTE}/list")(autocomplete_list)
     PromptServer.instance.routes.get(f"{AUTOCOMPLETE_ROUTE}/buckets")(autocomplete_buckets)
     PromptServer.instance.routes.post(AUTOCOMPLETE_ROUTE)(autocomplete_mutate)
-if LORA_NOTE_ROUTE not in _existing:
-    PromptServer.instance.routes.get(LORA_NOTE_ROUTE)(get_lora_note)
+if RESOLVE_LORA_ROUTE not in _existing:
+    PromptServer.instance.routes.get(RESOLVE_LORA_ROUTE)(resolve_lora)

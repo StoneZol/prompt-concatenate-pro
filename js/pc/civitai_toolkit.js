@@ -62,52 +62,6 @@ export function modelCoverUrl(model) {
   return url || null;
 }
 
-/** Plain text from Toolkit HTML / placeholder descriptions. */
-export function modelDescriptionText(model) {
-  const version = htmlToPlainText(model?.version_description);
-  let body = htmlToPlainText(model?.model_description);
-  if (/^no description found\.?$/i.test(body)) body = "";
-  const parts = [];
-  if (version) parts.push(version);
-  if (body) parts.push(body);
-  return parts.join("\n\n").trim();
-}
-
-function htmlToPlainText(html) {
-  const raw = String(html || "").trim();
-  if (!raw) return "";
-  try {
-    const doc = new DOMParser().parseFromString(raw, "text/html");
-    return (doc.body?.textContent || "")
-      .replace(/\u00a0/g, " ")
-      .replace(/[ \t]+\n/g, "\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-  } catch {
-    return raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  }
-}
-
-/**
- * Read Toolkit-style sidecar note next to the LoRA
- * (`Name.safetensors` → `Name.txt` / `.md` / `.caption`).
- * @param {string} filename relative path under loras/
- */
-export async function fetchLoraSidecarNotes(filename) {
-  const file = String(filename || "").replace(/\\/g, "/").replace(/^\/+/, "");
-  if (!file) return "";
-  try {
-    const qs = new URLSearchParams({ file });
-    const res = await fetch(`/prompt_craft/lora_note?${qs}`);
-    if (!res.ok) return "";
-    const data = await res.json();
-    if (!data?.ok) return "";
-    return String(data.notes || "").trim();
-  } catch {
-    return "";
-  }
-}
-
 export async function fetchCivitaiLoras(force = false) {
   const now = Date.now();
   if (!force && cache && now - cacheTime < CACHE_MS) return { ok: true, models: cache };

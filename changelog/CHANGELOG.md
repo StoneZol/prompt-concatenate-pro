@@ -39,7 +39,7 @@ Wire any STRING prompts into the builder as a first-class pair: reorder, enable/
 
 - Settings · SQLite: **Civitai Toolkit import** — shows a **Civitai** button on each pair
 - Search the local Toolkit DB by filename / title; pick parsed trigger groups (collapsed + expand); **Append** or **Replace** into positive
-- Per result: cover preview icon (hover) + **Info** (description + sidecar note next to the LoRA: `Name.txt` / `.md`, Toolkit-style)
+- Per result: cover preview (hover) + **`?`** Toolkit Local Manager info + **`i`** pysssss View Lora info (same pair as Ultimate LoRA Loader)
 - Soft dependency on [ComfyUI-Civitai-Toolkit](https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit) (works without it; popup explains if missing)
 
 ---

@@ -478,8 +478,7 @@ const CSS = `
   white-space: nowrap;
 }
 
-.pc-civitai-preview-btn,
-.pc-civitai-info-btn {
+.pc-civitai-preview-btn {
   flex: 0 0 auto;
   width: 26px;
   height: 26px;
@@ -494,8 +493,7 @@ const CSS = `
   cursor: pointer;
 }
 
-.pc-civitai-preview-btn svg,
-.pc-civitai-info-btn svg {
+.pc-civitai-preview-btn svg {
   width: 15px;
   height: 15px;
   display: block;
@@ -505,11 +503,47 @@ const CSS = `
   color: #9fd4f0;
 }
 
-.pc-civitai-preview-btn.has-preview:hover,
-.pc-civitai-info-btn:hover {
+.pc-civitai-preview-btn.has-preview:hover {
   color: var(--input-text, #ddd);
   background: var(--comfy-input-bg, #2a2a2e);
   border-color: var(--border-color, #444);
+}
+
+.pc-civitai-info-pair {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pc-civitai-ext-info {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border-color, #555);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--descrip-text, #aaa);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pc-civitai-ext-info:hover {
+  color: #9fd4f0;
+  border-color: #5a8aa8;
+  background: rgba(94, 176, 224, 0.12);
+}
+
+.pc-civitai-ext-info-full:hover {
+  color: #c4b5fd;
+  border-color: #6d5aa8;
+  background: rgba(109, 90, 168, 0.14);
 }
 
 .pc-civitai-cover-tip {
@@ -534,58 +568,6 @@ const CSS = `
   background: #111;
 }
 
-.pc-civitai-info {
-  gap: 10px;
-  max-height: min(60vh, 480px);
-}
-
-.pc-civitai-info-cover {
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--border-color, #444);
-  background: #111;
-}
-
-.pc-civitai-info-cover img {
-  display: block;
-  width: 100%;
-  max-height: 220px;
-  object-fit: contain;
-}
-
-.pc-civitai-info-file {
-  font-size: 11px;
-  color: var(--descrip-text, #888);
-  word-break: break-all;
-}
-
-.pc-civitai-info-section {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.pc-civitai-info-section.is-empty .pc-civitai-info-text {
-  color: var(--descrip-text, #777);
-  font-style: italic;
-}
-
-.pc-civitai-info-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--descrip-text, #aaa);
-}
-
-.pc-civitai-info-text {
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--input-text, #ddd);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 .pc-civitai-groups {
   display: flex;
   flex-direction: column;
@@ -597,6 +579,26 @@ const CSS = `
   color: var(--descrip-text, #777);
   font-style: italic;
   padding: 2px 0;
+}
+
+.pc-civitai-more-groups {
+  align-self: flex-start;
+  height: 24px;
+  margin-top: 2px;
+  padding: 0 8px;
+  border: 1px dashed var(--border-color, #555);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--descrip-text, #aaa);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.pc-civitai-more-groups:hover {
+  color: var(--input-text, #ddd);
+  border-color: #6d5aa8;
+  background: rgba(109, 90, 168, 0.12);
 }
 
 .pc-civitai-group {

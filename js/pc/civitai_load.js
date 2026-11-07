@@ -1,18 +1,20 @@
 import { openPopup } from "./popup.js";
-import { CHEVRON_ICON_SVG, IMAGE_ICON_SVG, TEXT_ICON_SVG } from "./icons.js";
+import { CHEVRON_ICON_SVG, IMAGE_ICON_SVG } from "./icons.js";
 import {
   fetchCivitaiLoras,
-  fetchLoraSidecarNotes,
   modelCoverUrl,
-  modelDescriptionText,
   modelDisplayName,
   modelFileLabel,
   parseTriggerGroups,
   searchCivitaiLoras,
 } from "./civitai_toolkit.js";
+import { openToolkitModelInfo } from "./civitai_toolkit_popup.js";
+import { openPysssssLoraInfo } from "./pysssss_info.js";
 import { joinFields } from "./join.js";
 
 const PREVIEW_CHARS = 96;
+/** How many trigger groups to show before “Show more”. */
+const GROUPS_PREVIEW = 2;
 
 let coverTip = null;
 
@@ -59,85 +61,11 @@ function selectionKey(modelIndex, groupIndex) {
   return `${modelIndex}:${groupIndex}`;
 }
 
-function openModelInfoPopup({ anchor, model }) {
-  const title = modelDisplayName(model);
-  const file = modelFileLabel(model);
-  const cover = modelCoverUrl(model);
-  const description = modelDescriptionText(model);
-
-  openPopup({
-    nested: true,
-    title: title || "LoRA info",
-    anchor,
-    width: 420,
-    onClose: hideCoverTip,
-    render(body, { reposition }) {
-      const scroll = document.createElement("div");
-      scroll.className = "pc-popup-scroll pc-civitai-info";
-
-      if (cover) {
-        const imgWrap = document.createElement("div");
-        imgWrap.className = "pc-civitai-info-cover";
-        const img = document.createElement("img");
-        img.src = cover;
-        img.alt = title;
-        imgWrap.appendChild(img);
-        scroll.appendChild(imgWrap);
-      }
-
-      if (file) {
-        const fileEl = document.createElement("div");
-        fileEl.className = "pc-civitai-info-file";
-        fileEl.textContent = file;
-        fileEl.title = file;
-        scroll.appendChild(fileEl);
-      }
-
-      const notesSection = document.createElement("div");
-      notesSection.className = "pc-civitai-info-section";
-      const notesLabel = document.createElement("div");
-      notesLabel.className = "pc-civitai-info-label";
-      notesLabel.textContent = "Notes";
-      const notesBody = document.createElement("div");
-      notesBody.className = "pc-civitai-info-text";
-      notesBody.textContent = "Loading…";
-      notesSection.append(notesLabel, notesBody);
-      scroll.appendChild(notesSection);
-
-      const descSection = document.createElement("div");
-      descSection.className = "pc-civitai-info-section";
-      const descLabel = document.createElement("div");
-      descLabel.className = "pc-civitai-info-label";
-      descLabel.textContent = "Description";
-      const descBody = document.createElement("div");
-      descBody.className = "pc-civitai-info-text";
-      descBody.textContent = description || "No description.";
-      descSection.append(descLabel, descBody);
-      scroll.appendChild(descSection);
-
-      body.appendChild(scroll);
-
-      fetchLoraSidecarNotes(file).then((notes) => {
-        if (!notesSection.isConnected) return;
-        if (notes) {
-          notesBody.textContent = notes;
-        } else {
-          notesBody.textContent = "No sidecar note (.txt / .md).";
-          notesSection.classList.add("is-empty");
-        }
-        reposition?.();
-      });
-
-      requestAnimationFrame(() => reposition?.());
-    },
-  });
-}
-
 /**
  * Search Civitai Toolkit local DB for LoRA trigger groups → Append / Replace positive.
- * @param {{ anchor: Element, onApply: (text: string, mode: "append"|"replace") => void }} opts
+ * @param {{ anchor: Element, node?: object, onApply: (text: string, mode: "append"|"replace") => void }} opts
  */
-export async function openCivitaiLoadPopup({ anchor, onApply } = {}) {
+export async function openCivitaiLoadPopup({ anchor, node, onApply } = {}) {
   const loaded = await fetchCivitaiLoras();
 
   return openPopup({
@@ -216,6 +144,45 @@ export async function openCivitaiLoadPopup({ anchor, onApply } = {}) {
         apply("replace");
       });
       paintActions();
+
+      function makeInfoPair(model) {
+        const pair = document.createElement("div");
+        pair.className = "pc-civitai-info-pair";
+        const file = modelFileLabel(model);
+
+        const toolkitBtn = document.createElement("button");
+        toolkitBtn.type = "button";
+        toolkitBtn.className = "pc-civitai-ext-info";
+        toolkitBtn.textContent = "?";
+        toolkitBtn.title = "Civitai Toolkit · Local Manager info";
+        toolkitBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+        toolkitBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          hideCoverTip();
+          // Keep search open — Toolkit overlay is above our popup.
+          openToolkitModelInfo(model, modelDisplayName(model));
+        });
+
+        const fullBtn = document.createElement("button");
+        fullBtn.type = "button";
+        fullBtn.className = "pc-civitai-ext-info pc-civitai-ext-info-full";
+        fullBtn.textContent = "i";
+        fullBtn.title = "View Lora info (pysssss)";
+        fullBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+        fullBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          hideCoverTip();
+          // pysssss ComfyDialog sits under our popup — close first, then open
+          // with a Comfy-canonical lora name (Toolkit paths often mismatch).
+          close();
+          setTimeout(() => openPysssssLoraInfo(file, node), 0);
+        });
+
+        pair.append(toolkitBtn, fullBtn);
+        return pair;
+      }
 
       function makeGroupRow(modelIndex, groupIndex, text) {
         const key = selectionKey(modelIndex, groupIndex);
@@ -329,20 +296,7 @@ export async function openCivitaiLoadPopup({ anchor, onApply } = {}) {
           titles.appendChild(title);
         }
 
-        const infoBtn = document.createElement("button");
-        infoBtn.type = "button";
-        infoBtn.className = "pc-civitai-info-btn";
-        infoBtn.title = "Description & notes";
-        infoBtn.innerHTML = TEXT_ICON_SVG;
-        infoBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
-        infoBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          hideCoverTip();
-          openModelInfoPopup({ anchor: infoBtn, model });
-        });
-
-        head.append(previewBtn, titles, infoBtn);
+        head.append(previewBtn, titles, makeInfoPair(model));
 
         const groups = parseTriggerGroups(model.trained_words);
         const groupsWrap = document.createElement("div");
@@ -354,9 +308,35 @@ export async function openCivitaiLoadPopup({ anchor, onApply } = {}) {
           empty.textContent = "No trigger groups";
           groupsWrap.appendChild(empty);
         } else {
-          groups.forEach((text, groupIndex) => {
-            groupsWrap.appendChild(makeGroupRow(modelIndex, groupIndex, text));
-          });
+          const rows = groups.map((text, groupIndex) =>
+            makeGroupRow(modelIndex, groupIndex, text),
+          );
+          const extra = rows.length > GROUPS_PREVIEW;
+          let expanded = false;
+
+          function paintGroups() {
+            groupsWrap.replaceChildren();
+            const visible = expanded ? rows : rows.slice(0, GROUPS_PREVIEW);
+            for (const row of visible) groupsWrap.appendChild(row);
+            if (!extra) return;
+
+            const moreBtn = document.createElement("button");
+            moreBtn.type = "button";
+            moreBtn.className = "pc-civitai-more-groups";
+            const hidden = rows.length - GROUPS_PREVIEW;
+            moreBtn.textContent = expanded
+              ? "Show less"
+              : `Show ${hidden} more group${hidden === 1 ? "" : "s"}`;
+            moreBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              expanded = !expanded;
+              paintGroups();
+              reposition?.();
+            });
+            groupsWrap.appendChild(moreBtn);
+          }
+
+          paintGroups();
         }
 
         card.append(head, groupsWrap);
