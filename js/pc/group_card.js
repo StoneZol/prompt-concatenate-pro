@@ -10,9 +10,17 @@ function isEnabled(group) {
 }
 
 const TEXTAREA_MIN_HEIGHT = 72;
+const TEXTAREA_MAX_HEIGHT = 800;
 
 function heightKeyFor(fieldKey) {
   return fieldKey === "positive" ? "heightPositive" : "heightNegative";
+}
+
+function clampTextareaHeight(raw) {
+  const h = Math.round(Number(raw));
+  if (!Number.isFinite(h)) return 0;
+  if (h < TEXTAREA_MIN_HEIGHT || h > TEXTAREA_MAX_HEIGHT) return 0;
+  return h;
 }
 
 function makeField(group, key, labelText, { onChange, onPrompt }) {
@@ -36,30 +44,19 @@ function makeField(group, key, labelText, { onChange, onPrompt }) {
   bindPromptAutocomplete(area, key);
 
   const heightKey = heightKeyFor(key);
-  const saved = Number(group[heightKey]);
-  if (Number.isFinite(saved) && saved >= TEXTAREA_MIN_HEIGHT) {
-    area.style.height = `${Math.round(saved)}px`;
-  }
+  const saved = clampTextareaHeight(group[heightKey]);
+  if (saved) area.style.height = `${saved}px`;
 
-  // Remember vertical resize across workflow switches (stored in blocks_data).
-  let applying = true;
-  let heightTimer = 0;
-  const ro = new ResizeObserver(() => {
-    if (applying) return;
-    const h = Math.round(area.getBoundingClientRect().height);
-    if (!Number.isFinite(h) || h < TEXTAREA_MIN_HEIGHT) return;
-    if (group[heightKey] === h) return;
-    clearTimeout(heightTimer);
-    heightTimer = setTimeout(() => {
-      if (group[heightKey] === h) return;
-      group[heightKey] = h;
-      onChange?.();
-    }, 120);
-  });
-  ro.observe(area);
-  requestAnimationFrame(() => {
-    applying = false;
-  });
+  // Persist only after a user resize (pointerup). ResizeObserver was rewriting
+  // heights on Comfy restart / fillDom reflow and wiping saved sizes.
+  function commitHeight() {
+    const h = clampTextareaHeight(area.getBoundingClientRect().height);
+    if (!h || group[heightKey] === h) return;
+    group[heightKey] = h;
+    onChange?.();
+  }
+  area.addEventListener("pointerup", commitHeight);
+  area.addEventListener("mouseup", commitHeight);
 
   wrap.append(label, area);
   return { wrap, area };

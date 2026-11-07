@@ -372,7 +372,7 @@ async function showSuggestions(textarea, side, segment) {
 
         if (matches.length) {
             state.items = matches;
-            // Longer hits exist (e.g. "pov on kneel") but typed "pov" is new — offer Add at end.
+            // Longer hits exist (e.g. "sweet dreams") but typed "sweet" is new — offer Add at end.
             if (
                 !hasExact &&
                 needle.length >= MIN_SAVE_LEN &&

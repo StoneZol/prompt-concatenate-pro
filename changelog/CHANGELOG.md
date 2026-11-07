@@ -13,15 +13,20 @@ Format: newest first.
 Wire any STRING prompts into the builder as a first-class pair: reorder, enable/disable, no library Save/Load.
 
 - Settings: **External prompt** — adds one **External** card + `external_pos` / `external_neg` inputs
+
+![External pair + wired inputs](../docs/screenshots/2.1.0/0.png)
+
 - Settings: **Write external debug snapshot** (active only when External is on, badge `debug`) — after a run, the card info tip shows what arrived; keep off for normal work (past values can stick in workflow / PNG meta)
 - Presets store External’s position via a fixed id; load skips that slot if External is off
 - Templates ignore External (not saved into packs)
 
 ### Pair UX
 
-- Positive / negative textareas remember their resized height in the node’s `blocks_data` (survives workflow switches)
+- Positive / negative textareas remember their resized height in the node’s `blocks_data` (survives workflow switches; saved only on user resize, not on layout reflow)
 - Settings: **Skip pair overwrite confirms** — Load pair replace + Clear pair without dialogs (off by default)
-- Autocomplete: when longer matches exist but the typed segment is new (`pov` vs `pov on kneel`), an **Add** row appears at the bottom — Tab saves it to the dictionary
+- Autocomplete: when longer matches exist but the typed segment is new (`sweet` vs `sweet dreams`), an **Add** row appears at the bottom — Tab saves it to the dictionary
+
+![Autocomplete: Tab to add typed segment](../docs/screenshots/2.1.0/1.png)
 
 ---
 
