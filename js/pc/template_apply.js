@@ -1,3 +1,5 @@
+import { isExternalGroup, isExternalSlotName } from "./external.js";
+
 function slotHasText(value) {
   return Boolean(String(value || "").trim());
 }
@@ -19,9 +21,10 @@ export function serializeTemplateSlots(groups) {
   const slots = [];
   const seen = new Set();
   for (const group of groups || []) {
+    if (isExternalGroup(group)) continue;
     const title = (group?.title || "").trim();
     const key = title.toLowerCase();
-    if (!title || seen.has(key)) continue;
+    if (!title || seen.has(key) || isExternalSlotName(title)) continue;
     if (!slotHasContent(group)) continue;
     seen.add(key);
     slots.push({
@@ -37,7 +40,7 @@ export function serializeTemplateSlots(groups) {
 
 function normalizeActiveSlot(slot) {
   const title = (slot?.title || "").trim();
-  if (!title || slot?.enabled === false) return null;
+  if (!title || slot?.enabled === false || isExternalSlotName(title)) return null;
   return {
     title,
     positive: slot.positive || "",

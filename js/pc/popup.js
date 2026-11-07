@@ -242,6 +242,44 @@ const CSS = `
   color: var(--input-text, #ddd);
 }
 
+.pc-settings-row-disabled {
+  opacity: 0.55;
+}
+
+.pc-settings-section {
+  margin: 14px 0 8px;
+  padding: 7px 10px 7px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  border-left-width: 3px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  user-select: none;
+  line-height: 1.3;
+}
+
+.pc-settings-section:first-child {
+  margin-top: 0;
+}
+
+.pc-settings-section-node {
+  border-color: #6b5a2e;
+  border-left-color: #e6b84a;
+  background: linear-gradient(90deg, rgba(230, 184, 74, 0.18), rgba(230, 184, 74, 0.04));
+  color: #f0d78a;
+  text-shadow: 0 0 12px rgba(230, 184, 74, 0.35);
+}
+
+.pc-settings-section-saved {
+  border-color: #2e4a5c;
+  border-left-color: #5eb0e0;
+  background: linear-gradient(90deg, rgba(94, 176, 224, 0.16), rgba(94, 176, 224, 0.03));
+  color: #9fd4f0;
+  text-shadow: 0 0 12px rgba(94, 176, 224, 0.3);
+}
+
 .pc-settings-label {
   flex: 1 1 auto;
   line-height: 1.35;

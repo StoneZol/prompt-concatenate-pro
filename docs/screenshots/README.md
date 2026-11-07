@@ -13,6 +13,13 @@ Used by the main [README](../../README.md) and [changelog](../../changelog/CHANG
 | `6.png` | Library manager · Prompts |
 | `7.png` | Edit prompt dialog |
 
+## 2.1.0
+
+| File | Content |
+|------|---------|
+| `2.1.0/0.png` | External pair + `external_pos` / `external_neg` inputs |
+| `2.1.0/1.png` | Autocomplete — Tab to add typed segment |
+
 ## 2.0.0
 
 | File | Content |

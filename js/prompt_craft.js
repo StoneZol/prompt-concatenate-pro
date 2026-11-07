@@ -33,6 +33,15 @@ import { baseShelfName, nextDuplicateTitle } from "./pc/titles.js";
 import { attachPromptMaterializeHooks } from "./pc/metadata.js";
 import { ensureUiPrefs } from "./pc/prefs.js";
 import { bindInfoTip, hidePromptTip } from "./pc/preview_tip.js";
+import {
+  EXTERNAL_GROUP_ID,
+  EXTERNAL_TITLE,
+  findExternalIndex,
+  isExternalGroup,
+  isExternalSlotName,
+  makeExternalGroup,
+  serializeGroupForPersist,
+} from "./pc/external.js";
 
 const config = await loadConfig();
 injectStyles(config.style_id);
@@ -67,23 +76,59 @@ function normalizeLoadedRef(raw) {
   };
 }
 
+function normalizeGroup(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  if (isExternalGroup(raw) || isExternalSlotName(raw.id) || isExternalSlotName(raw.title)) {
+    const g = makeExternalGroup({ enabled: raw.enabled !== false });
+    g.collapsed = Boolean(raw.collapsed);
+    return g;
+  }
+  return raw;
+}
+
+function normalizeGroups(list) {
+  const out = [];
+  let sawExternal = false;
+  for (const item of list || []) {
+    const g = normalizeGroup(item);
+    if (!g) continue;
+    if (isExternalGroup(g)) {
+      if (sawExternal) continue;
+      sawExternal = true;
+    }
+    out.push(g);
+  }
+  return out;
+}
+
 function parseBlocksState(raw) {
   try {
     const data = raw ? JSON.parse(raw) : [];
     if (Array.isArray(data)) {
-      return { groups: data, loadedStack: null, loadedTemplate: null };
+      return {
+        groups: normalizeGroups(data),
+        loadedStack: null,
+        loadedTemplate: null,
+        embedClipMeta: false,
+      };
     }
     if (data && typeof data === "object") {
       return {
-        groups: Array.isArray(data.groups) ? data.groups : [],
+        groups: normalizeGroups(Array.isArray(data.groups) ? data.groups : []),
         loadedStack: normalizeLoadedRef(data.loadedStack),
         loadedTemplate: normalizeLoadedRef(data.loadedTemplate),
+        embedClipMeta: Boolean(data.nodePrefs?.embedClipMeta),
       };
     }
   } catch {
     /* ignore */
   }
-  return { groups: [], loadedStack: null, loadedTemplate: null };
+  return {
+    groups: [],
+    loadedStack: null,
+    loadedTemplate: null,
+    embedClipMeta: false,
+  };
 }
 
 function stampLabels(title) {
@@ -97,9 +142,15 @@ function stampLabels(title) {
 function groupTitleError(groups, title, exceptId) {
   const name = (title || "").trim();
   if (!name) return "Name is required";
+  if (name === EXTERNAL_TITLE || name === EXTERNAL_GROUP_ID) {
+    return "Name reserved for External";
+  }
   const key = name.toLowerCase();
   const taken = groups.some(
-    (group) => group.id !== exceptId && (group.title || "").trim().toLowerCase() === key,
+    (group) =>
+      group.id !== exceptId &&
+      !isExternalGroup(group) &&
+      (group.title || "").trim().toLowerCase() === key,
   );
   if (taken) return "Name already used";
   return "";
@@ -153,6 +204,7 @@ app.registerExtension({
       let groups = initialState.groups;
       let loadedStack = initialState.loadedStack;
       let loadedTemplate = initialState.loadedTemplate;
+      let embedClipMeta = initialState.embedClipMeta;
       const cards = new Map();
       let uiWidget = null;
 
@@ -368,17 +420,40 @@ app.registerExtension({
 
       function persist() {
         if (!dataWidget) return;
-        const payload =
-          loadedStack || loadedTemplate
-            ? {
-                groups,
-                ...(loadedStack ? { loadedStack } : {}),
-                ...(loadedTemplate ? { loadedTemplate } : {}),
-              }
-            : groups;
+        const safeGroups = groups.map(serializeGroupForPersist);
+        const needsObject = loadedStack || loadedTemplate || embedClipMeta;
+        const payload = needsObject
+          ? {
+              groups: safeGroups,
+              ...(loadedStack ? { loadedStack } : {}),
+              ...(loadedTemplate ? { loadedTemplate } : {}),
+              ...(embedClipMeta ? { nodePrefs: { embedClipMeta: true } } : {}),
+            }
+          : safeGroups;
         dataWidget.value = JSON.stringify(payload);
         node.setDirtyCanvas(true, true);
         scheduleJoinDebugLog();
+      }
+
+      function syncExternalGroup(enabled) {
+        collectFromShadows();
+        const idx = findExternalIndex(groups);
+        if (enabled) {
+          if (idx < 0) {
+            groups.push(makeExternalGroup());
+            clearLoadedStack();
+            persist();
+            renderCards();
+            fillDom();
+          }
+          return;
+        }
+        if (idx < 0) return;
+        groups.splice(idx, 1);
+        clearLoadedStack();
+        persist();
+        renderCards();
+        fillDom();
       }
 
       let joinDebugTimer = null;
@@ -420,6 +495,7 @@ app.registerExtension({
       }
 
       function addShadows(group) {
+        if (isExternalGroup(group)) return;
         const labels = {
           pos: group.label_pos || stampLabels(group.title).label_pos,
           neg: group.label_neg || stampLabels(group.title).label_neg,
@@ -767,9 +843,16 @@ app.registerExtension({
 
       function applyLayout(layout) {
         const next = [];
+        let sawExternal = false;
         for (const slot of layout.slots || []) {
           const name = (slot || "").trim();
           if (!name) continue;
+          if (isExternalSlotName(name)) {
+            if (sawExternal) continue;
+            next.push(makeExternalGroup());
+            sawExternal = true;
+            continue;
+          }
           next.push({
             id: newGroupId(),
             title: name,
@@ -969,7 +1052,18 @@ app.registerExtension({
 
       settingsBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        openSettingsPopup({ anchor: settingsBtn });
+        openSettingsPopup({
+          anchor: settingsBtn,
+          nodeSettings: {
+            getEmbedClipMeta: () => embedClipMeta,
+            setEmbedClipMeta: (value) => {
+              embedClipMeta = Boolean(value);
+              persist();
+            },
+            getExternalPrompt: () => findExternalIndex(groups) >= 0,
+            setExternalPrompt: (enabled) => syncExternalGroup(enabled),
+          },
+        });
       });
 
       const onResize = node.onResize;
@@ -992,6 +1086,7 @@ app.registerExtension({
         groups = state.groups;
         loadedStack = state.loadedStack;
         loadedTemplate = state.loadedTemplate;
+        embedClipMeta = state.embedClipMeta;
         paintLoadedStack();
         paintLoadedTemplate();
         rebuildShadows();
@@ -1047,6 +1142,7 @@ app.registerExtension({
       renderCards();
       if (groups.length) rebuildShadows();
       fillDom();
+
       setTimeout(() => {
         scanAndHideBlocksData();
         fillDom();

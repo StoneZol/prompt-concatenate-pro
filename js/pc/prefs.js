@@ -4,16 +4,17 @@ const LEGACY_KEY = "pc-ui-prefs";
 
 const MANAGER_TABS = new Set(["presets", "prompts", "templates", "suggest"]);
 
+/** Persisted in SQLite (survive Comfy / browser restart). */
 const DEFAULTS = {
   otherCollections: false,
   showEmpty: false,
   searchInPrompts: false,
-  /** Write joined prompts into stock CLIP text + detach wires on queue (PNG meta). */
-  embedClipMeta: false,
-  /** Experimental: suggest segments from saved pairs / autocomplete dict. */
+  /** Suggest segments from saved pairs / autocomplete dict. */
   promptAutocomplete: false,
   /** Last Library manager tab: presets | prompts | templates | suggest */
   managerTab: "presets",
+  /** Skip Load-pair replace + Clear-pair confirms. */
+  skipPairReplaceConfirm: false,
 };
 
 let cache = { ...DEFAULTS };
@@ -56,9 +57,10 @@ function clearLegacyLocal() {
 }
 
 function applyPrefs(prefs) {
-  cache = { ...DEFAULTS, ...(prefs || {}) };
+  cache = { ...DEFAULTS };
+  const incoming = prefs || {};
   for (const key of Object.keys(DEFAULTS)) {
-    cache[key] = coercePref(key, cache[key]);
+    if (key in incoming) cache[key] = coercePref(key, incoming[key]);
   }
   loaded = true;
   return cache;
@@ -79,12 +81,16 @@ export async function ensureUiPrefs() {
       const legacy = readLegacyLocal();
       if (legacy) {
         const merged = { ...prefs, ...legacy };
-        const saved = await updateUiPrefs(merged);
+        const patch = {};
+        for (const key of Object.keys(DEFAULTS)) {
+          if (key in merged) patch[key] = coercePref(key, merged[key]);
+        }
+        const saved = await updateUiPrefs(patch);
         if (saved.ok) {
-          prefs = saved.prefs || merged;
+          prefs = saved.prefs || patch;
           clearLegacyLocal();
         } else {
-          prefs = merged;
+          prefs = patch;
         }
       }
       return applyPrefs(prefs);

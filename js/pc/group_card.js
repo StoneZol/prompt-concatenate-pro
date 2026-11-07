@@ -2,9 +2,25 @@ import { CHEVRON_ICON_SVG, CLOSE_ICON_SVG, COPY_ICON_SVG, GRIP_ICON_SVG, LOAD_IC
 import { openConfirmPopup } from "./popup.js";
 import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
 import { bindPromptAutocomplete } from "./autocomplete.js";
+import { EXTERNAL_TITLE, isExternalGroup } from "./external.js";
+import { confirmClearPair } from "./pair_load.js";
 
 function isEnabled(group) {
   return group.enabled !== false;
+}
+
+const TEXTAREA_MIN_HEIGHT = 72;
+const TEXTAREA_MAX_HEIGHT = 800;
+
+function heightKeyFor(fieldKey) {
+  return fieldKey === "positive" ? "heightPositive" : "heightNegative";
+}
+
+function clampTextareaHeight(raw) {
+  const h = Math.round(Number(raw));
+  if (!Number.isFinite(h)) return 0;
+  if (h < TEXTAREA_MIN_HEIGHT || h > TEXTAREA_MAX_HEIGHT) return 0;
+  return h;
 }
 
 function makeField(group, key, labelText, { onChange, onPrompt }) {
@@ -27,15 +43,32 @@ function makeField(group, key, labelText, { onChange, onPrompt }) {
   });
   bindPromptAutocomplete(area, key);
 
+  const heightKey = heightKeyFor(key);
+  const saved = clampTextareaHeight(group[heightKey]);
+  if (saved) area.style.height = `${saved}px`;
+
+  // Persist only after a user resize (pointerup). ResizeObserver was rewriting
+  // heights on Comfy restart / fillDom reflow and wiping saved sizes.
+  function commitHeight() {
+    const h = clampTextareaHeight(area.getBoundingClientRect().height);
+    if (!h || group[heightKey] === h) return;
+    group[heightKey] = h;
+    onChange?.();
+  }
+  area.addEventListener("pointerup", commitHeight);
+  area.addEventListener("mouseup", commitHeight);
+
   wrap.append(label, area);
   return { wrap, area };
 }
 
 export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, onRename, onReorder, onDrop, onSavePair, onLoadPair, onReloadLoaded, onDuplicate }) {
   const card = document.createElement("div");
-  card.className = "pc-group";
+  card.className = "pc-group" + (isExternalGroup(group) ? " pc-group-external" : "");
   card.dataset.groupId = group.id;
   card.addEventListener("pointerdown", (e) => e.stopPropagation());
+
+  const external = isExternalGroup(group);
 
   function applyEnabled() {
     const on = isEnabled(group);
@@ -110,10 +143,17 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   title.className = "pc-title-input";
   title.type = "text";
   title.placeholder = "title";
-  title.value = group.title || "";
+  title.value = external ? EXTERNAL_TITLE : group.title || "";
+  title.readOnly = external;
+  title.disabled = external;
+  if (external) {
+    title.title = "Wired via external_pos / external_neg";
+    group.title = EXTERNAL_TITLE;
+  }
   title.addEventListener("pointerdown", (e) => e.stopPropagation());
 
   function commitTitle() {
+    if (external) return;
     const next = title.value.trim();
     if (next === (group.title || "").trim()) {
       title.value = group.title || "";
@@ -136,6 +176,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   }
 
   title.addEventListener("keydown", (e) => {
+    if (external) return;
     if (e.key === "Enter") {
       e.preventDefault();
       title.blur();
@@ -164,6 +205,10 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   collapseBtn.innerHTML = CHEVRON_ICON_SVG;
 
   function applyCollapsed() {
+    if (external) {
+      card.classList.remove("collapsed");
+      return;
+    }
     const collapsed = !!group.collapsed;
     card.classList.toggle("collapsed", collapsed);
     collapseBtn.title = collapsed ? "Expand group" : "Collapse group";
@@ -177,158 +222,169 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     onChange?.();
   });
 
-  head.append(dragHandle, priority, toggle, title, copyBtn, collapseBtn);
+  if (external) {
+    head.append(dragHandle, priority, toggle, title);
+  } else {
+    head.append(dragHandle, priority, toggle, title, copyBtn, collapseBtn);
+  }
 
   const body = document.createElement("div");
   body.className = "pc-group-body";
 
-  const toolbar = document.createElement("div");
-  toolbar.className = "pc-group-toolbar";
+  let pos = null;
+  let neg = null;
+  let paintLoaded = () => {};
 
-  const removeBtn = document.createElement("button");
-  removeBtn.type = "button";
-  removeBtn.className = "pc-remove-btn";
-  removeBtn.title = "Remove group";
-  removeBtn.innerHTML = TRASH_ICON_SVG;
-  removeBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const name = (group.title || "").trim() || "this group";
-    openConfirmPopup({
-      anchor: removeBtn,
-      title: "Remove group",
-      message: `Delete “${name}”? This cannot be undone.`,
-      confirmLabel: "Delete",
-      cancelLabel: "Cancel",
-      onConfirm: () => onRemove?.(),
+  if (external) {
+    const hint = document.createElement("div");
+    hint.className = "pc-external-hint";
+    hint.textContent = "Wired inputs · external_pos / external_neg";
+    body.append(hint);
+  } else {
+    const toolbar = document.createElement("div");
+    toolbar.className = "pc-group-toolbar";
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "pc-remove-btn";
+    removeBtn.title = "Remove group";
+    removeBtn.innerHTML = TRASH_ICON_SVG;
+    removeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const name = (group.title || "").trim() || "this group";
+      openConfirmPopup({
+        anchor: removeBtn,
+        title: "Remove group",
+        message: `Delete “${name}”? This cannot be undone.`,
+        confirmLabel: "Delete",
+        cancelLabel: "Cancel",
+        onConfirm: () => onRemove?.(),
+      });
     });
-  });
 
-  const savePairBtn = document.createElement("button");
-  savePairBtn.type = "button";
-  savePairBtn.className = "pc-pair-save-btn";
-  savePairBtn.title = "Save pair";
-  savePairBtn.innerHTML = `${SAVE_ICON_SVG}<span>Save</span>`;
-  savePairBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    onSavePair?.(savePairBtn);
-  });
+    const savePairBtn = document.createElement("button");
+    savePairBtn.type = "button";
+    savePairBtn.className = "pc-pair-save-btn";
+    savePairBtn.title = "Save pair";
+    savePairBtn.innerHTML = `${SAVE_ICON_SVG}<span>Save</span>`;
+    savePairBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onSavePair?.(savePairBtn);
+    });
 
-  const loadPairBtn = document.createElement("button");
-  loadPairBtn.type = "button";
-  loadPairBtn.className = "pc-pair-load-btn";
-  loadPairBtn.title = "Load pair";
-  loadPairBtn.innerHTML = `${LOAD_ICON_SVG}<span>Load</span>`;
-  loadPairBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    onLoadPair?.(loadPairBtn);
-  });
+    const loadPairBtn = document.createElement("button");
+    loadPairBtn.type = "button";
+    loadPairBtn.className = "pc-pair-load-btn";
+    loadPairBtn.title = "Load pair";
+    loadPairBtn.innerHTML = `${LOAD_ICON_SVG}<span>Load</span>`;
+    loadPairBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onLoadPair?.(loadPairBtn);
+    });
 
-  const clearPairBtn = document.createElement("button");
-  clearPairBtn.type = "button";
-  clearPairBtn.className = "pc-pair-clear-btn";
-  clearPairBtn.title = "Clear pair prompts";
-  clearPairBtn.innerHTML = `${CLOSE_ICON_SVG}<span>Clear</span>`;
+    const clearPairBtn = document.createElement("button");
+    clearPairBtn.type = "button";
+    clearPairBtn.className = "pc-pair-clear-btn";
+    clearPairBtn.title = "Clear pair prompts";
+    clearPairBtn.innerHTML = `${CLOSE_ICON_SVG}<span>Clear</span>`;
 
-  const spacer = document.createElement("div");
-  spacer.className = "pc-group-toolbar-spacer";
+    const spacer = document.createElement("div");
+    spacer.className = "pc-group-toolbar-spacer";
 
-  toolbar.append(savePairBtn, loadPairBtn, clearPairBtn, spacer, removeBtn);
+    toolbar.append(savePairBtn, loadPairBtn, clearPairBtn, spacer, removeBtn);
 
-  const loadedRow = document.createElement("div");
-  loadedRow.className = "pc-loaded-row";
+    const loadedRow = document.createElement("div");
+    loadedRow.className = "pc-loaded-row";
 
-  const loadedLabel = document.createElement("span");
-  loadedLabel.className = "pc-loaded-label";
+    const loadedLabel = document.createElement("span");
+    loadedLabel.className = "pc-loaded-label";
 
-  const notesBtn = document.createElement("button");
-  notesBtn.type = "button";
-  notesBtn.className = "pc-loaded-notes";
-  notesBtn.title = "View notes";
-  notesBtn.innerHTML = TEXT_ICON_SVG;
-  notesBtn.hidden = true;
-  bindInfoTip(notesBtn, () => ({
-    title: "Notes",
-    text: (group.loadedDescription || "").trim(),
-  }));
+    const notesBtn = document.createElement("button");
+    notesBtn.type = "button";
+    notesBtn.className = "pc-loaded-notes";
+    notesBtn.title = "View notes";
+    notesBtn.innerHTML = TEXT_ICON_SVG;
+    notesBtn.hidden = true;
+    bindInfoTip(notesBtn, () => ({
+      title: "Notes",
+      text: (group.loadedDescription || "").trim(),
+    }));
 
-  const resetBtn = document.createElement("button");
-  resetBtn.type = "button";
-  resetBtn.className = "pc-loaded-reset";
-  resetBtn.title = "Reload last saved pair";
-  resetBtn.innerHTML = RESET_ICON_SVG;
-  resetBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    hidePromptTip();
-    onReloadLoaded?.(resetBtn);
-  });
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "pc-loaded-reset";
+    resetBtn.title = "Reload last saved pair";
+    resetBtn.innerHTML = RESET_ICON_SVG;
+    resetBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      hidePromptTip();
+      onReloadLoaded?.(resetBtn);
+    });
 
-  const clearLoadedBtn = document.createElement("button");
-  clearLoadedBtn.type = "button";
-  clearLoadedBtn.className = "pc-loaded-clear";
-  clearLoadedBtn.title = "Detach loaded name";
-  clearLoadedBtn.innerHTML = CLOSE_ICON_SVG;
-  clearLoadedBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    hidePromptTip();
-    group.loadedTitle = "";
-    group.loadedCategory = "";
-    group.loadedDescription = "";
-    paintLoaded();
-    onChange?.();
-  });
+    const clearLoadedBtn = document.createElement("button");
+    clearLoadedBtn.type = "button";
+    clearLoadedBtn.className = "pc-loaded-clear";
+    clearLoadedBtn.title = "Detach loaded name";
+    clearLoadedBtn.innerHTML = CLOSE_ICON_SVG;
+    clearLoadedBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      hidePromptTip();
+      group.loadedTitle = "";
+      group.loadedCategory = "";
+      group.loadedDescription = "";
+      paintLoaded();
+      onChange?.();
+    });
 
-  loadedRow.append(loadedLabel, notesBtn, resetBtn, clearLoadedBtn);
+    loadedRow.append(loadedLabel, notesBtn, resetBtn, clearLoadedBtn);
 
-  function paintLoaded() {
-    const name = (group.loadedTitle || "").trim();
-    const notes = (group.loadedDescription || "").trim();
-    if (!name) {
-      loadedRow.hidden = true;
-      loadedLabel.textContent = "";
-      notesBtn.hidden = true;
-      return;
-    }
-    loadedRow.hidden = false;
-    loadedLabel.textContent = name;
-    loadedLabel.title = `Loaded: ${name}`;
-    notesBtn.hidden = !notes;
+    paintLoaded = function paintLoadedInner() {
+      const name = (group.loadedTitle || "").trim();
+      const notes = (group.loadedDescription || "").trim();
+      if (!name) {
+        loadedRow.hidden = true;
+        loadedLabel.textContent = "";
+        notesBtn.hidden = true;
+        return;
+      }
+      loadedRow.hidden = false;
+      loadedLabel.textContent = name;
+      loadedLabel.title = `Loaded: ${name}`;
+      notesBtn.hidden = !notes;
+    };
+
+    pos = makeField(group, "positive", "positive", { onChange, onPrompt });
+    neg = makeField(group, "negative", "negative", { onChange, onPrompt });
+
+    clearPairBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      hidePromptTip();
+      const hasText =
+        Boolean((group.positive || "").trim()) ||
+        Boolean((group.negative || "").trim()) ||
+        Boolean((group.loadedTitle || "").trim());
+      if (!hasText) return;
+      confirmClearPair({
+        anchor: clearPairBtn,
+        onConfirm: () => {
+          group.positive = "";
+          group.negative = "";
+          group.loadedTitle = "";
+          group.loadedCategory = "";
+          group.loadedDescription = "";
+          pos.area.value = "";
+          neg.area.value = "";
+          onPrompt?.("positive", "");
+          onPrompt?.("negative", "");
+          paintLoaded();
+          onChange?.();
+        },
+      });
+    });
+
+    body.append(toolbar, loadedRow, pos.wrap, neg.wrap);
   }
 
-  const pos = makeField(group, "positive", "positive", { onChange, onPrompt });
-  const neg = makeField(group, "negative", "negative", { onChange, onPrompt });
-
-  clearPairBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    hidePromptTip();
-    const hasText =
-      Boolean((group.positive || "").trim()) ||
-      Boolean((group.negative || "").trim()) ||
-      Boolean((group.loadedTitle || "").trim());
-    if (!hasText) return;
-    openConfirmPopup({
-      anchor: clearPairBtn,
-      title: "Clear pair",
-      message: "Clear positive / negative for this pair?",
-      confirmLabel: "Clear",
-      cancelLabel: "Cancel",
-      danger: true,
-      onConfirm: () => {
-        group.positive = "";
-        group.negative = "";
-        group.loadedTitle = "";
-        group.loadedCategory = "";
-        group.loadedDescription = "";
-        pos.area.value = "";
-        neg.area.value = "";
-        onPrompt?.("positive", "");
-        onPrompt?.("negative", "");
-        paintLoaded();
-        onChange?.();
-      },
-    });
-  });
-
-  body.append(toolbar, loadedRow, pos.wrap, neg.wrap);
   card.append(head, body);
   paintLoaded();
   applyCollapsed();
@@ -357,11 +413,13 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   return {
     el: card,
     setField(key, value) {
-      const area = key === "positive" ? pos.area : neg.area;
+      if (external) return;
+      const area = key === "positive" ? pos?.area : neg?.area;
       if (!area || area.value === value) return;
       area.value = value ?? "";
     },
     setLoadedTitle(value, category = "") {
+      if (external) return;
       group.loadedTitle = (value || "").trim();
       if (arguments.length > 1) group.loadedCategory = (category || "").trim();
       paintLoaded();

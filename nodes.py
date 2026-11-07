@@ -4,6 +4,8 @@ import json
 import re
 
 DEFAULT_SEPARATOR = ", "
+# Keep in sync with js/pc/external.js
+EXTERNAL_GROUP_ID = "pc_external_7f3a9c2e-4b1d-4e8a-9f06-1a2b3c4d5e6f"
 
 
 def _normalize_prompt(text: str) -> str:
@@ -46,10 +48,20 @@ def _parse_blocks(raw) -> list:
     return []
 
 
+def _block_text(block: dict, key: str, external_pos: str, external_neg: str) -> str:
+    if str(block.get("id") or "") == EXTERNAL_GROUP_ID:
+        return external_pos if key == "positive" else external_neg
+    return block.get(key, "") or ""
+
+
 class PromptCraft:
     @classmethod
     def INPUT_TYPES(cls):
         return {
+            "optional": {
+                "external_pos": ("STRING", {"forceInput": True, "default": ""}),
+                "external_neg": ("STRING", {"forceInput": True, "default": ""}),
+            },
             "hidden": {
                 "blocks_data": ("STRING", {"default": "[]"}),
                 "unique_id": "UNIQUE_ID",
@@ -65,13 +77,30 @@ class PromptCraft:
     OUTPUT_NODE = True
 
     @classmethod
-    def IS_CHANGED(cls, blocks_data, **kwargs):
-        return blocks_data
+    def IS_CHANGED(cls, blocks_data, external_pos=None, external_neg=None, **kwargs):
+        return (blocks_data, external_pos or "", external_neg or "")
 
-    def craft(self, blocks_data, unique_id=None, extra_pnginfo=None, **kwargs):
+    def craft(
+        self,
+        blocks_data,
+        external_pos=None,
+        external_neg=None,
+        unique_id=None,
+        extra_pnginfo=None,
+        **kwargs,
+    ):
+        ext_pos = external_pos if external_pos is not None else ""
+        ext_neg = external_neg if external_neg is not None else ""
         blocks = _parse_blocks(blocks_data)
-        positives = [block.get("positive", "") for block in blocks if block.get("enabled", True) is not False]
-        negatives = [block.get("negative", "") for block in blocks if block.get("enabled", True) is not False]
+
+        positives = []
+        negatives = []
+        for block in blocks:
+            if block.get("enabled", True) is False:
+                continue
+            positives.append(_block_text(block, "positive", ext_pos, ext_neg))
+            negatives.append(_block_text(block, "negative", ext_pos, ext_neg))
+
         str_pos = _join_fields(positives, DEFAULT_SEPARATOR)
         str_neg = _join_fields(negatives, DEFAULT_SEPARATOR)
         print(f"[PromptConcatenatePro] str_pos ({len(str_pos)}): {str_pos!r}")

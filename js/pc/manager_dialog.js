@@ -12,8 +12,9 @@ import {
 } from "./icons.js";
 import { openConfirmPopup, openInputPopup, openPopup } from "./popup.js";
 import { openAddGroupPopup } from "./add_group.js";
+import { EXTERNAL_GROUP_ID, EXTERNAL_TITLE, displaySlotName, isExternalSlotName } from "./external.js";
 import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
-import { confirmReplacePair, openLoadPairPopup } from "./pair_load.js";
+import { confirmClearPair, confirmReplacePair, openLoadPairPopup } from "./pair_load.js";
 import { openSavePairPopup } from "./pair_save.js";
 import { joinFields } from "./join.js";
 import {
@@ -334,7 +335,7 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
       slots.placeholder = "slots, comma-separated";
       slots.rows = 3;
       slots.value = (layout.slots || [])
-        .map((slot) => String(slot || "").trim())
+        .map((slot) => displaySlotName(slot))
         .filter(Boolean)
         .join(", ");
 
@@ -385,7 +386,11 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
         return String(text || "")
           .split(",")
           .map((part) => part.trim())
-          .filter(Boolean);
+          .filter(Boolean)
+          .map((part) => {
+            if (isExternalSlotName(part) || part === EXTERNAL_TITLE) return EXTERNAL_GROUP_ID;
+            return part;
+          });
       }
 
       async function submit() {
@@ -892,12 +897,9 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             hidePromptTip();
             const hasText = slotHasPrompt(slot) || Boolean((slot.loadedTitle || "").trim());
             if (!hasText) return;
-            mgrConfirm({
+            confirmClearPair({
+              nested: true,
               anchor: clearPairBtn,
-              title: "Clear pair",
-              message: "Clear positive / negative for this pair?",
-              confirmLabel: "Clear",
-              danger: true,
               onConfirm: () => {
                 slot.positive = "";
                 slot.negative = "";
@@ -1385,7 +1387,9 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
           });
         },
         renderItem: (layout) => {
-          const slotNames = (layout.slots || []).map((slot) => String(slot || "").trim()).filter(Boolean);
+          const slotNames = (layout.slots || [])
+            .map((slot) => displaySlotName(slot))
+            .filter(Boolean);
           return makeItemRow(layout, {
             name: layout.name || "Untitled",
             meta: slotNames.join(" · ") || "No fields",
@@ -1632,7 +1636,7 @@ export async function openManagerPopup({ anchor }) {
         suggestTab.type = "button";
         suggestTab.className = "pc-mgr-tab";
         suggestTab.textContent = "Suggest";
-        suggestTab.title = "Autocomplete dictionary (experimental)";
+        suggestTab.title = "Autocomplete dictionary";
         tabs.appendChild(suggestTab);
       }
 

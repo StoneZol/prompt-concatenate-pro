@@ -278,11 +278,11 @@ function renderItems(state) {
             const hint = document.createElement("div");
             hint.className =
                 "pc-ac-item-hint" + (savedFlash ? " is-saved" : "");
-            hint.textContent = savedFlash ? "Saved" : "Tab to save";
+            hint.textContent = savedFlash ? "Saved" : "Tab to add";
             btn.append(main, hint);
             btn.title = savedFlash
                 ? "Saved to dictionary"
-                : `Save “${item.text}” to dictionary`;
+                : `Add “${item.text}” to dictionary`;
             if (savedFlash) btn.disabled = true;
         } else {
             btn.className = "pc-ac-item" + selectedCls;
@@ -372,6 +372,14 @@ async function showSuggestions(textarea, side, segment) {
 
         if (matches.length) {
             state.items = matches;
+            // Longer hits exist (e.g. "sweet dreams") but typed "sweet" is new — offer Add at end.
+            if (
+                !hasExact &&
+                needle.length >= MIN_SAVE_LEN &&
+                !looksLikeWeightEdit(prefix)
+            ) {
+                state.items = [...matches, makeCreateItem(needle)];
+            }
         } else if (hasExact || looksLikeWeightEdit(prefix)) {
             // Already known, or user is tweaking (tag:1.2) weights — stay quiet.
             dismissPopup();

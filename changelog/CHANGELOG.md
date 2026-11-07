@@ -6,6 +6,37 @@ Format: newest first.
 
 ---
 
+## [2.1.0] — 2026-11-07
+
+### Settings: this node vs saved
+
+- Settings split into **This node** (per instance, in `blocks_data`) and **Saved · SQLite** (all nodes)
+- This node: **Embed prompts in CLIP for PNG meta**, **External prompt**
+- Saved: **Skip pair overwrite confirms**, **Prompt autocomplete** (no longer marked experimental)
+
+![Settings: This node vs Saved · SQLite](../docs/screenshots/2.1.0/2.png)
+
+### External prompt slot
+
+Wire any STRING prompts into the builder as a first-class pair: reorder, enable/disable, no library Save/Load.
+
+- Per-node toggle **External prompt** — **External** card + `external_pos` / `external_neg` inputs; values visible in the Comfy console print on run
+
+![External pair + wired inputs](../docs/screenshots/2.1.0/0.png)
+
+- Presets/workflows store External’s position (fixed id); loading them restores External on that node
+- Templates ignore External (not saved into packs)
+
+### Pair UX
+
+- Positive / negative textareas remember their resized height in the node’s `blocks_data` (survives workflow switches; saved only on user resize, not on layout reflow)
+- Settings: **Skip pair overwrite confirms** — Load pair replace + Clear pair without dialogs (off by default)
+- Autocomplete: when longer matches exist but the typed segment is new (`sweet` vs `sweet dreams`), an **Add** row appears at the bottom — Tab saves it to the dictionary
+
+![Autocomplete: Tab to add typed segment](../docs/screenshots/2.1.0/1.png)
+
+---
+
 ## [2.0.0] — 2026-10-17
 
 ### Templates, autocomplete, library polish

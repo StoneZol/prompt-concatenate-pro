@@ -2,6 +2,7 @@ import { CHEVRON_ICON_SVG, LOAD_ICON_SVG } from "./icons.js";
 import { openConfirmPopup, openPopup } from "./popup.js";
 import { listLayouts } from "./api.js";
 import { matchesLayoutPreset } from "./search.js";
+import { displaySlotName } from "./external.js";
 
 const DESC_PREVIEW_CHARS = 60;
 const UNCATEGORISED = "Uncategorised";
@@ -31,7 +32,9 @@ function makePresetCard(layout, { onLoad }) {
 
   const slots = document.createElement("div");
   slots.className = "pc-preset-slots";
-  const slotNames = (layout.slots || []).map((slot) => String(slot || "").trim()).filter(Boolean);
+  const slotNames = (layout.slots || [])
+    .map((slot) => displaySlotName(slot))
+    .filter(Boolean);
   slots.textContent = slotNames.join(" · ") || "No fields";
 
   card.append(head, slots);
