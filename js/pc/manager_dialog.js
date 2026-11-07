@@ -1636,7 +1636,7 @@ export async function openManagerPopup({ anchor }) {
         suggestTab.type = "button";
         suggestTab.className = "pc-mgr-tab";
         suggestTab.textContent = "Suggest";
-        suggestTab.title = "Autocomplete dictionary (experimental)";
+        suggestTab.title = "Autocomplete dictionary";
         tabs.appendChild(suggestTab);
       }
 

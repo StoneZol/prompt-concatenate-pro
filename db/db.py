@@ -1142,22 +1142,16 @@ UI_PREF_KEYS = (
     "otherCollections",
     "showEmpty",
     "searchInPrompts",
-    "embedClipMeta",
     "promptAutocomplete",
     "managerTab",
-    "externalPrompt",
-    "externalDebugSnapshot",
     "skipPairReplaceConfirm",
 )
 UI_PREF_DEFAULTS = {
     "otherCollections": False,
     "showEmpty": False,
     "searchInPrompts": False,
-    "embedClipMeta": False,
     "promptAutocomplete": False,
     "managerTab": "presets",
-    "externalPrompt": False,
-    "externalDebugSnapshot": False,
     "skipPairReplaceConfirm": False,
 }
 _MANAGER_TAB_VALUES = frozenset({"presets", "prompts", "templates", "suggest"})

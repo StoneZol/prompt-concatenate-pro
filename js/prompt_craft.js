@@ -31,7 +31,7 @@ import {
 import { craftOutput, isJoinDebugEnabled, joinFields } from "./pc/join.js";
 import { baseShelfName, nextDuplicateTitle } from "./pc/titles.js";
 import { attachPromptMaterializeHooks } from "./pc/metadata.js";
-import { ensureUiPrefs, getUiPref } from "./pc/prefs.js";
+import { ensureUiPrefs } from "./pc/prefs.js";
 import { bindInfoTip, hidePromptTip } from "./pc/preview_tip.js";
 import {
   EXTERNAL_GROUP_ID,
@@ -105,19 +105,30 @@ function parseBlocksState(raw) {
   try {
     const data = raw ? JSON.parse(raw) : [];
     if (Array.isArray(data)) {
-      return { groups: normalizeGroups(data), loadedStack: null, loadedTemplate: null };
+      return {
+        groups: normalizeGroups(data),
+        loadedStack: null,
+        loadedTemplate: null,
+        embedClipMeta: false,
+      };
     }
     if (data && typeof data === "object") {
       return {
         groups: normalizeGroups(Array.isArray(data.groups) ? data.groups : []),
         loadedStack: normalizeLoadedRef(data.loadedStack),
         loadedTemplate: normalizeLoadedRef(data.loadedTemplate),
+        embedClipMeta: Boolean(data.nodePrefs?.embedClipMeta),
       };
     }
   } catch {
     /* ignore */
   }
-  return { groups: [], loadedStack: null, loadedTemplate: null };
+  return {
+    groups: [],
+    loadedStack: null,
+    loadedTemplate: null,
+    embedClipMeta: false,
+  };
 }
 
 function stampLabels(title) {
@@ -193,6 +204,7 @@ app.registerExtension({
       let groups = initialState.groups;
       let loadedStack = initialState.loadedStack;
       let loadedTemplate = initialState.loadedTemplate;
+      let embedClipMeta = initialState.embedClipMeta;
       const cards = new Map();
       let uiWidget = null;
 
@@ -409,14 +421,15 @@ app.registerExtension({
       function persist() {
         if (!dataWidget) return;
         const safeGroups = groups.map(serializeGroupForPersist);
-        const payload =
-          loadedStack || loadedTemplate
-            ? {
-                groups: safeGroups,
-                ...(loadedStack ? { loadedStack } : {}),
-                ...(loadedTemplate ? { loadedTemplate } : {}),
-              }
-            : safeGroups;
+        const needsObject = loadedStack || loadedTemplate || embedClipMeta;
+        const payload = needsObject
+          ? {
+              groups: safeGroups,
+              ...(loadedStack ? { loadedStack } : {}),
+              ...(loadedTemplate ? { loadedTemplate } : {}),
+              ...(embedClipMeta ? { nodePrefs: { embedClipMeta: true } } : {}),
+            }
+          : safeGroups;
         dataWidget.value = JSON.stringify(payload);
         node.setDirtyCanvas(true, true);
         scheduleJoinDebugLog();
@@ -441,17 +454,6 @@ app.registerExtension({
         persist();
         renderCards();
         fillDom();
-      }
-
-      function applyExternalSnapshot(message) {
-        if (!getUiPref("externalDebugSnapshot")) return;
-        const ext = groups.find((g) => isExternalGroup(g));
-        if (!ext) return;
-        const pos = message?.external_pos;
-        const neg = message?.external_neg;
-        ext.lastPositive = Array.isArray(pos) ? String(pos[0] ?? "") : String(pos ?? "");
-        ext.lastNegative = Array.isArray(neg) ? String(neg[0] ?? "") : String(neg ?? "");
-        // Memory only — do not persist into blocks_data.
       }
 
       let joinDebugTimer = null;
@@ -841,13 +843,12 @@ app.registerExtension({
 
       function applyLayout(layout) {
         const next = [];
-        const allowExternal = Boolean(getUiPref("externalPrompt"));
         let sawExternal = false;
         for (const slot of layout.slots || []) {
           const name = (slot || "").trim();
           if (!name) continue;
           if (isExternalSlotName(name)) {
-            if (!allowExternal || sawExternal) continue;
+            if (sawExternal) continue;
             next.push(makeExternalGroup());
             sawExternal = true;
             continue;
@@ -1053,16 +1054,17 @@ app.registerExtension({
         e.stopPropagation();
         openSettingsPopup({
           anchor: settingsBtn,
-          onExternalPromptChange: (enabled) => syncExternalGroup(enabled),
+          nodeSettings: {
+            getEmbedClipMeta: () => embedClipMeta,
+            setEmbedClipMeta: (value) => {
+              embedClipMeta = Boolean(value);
+              persist();
+            },
+            getExternalPrompt: () => findExternalIndex(groups) >= 0,
+            setExternalPrompt: (enabled) => syncExternalGroup(enabled),
+          },
         });
       });
-
-      const onExecuted = node.onExecuted;
-      node.onExecuted = function (message) {
-        const result = onExecuted ? onExecuted.apply(this, arguments) : undefined;
-        applyExternalSnapshot(message);
-        return result;
-      };
 
       const onResize = node.onResize;
       node.onResize = function () {
@@ -1082,13 +1084,9 @@ app.registerExtension({
         hideDataWidget(w);
         const state = parseBlocksState(w?.value);
         groups = state.groups;
-        if (getUiPref("externalPrompt")) {
-          if (findExternalIndex(groups) < 0) groups.push(makeExternalGroup());
-        } else {
-          groups = groups.filter((g) => !isExternalGroup(g));
-        }
         loadedStack = state.loadedStack;
         loadedTemplate = state.loadedTemplate;
+        embedClipMeta = state.embedClipMeta;
         paintLoadedStack();
         paintLoadedTemplate();
         rebuildShadows();
@@ -1144,22 +1142,6 @@ app.registerExtension({
       renderCards();
       if (groups.length) rebuildShadows();
       fillDom();
-
-      ensureUiPrefs().then(() => {
-        if (getUiPref("externalPrompt")) {
-          if (findExternalIndex(groups) < 0) {
-            groups.push(makeExternalGroup());
-            persist();
-            renderCards();
-            fillDom();
-          }
-        } else if (findExternalIndex(groups) >= 0) {
-          groups = groups.filter((g) => !isExternalGroup(g));
-          persist();
-          renderCards();
-          fillDom();
-        }
-      });
 
       setTimeout(() => {
         scanAndHideBlocksData();

@@ -18,9 +18,6 @@ export function makeExternalGroup({ enabled = true } = {}) {
     negative: "",
     enabled: enabled !== false,
     collapsed: false,
-    // Display-only; never persisted into blocks_data.
-    lastPositive: "",
-    lastNegative: "",
   };
 }
 

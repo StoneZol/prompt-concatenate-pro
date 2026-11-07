@@ -37,7 +37,7 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 ## Features
 
 - **Group cards** — title, positive, negative, drag reorder, collapse, duplicate, enable toggle, **Clear**
-- **External prompt** (Settings) — one wired pair (`external_pos` / `external_neg`) in the stack; optional debug snapshot tip
+- **External prompt** (session Settings) — one wired pair (`external_pos` / `external_neg`) in the stack
 - **Add group** — type a new name, or pick a library shelf that already has saved pairs (exact name)
 - **Join engine** — merges enabled groups with `, `, skips empty, normalizes commas and spacing
 - **Pin to sidebar** — `Group \| positive` / `Group \| negative` in Inputs / Favorites
@@ -47,8 +47,8 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 - **Prompt pairs** — save / load / append per group shelf; preview; **Search in prompts**
 - **Smart search** — AND tokens; `shelf\keyword` filters a collection first
 - **Library manager** — Presets / Prompts / Templates (+ **Suggest** when autocomplete is on); duplicate, rename, move, delete; last tab remembered
-- **Prompt autocomplete** (experimental, Settings) — suggests segments from **your** library; caret popup (**Tab** accept); Suggest tab + rebuild
-- **PNG-friendly prompts** — optional Settings: on queue, write joined text into stock CLIP `text`; wires restore after (off by default)
+- **Prompt autocomplete** (Settings) — suggests segments from **your** library; caret popup (**Tab** accept / Add); Suggest tab + rebuild
+- **PNG-friendly prompts** — session Settings: on queue, write joined text into stock CLIP `text`; wires restore after (off by default)
 - **Local SQLite** — `db/presets.sqlite` (+ `db/autocomplete/` when Suggest is used)
 
 ---
@@ -111,7 +111,7 @@ After load: **Loaded ·** chip — Save prefills; **×** detaches; reload pulls 
 
 ![Edit template](docs/screenshots/2.0.0/5.png)
 
-### Autocomplete (experimental)
+### Autocomplete
 
 **Settings → Prompt autocomplete**. While typing, suggestions from your library appear at the caret (**Tab** to accept). Manager **Suggest** tab: browse / edit / rebuild dictionaries (`db/autocomplete/`).
 
@@ -186,11 +186,15 @@ Pin from the node **Inputs** panel or **Favorites**. Edits sync both ways with t
 
 ## Settings
 
-- **Embed prompts in CLIP for PNG meta** — on queue, write joined text into stock CLIP widgets (off by default so PNG-loaded workflows keep wires)
+**This node** (stored with the node in the workflow):
+
+- **Embed prompts in CLIP for PNG meta** — on queue, write joined text into stock CLIP widgets (off by default)
+- **External prompt** — **External** pair + `external_pos` / `external_neg`; reorder / enable; no Save / Load. Position is saved in presets/workflows. Wired text shows in the console print on run.
+
+**Saved · SQLite** (all Prompt Concatenate Pro nodes):
+
 - **Skip pair overwrite confirms** — Load pair replace + Clear without asking (off by default; Delete / presets untouched)
-- **Prompt autocomplete** — experimental; enables caret suggestions + Suggest tab
-- **External prompt** — adds one **External** pair + `external_pos` / `external_neg` inputs; reorder / enable like other groups; no Save / Load. Presets remember its position.
-- **Write external debug snapshot** — only when External is on (`debug`); after a run, External’s info tip shows last received text. Off by default — past values can stick in workflow / PNG meta.
+- **Prompt autocomplete** — caret suggestions + Suggest tab from your library
 
 ---
 

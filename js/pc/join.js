@@ -28,16 +28,13 @@ export function joinFields(parts, separator = DEFAULT_SEPARATOR) {
 
 export function craftOutput(groups) {
   const enabled = (groups || []).filter((group) => group.enabled !== false);
+  // External text comes from node inputs at execute time (Python); preview skips it.
   return {
     str_pos: joinFields(
-      enabled.map((group) =>
-        isExternalGroup(group) ? group.lastPositive || "" : group.positive,
-      ),
+      enabled.map((group) => (isExternalGroup(group) ? "" : group.positive)),
     ),
     str_neg: joinFields(
-      enabled.map((group) =>
-        isExternalGroup(group) ? group.lastNegative || "" : group.negative,
-      ),
+      enabled.map((group) => (isExternalGroup(group) ? "" : group.negative)),
     ),
   };
 }

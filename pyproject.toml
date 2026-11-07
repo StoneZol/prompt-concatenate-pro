@@ -1,6 +1,6 @@
 [project]
 name = "comfyui-prompt-craft"
-description = "Modular prompt library for ComfyUI: group cards → str_pos/str_neg, pin to sidebar, local SQLite presets (structure), templates (full packs), pairs, manager, optional autocomplete from your own library."
+description = "Local prompt combine for ComfyUI: named group cards → str_pos/str_neg, External wired slot, SQLite presets (structure) / templates (full packs) / pairs, sidebar pin, manager, optional autocomplete + per-node CLIP PNG embed."
 version = "2.1.0"
 license = { file = "LICENSE" }
 requires-python = ">=3.8"
@@ -8,6 +8,7 @@ dependencies = []
 
 [project.urls]
 Repository = "https://github.com/StoneZol/prompt-concatenate-pro"
+Changelog = "https://github.com/StoneZol/prompt-concatenate-pro/blob/main/changelog/CHANGELOG.md"
 "Bug Tracker" = "https://github.com/StoneZol/prompt-concatenate-pro/issues"
 
 [tool.comfy]

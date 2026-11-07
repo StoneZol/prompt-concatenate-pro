@@ -113,13 +113,7 @@ class PromptCraft:
                 "node_id": str(unique_id) if unique_id is not None else "",
             }
 
-        return {
-            "ui": {
-                "external_pos": [ext_pos],
-                "external_neg": [ext_neg],
-            },
-            "result": (str_pos, str_neg),
-        }
+        return (str_pos, str_neg)
 
 
 NODE_CLASS_MAPPINGS = {

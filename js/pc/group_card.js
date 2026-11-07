@@ -236,36 +236,10 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   let paintLoaded = () => {};
 
   if (external) {
-    const extRow = document.createElement("div");
-    extRow.className = "pc-external-row";
-
     const hint = document.createElement("div");
     hint.className = "pc-external-hint";
     hint.textContent = "Wired inputs · external_pos / external_neg";
-
-    const infoBtn = document.createElement("button");
-    infoBtn.type = "button";
-    infoBtn.className = "pc-loaded-notes";
-    infoBtn.title = "Last received (debug snapshot)";
-    infoBtn.innerHTML = TEXT_ICON_SVG;
-    bindInfoTip(infoBtn, () => {
-      const posText = (group.lastPositive || "").trim();
-      const negText = (group.lastNegative || "").trim();
-      if (!posText && !negText) {
-        return {
-          title: "External",
-          text:
-            "No snapshot yet. Enable Settings → Write external debug snapshot and run the graph.",
-        };
-      }
-      const lines = [];
-      if (posText) lines.push(`positive:\n${posText}`);
-      if (negText) lines.push(`negative:\n${negText}`);
-      return { title: "Last received", text: lines.join("\n\n") };
-    });
-
-    extRow.append(hint, infoBtn);
-    body.append(extRow);
+    body.append(hint);
   } else {
     const toolbar = document.createElement("div");
     toolbar.className = "pc-group-toolbar";

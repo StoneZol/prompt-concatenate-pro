@@ -8,6 +8,7 @@ import { makeBusyLine } from "./busy.js";
 const EMBED_CLIP_META_HELP = {
   title: "Embed prompts in CLIP for PNG meta",
   text:
+    "Per node — stored with this node in the workflow.\n\n" +
     "Off (default): wires stay connected — workflows loaded from images keep Prompt Concatenate Pro linked to CLIP.\n\n" +
     "On: before queue, joined text is written into stock CLIP Text Encode fields (as if typed) so Civitai-style readers see prompts. " +
     "The workflow saved in the PNG may show CLIP filled and Concatenate Pro disconnected — re-link after load if needed.",
@@ -16,7 +17,7 @@ const EMBED_CLIP_META_HELP = {
 const AUTOCOMPLETE_HELP = {
   title: "Prompt autocomplete",
   text:
-    "Experimental. Off by default.\n\n" +
+    "Off by default. Saved in SQLite (all nodes).\n\n" +
     "When on, typing in positive/negative fields suggests segments from your saved pairs " +
     "and from the autocomplete dictionary (comma / newline separated; weights stripped). " +
     "Dictionaries are stored per side (pos/neg) in letter buckets.\n\n" +
@@ -29,49 +30,44 @@ const AUTOCOMPLETE_HELP = {
 const EXTERNAL_PROMPT_HELP = {
   title: "External prompt",
   text:
-    "Off by default.\n\n" +
-    "When on, the node gets an External pair in the group list and two STRING inputs " +
+    "Per node — the External pair lives on this node (position saved in presets/workflows).\n\n" +
+    "When on, this node gets an External pair and two STRING inputs " +
     "(external_pos / external_neg). Wire any prompts into them — External can be reordered " +
     "and enabled/disabled like other pairs, but has no Save / Load.\n\n" +
-    "Layout presets store External’s position (special id). If this toggle is off when you " +
-    "load a preset, that slot is skipped.",
-};
-
-const EXTERNAL_DEBUG_HELP = {
-  title: "Write external debug snapshot",
-  text:
-    "Debug only. Requires External prompt.\n\n" +
-    "When on, after each run the External card’s info tip shows the text that arrived on " +
-    "the inputs. Snapshots are kept in memory for the session tip — avoid relying on them " +
-    "in saved workflows.\n\n" +
-    "Past generations can still stick in workflow / PNG meta if other tools serialize node " +
-    "state. Keep this off for normal work; turn on only while debugging wires.",
+    "Wired values show in the Comfy console print on run.",
 };
 
 const SKIP_PAIR_REPLACE_HELP = {
   title: "Skip pair overwrite confirms",
   text:
-    "Off by default.\n\n" +
+    "Off by default. Saved in SQLite (all nodes).\n\n" +
     "When on, skips “Replace current prompts?” on Load pair and “Clear positive / negative?” on Clear. " +
     "Applies on the node and in Edit template.\n\n" +
     "Does not affect Delete group, preset/template replace, or Suggest rename.",
 };
 
+function makeSectionLabel(text, variant = "node") {
+  const el = document.createElement("div");
+  el.className = `pc-settings-section pc-settings-section-${variant}`;
+  el.textContent = text;
+  return el;
+}
+
 function makeSettingRow({
   label,
-  prefKey,
   help,
   badge,
   disabled = false,
   onToggle,
   getEnabled,
-  setEnabledVisual,
+  /** If set, writes SQLite pref. Otherwise caller handles state in onToggle only. */
+  prefKey,
 }) {
   const row = document.createElement("div");
   row.className = "pc-toggle-row pc-settings-row";
 
   const toggle = document.createElement("div");
-  const on = Boolean(getEnabled ? getEnabled() : getUiPref(prefKey));
+  const on = Boolean(getEnabled ? getEnabled() : prefKey ? getUiPref(prefKey) : false);
   toggle.className = "pc-toggle" + (on ? " on" : "");
   toggle.setAttribute("role", "switch");
   toggle.setAttribute("aria-checked", on ? "true" : "false");
@@ -144,8 +140,6 @@ function makeSettingRow({
   applyDisabled();
   row.append(toggle, labelEl, infoBtn);
 
-  setEnabledVisual?.(paintEnabled);
-
   return {
     el: row,
     setDisabled(next) {
@@ -160,9 +154,14 @@ function makeSettingRow({
 }
 
 /**
- * Node settings: toggles with info tips (same peek pattern as Load pair).
+ * Node settings: per-node toggles + global SQLite toggles.
+ * @param {object} [nodeSettings]
+ * @param {() => boolean} nodeSettings.getEmbedClipMeta
+ * @param {(v: boolean) => void} nodeSettings.setEmbedClipMeta
+ * @param {() => boolean} nodeSettings.getExternalPrompt
+ * @param {(v: boolean) => void} nodeSettings.setExternalPrompt
  */
-export async function openSettingsPopup({ anchor, onExternalPromptChange } = {}) {
+export async function openSettingsPopup({ anchor, nodeSettings } = {}) {
   await ensureUiPrefs();
 
   openPopup({
@@ -173,14 +172,30 @@ export async function openSettingsPopup({ anchor, onExternalPromptChange } = {})
     render(body) {
       const list = document.createElement("div");
       list.className = "pc-settings-list";
+
+      list.appendChild(makeSectionLabel("This node", "node"));
       list.appendChild(
         makeSettingRow({
           label: "Embed prompts in CLIP for PNG meta",
-          prefKey: "embedClipMeta",
           help: EMBED_CLIP_META_HELP,
+          getEnabled: () => Boolean(nodeSettings?.getEmbedClipMeta?.()),
+          onToggle(enabled) {
+            nodeSettings?.setEmbedClipMeta?.(enabled);
+          },
+        }).el,
+      );
+      list.appendChild(
+        makeSettingRow({
+          label: "External prompt",
+          help: EXTERNAL_PROMPT_HELP,
+          getEnabled: () => Boolean(nodeSettings?.getExternalPrompt?.()),
+          onToggle(enabled) {
+            nodeSettings?.setExternalPrompt?.(enabled);
+          },
         }).el,
       );
 
+      list.appendChild(makeSectionLabel("Saved · SQLite", "saved"));
       list.appendChild(
         makeSettingRow({
           label: "Skip pair overwrite confirms",
@@ -195,7 +210,6 @@ export async function openSettingsPopup({ anchor, onExternalPromptChange } = {})
           label: "Prompt autocomplete",
           prefKey: "promptAutocomplete",
           help: AUTOCOMPLETE_HELP,
-          badge: "experimental",
           async onToggle(enabled, { setBusy } = {}) {
             if (!enabled) {
               acBusy.hide();
@@ -234,44 +248,10 @@ export async function openSettingsPopup({ anchor, onExternalPromptChange } = {})
       );
       list.appendChild(acBusy.el);
 
-      const featureOn = Boolean(getUiPref("externalPrompt"));
-      let debugRow = null;
-
-      const externalRow = makeSettingRow({
-        label: "External prompt",
-        prefKey: "externalPrompt",
-        help: EXTERNAL_PROMPT_HELP,
-        onToggle(enabled) {
-          if (!enabled) {
-            setUiPref("externalDebugSnapshot", false);
-            debugRow?.setOn(false);
-          }
-          debugRow?.setDisabled(!enabled);
-          onExternalPromptChange?.(enabled);
-        },
-      });
-      list.appendChild(externalRow.el);
-
-      debugRow = makeSettingRow({
-        label: "Write external debug snapshot",
-        prefKey: "externalDebugSnapshot",
-        help: EXTERNAL_DEBUG_HELP,
-        badge: "debug",
-        disabled: !featureOn,
-        getEnabled: () =>
-          featureOn && Boolean(getUiPref("externalDebugSnapshot")),
-      });
-      // Sync visual with coerced state when feature was off.
-      if (!featureOn && getUiPref("externalDebugSnapshot")) {
-        setUiPref("externalDebugSnapshot", false);
-        debugRow.setOn(false);
-      }
-      list.appendChild(debugRow.el);
-
       const footer = document.createElement("div");
       footer.className = "pc-settings-footer";
       footer.textContent =
-        "New experimental or contested features will show up here as they appear.";
+        "This node settings travel with the workflow. Saved settings apply to all Prompt Concatenate Pro nodes.";
 
       body.append(list, footer);
     },

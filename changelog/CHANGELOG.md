@@ -8,16 +8,23 @@ Format: newest first.
 
 ## [2.1.0] — 2026-11-07
 
+### Settings: this node vs saved
+
+- Settings split into **This node** (per instance, in `blocks_data`) and **Saved · SQLite** (all nodes)
+- This node: **Embed prompts in CLIP for PNG meta**, **External prompt**
+- Saved: **Skip pair overwrite confirms**, **Prompt autocomplete** (no longer marked experimental)
+
+![Settings: This node vs Saved · SQLite](../docs/screenshots/2.1.0/2.png)
+
 ### External prompt slot
 
 Wire any STRING prompts into the builder as a first-class pair: reorder, enable/disable, no library Save/Load.
 
-- Settings: **External prompt** — adds one **External** card + `external_pos` / `external_neg` inputs
+- Per-node toggle **External prompt** — **External** card + `external_pos` / `external_neg` inputs; values visible in the Comfy console print on run
 
 ![External pair + wired inputs](../docs/screenshots/2.1.0/0.png)
 
-- Settings: **Write external debug snapshot** (active only when External is on, badge `debug`) — after a run, the card info tip shows what arrived; keep off for normal work (past values can stick in workflow / PNG meta)
-- Presets store External’s position via a fixed id; load skips that slot if External is off
+- Presets/workflows store External’s position (fixed id); loading them restores External on that node
 - Templates ignore External (not saved into packs)
 
 ### Pair UX
