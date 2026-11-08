@@ -1,6 +1,25 @@
+import { CLOSE_ICON_SVG } from "./icons.js";
+
 const STYLE_ID = "pc-popup-styles";
 
 const CSS = `
+.pc-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(3px);
+}
+
+.pc-popup-backdrop.pc-popup-nested {
+  z-index: 12100;
+}
+
 .pc-popup-root {
   position: fixed;
   z-index: 11000;
@@ -21,6 +40,17 @@ const CSS = `
   overflow: hidden;
 }
 
+.pc-popup-backdrop > .pc-popup-root {
+  position: relative;
+  z-index: auto;
+  width: min(420px, 100%);
+  max-width: min(520px, calc(100vw - 32px));
+  height: auto;
+  max-height: min(88vh, 760px);
+  padding: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
 .pc-popup-nested {
   z-index: 11100;
 }
@@ -32,12 +62,86 @@ const CSS = `
   overflow: hidden;
 }
 
+.pc-popup-backdrop > .pc-popup-centered {
+  width: min(520px, 100%);
+  max-width: min(560px, calc(100vw - 32px));
+  /* Don't use fit-content here — it grows past max-height and kills scroll. */
+  height: auto;
+  max-height: min(88vh, 760px);
+}
+
+/* List / editor dialogs: stable shell height so tabs don't jump. */
+.pc-popup-backdrop > .pc-popup-root:has(.pc-mgr-list),
+.pc-popup-backdrop > .pc-popup-root:has(.pc-preset-list),
+.pc-popup-backdrop > .pc-popup-root:has(.pc-popup-scroll) {
+  height: min(88vh, 720px);
+  max-height: min(88vh, 720px);
+}
+
+.pc-popup-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 0 10px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--border-color, #444);
+}
+
+.pc-popup-close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--descrip-text, #999);
+  cursor: pointer;
+}
+
+.pc-popup-close:hover {
+  color: #f88;
+  border-color: var(--border-color, #555);
+  background: rgba(255, 80, 80, 0.08);
+}
+
+.pc-popup-close svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
 .pc-popup-centered .pc-popup-body {
   flex: 0 1 auto;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  gap: 0;
+}
+
+.pc-popup-backdrop .pc-popup-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  gap: 8px;
+}
+
+/* Editors / manager: outer body does not scroll — inner list/scroll does. */
+.pc-popup-backdrop .pc-popup-body:has(> .pc-popup-fixed),
+.pc-popup-backdrop .pc-popup-body:has(.pc-mgr-list),
+.pc-popup-backdrop .pc-popup-body:has(.pc-preset-list) {
+  overflow: hidden;
+}
+
+.pc-popup-backdrop .pc-popup-body:has(> .pc-popup-fixed) {
   gap: 0;
 }
 
@@ -59,10 +163,37 @@ const CSS = `
   padding-right: 2px;
 }
 
-/* Centered editors: size to content; don't leave a hole above the footer Save. */
+/* Floating centered editors (non-blocking): cap scroll height. */
 .pc-popup-centered .pc-popup-scroll {
   flex: 0 1 auto;
   max-height: min(72vh, 640px);
+}
+
+.pc-popup-backdrop .pc-popup-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.pc-popup-backdrop .pc-mgr-tabs,
+.pc-popup-backdrop .pc-toggle-row,
+.pc-popup-backdrop .pc-popup-body > .pc-popup-input,
+.pc-popup-backdrop .pc-popup-body > .pc-popup-message {
+  flex: 0 0 auto;
+}
+
+.pc-popup-backdrop .pc-mgr-list,
+.pc-popup-backdrop .pc-preset-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.pc-popup-backdrop .pc-mgr-list-suggest.pc-ac-mgr-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .pc-popup-title.pc-popup-drag {
@@ -100,6 +231,18 @@ const CSS = `
   color: var(--descrip-text, #aaa);
   padding: 2px 4px 8px;
   user-select: none;
+}
+
+.pc-popup-head .pc-popup-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--input-text, #ddd);
+  padding: 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pc-popup-body {
@@ -161,8 +304,13 @@ const CSS = `
   font-size: 12px;
 }
 
-.pc-popup-btn:hover {
+.pc-popup-btn:hover:not(:disabled) {
   filter: brightness(1.15);
+}
+
+.pc-popup-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .pc-popup-btn.primary {
@@ -416,20 +564,729 @@ const CSS = `
   text-transform: lowercase;
 }
 
+.pc-civitai-overlay,
+.pc-civitai-info-overlay {
+  position: fixed;
+  inset: 0;
+  /* Above blocking dialogs (12000) and nested edit popups (12100). */
+  z-index: 12200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(3px);
+}
+
+.pc-civitai-info-overlay {
+  z-index: 12220;
+}
+
+.pc-civitai-modal,
+.pc-civitai-info-panel {
+  width: min(640px, 100%);
+  max-height: min(88vh, 760px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--comfy-menu-bg, #1e1e1e);
+  color: var(--input-text, #ddd);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+}
+
+.pc-civitai-info-panel {
+  width: min(560px, 100%);
+  max-height: min(88vh, 780px);
+}
+
+.pc-civitai-info-footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color, #444);
+}
+
+.pc-civitai-modal-top {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color, #444);
+  background: var(--comfy-menu-bg, #1e1e1e);
+  z-index: 1;
+}
+
+.pc-civitai-modal-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pc-civitai-modal-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-civitai-modal-close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--descrip-text, #999);
+  cursor: pointer;
+}
+
+.pc-civitai-modal-close:hover {
+  color: #f88;
+  border-color: var(--border-color, #555);
+  background: rgba(255, 80, 80, 0.08);
+}
+
+.pc-civitai-modal-close svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.pc-civitai-crumbs {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.pc-civitai-crumb {
+  flex: 0 1 auto;
+  max-width: 180px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #9ab4ff;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 22px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pc-civitai-crumb.is-current {
+  color: var(--input-text, #ddd);
+  cursor: default;
+}
+
+.pc-civitai-crumb:not(.is-current):hover {
+  background: rgba(154, 180, 255, 0.12);
+  border-color: rgba(154, 180, 255, 0.35);
+  text-decoration: underline;
+}
+
+.pc-civitai-crumb-sep {
+  flex: 0 0 auto;
+  color: var(--descrip-text, #666);
+  font-size: 12px;
+  user-select: none;
+}
+
+.pc-civitai-search {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pc-civitai-status {
+  margin: 0;
+  min-height: 1.2em;
+  flex: 0 0 auto;
+}
+
+.pc-civitai-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 2px 2px 0;
+}
+
+.pc-civitai-search-group {
+  flex: 0 0 auto;
+  display: block;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 6px 8px 4px;
+  border: none;
+  border-bottom: 1px solid var(--border-color, #38383c);
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  color: #a78bfa;
+  font-family: inherit;
+  font-size: 11px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
+  box-sizing: border-box;
+}
+
+.pc-civitai-search-group.clickable {
+  cursor: pointer;
+}
+
+.pc-civitai-search-group.clickable:hover {
+  background: rgba(167, 139, 250, 0.1);
+}
+
+.pc-civitai-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #444);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--input-text, #ddd);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.pc-civitai-folder:hover {
+  border-color: #6d5aa8;
+  background: rgba(109, 90, 168, 0.12);
+}
+
+.pc-civitai-folder-icon {
+  flex: 0 0 auto;
+}
+
+.pc-civitai-folder-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-civitai-folder-arrow {
+  flex: 0 0 auto;
+  color: var(--descrip-text, #888);
+}
+
+.pc-civitai-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-color, #444);
+}
+
+.pc-civitai-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #444);
+  background: rgba(255, 255, 255, 0.03);
+  box-sizing: border-box;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.pc-civitai-row:hover {
+  border-color: #6d5aa8;
+  background: rgba(109, 90, 168, 0.1);
+}
+
+.pc-civitai-titles {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pc-civitai-title-btn {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #c5d4ff;
+  line-height: 1.35;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pc-civitai-title-btn:hover {
+  color: #e8eeff;
+  text-decoration: underline;
+}
+
+.pc-civitai-file {
+  font-size: 11px;
+  color: var(--descrip-text, #888);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-civitai-base {
+  flex: 0 0 auto;
+  max-width: 110px;
+  font-size: 10px;
+  color: var(--descrip-text, #888);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-civitai-preview-btn {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--descrip-text, #777);
+  cursor: pointer;
+}
+
+.pc-civitai-preview-btn svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+.pc-civitai-preview-btn.has-preview {
+  color: #9fd4f0;
+}
+
+.pc-civitai-preview-btn.has-preview:hover {
+  color: var(--input-text, #ddd);
+  background: var(--comfy-input-bg, #2a2a2e);
+  border-color: var(--border-color, #444);
+}
+
+.pc-civitai-info-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.pc-civitai-tag {
+  flex: 0 1 auto;
+  max-width: 100%;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color, #4a4a50);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--descrip-text, #bbb);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-civitai-cover-tip {
+  position: fixed;
+  z-index: 12250;
+  width: 220px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #555);
+  background: var(--comfy-menu-bg, #1e1e1e);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.pc-civitai-cover-tip img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #111;
+}
+
+.pc-civitai-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pc-civitai-empty-groups {
+  font-size: 11px;
+  color: var(--descrip-text, #777);
+  font-style: italic;
+  padding: 2px 0;
+}
+
+.pc-civitai-more-groups {
+  align-self: flex-start;
+  height: 24px;
+  margin-top: 2px;
+  padding: 0 8px;
+  border: 1px dashed var(--border-color, #555);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--descrip-text, #aaa);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.pc-civitai-more-groups:hover {
+  color: var(--input-text, #ddd);
+  border-color: #6d5aa8;
+  background: rgba(109, 90, 168, 0.12);
+}
+
+.pc-civitai-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #555);
+  background: var(--comfy-input-bg, #2a2a2e);
+  color: var(--input-text, #ddd);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.pc-civitai-group:hover {
+  border-color: #6d5aa8;
+}
+
+.pc-civitai-group.selected {
+  border-color: #9b87d8;
+  background: #2f2b3d;
+  color: #e8e4f5;
+  box-shadow: inset 0 0 0 1px rgba(155, 135, 216, 0.35);
+}
+
+.pc-civitai-group-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: 3.9em;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.pc-civitai-group-text.is-expanded {
+  max-height: none;
+  overflow: visible;
+}
+
+.pc-civitai-expand {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: -2px -2px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--descrip-text, #999);
+  cursor: pointer;
+}
+
+.pc-civitai-expand:hover {
+  color: var(--input-text, #ddd);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pc-civitai-expand svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  transition: transform 0.12s ease;
+}
+
+.pc-civitai-expand.open svg {
+  transform: rotate(180deg);
+}
+
+.pc-civitai-info-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pc-civitai-info-hero {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.pc-civitai-info-cover {
+  width: 148px;
+  height: 148px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #444);
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pc-civitai-info-cover.is-empty {
+  font-size: 11px;
+  color: var(--descrip-text, #777);
+}
+
+.pc-civitai-info-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pc-civitai-info-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.pc-civitai-info-name {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--input-text, #eee);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
+.pc-civitai-info-line {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--descrip-text, #888);
+  word-break: break-word;
+}
+
+.pc-civitai-info-path {
+  word-break: break-all;
+}
+
+.pc-civitai-info-link {
+  color: #9ab4ff;
+  text-decoration: none;
+}
+
+.pc-civitai-info-link:hover {
+  text-decoration: underline;
+  color: #c2d0ff;
+}
+
+.pc-civitai-info-section {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pc-civitai-info-notes-slot:empty {
+  display: none;
+}
+
+.pc-civitai-info-section-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pc-civitai-info-label {
+  flex: 1 1 auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--descrip-text, #aaa);
+}
+
+.pc-civitai-copy-btn {
+  flex: 0 0 auto;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color, #555);
+  border-radius: 6px;
+  background: var(--comfy-input-bg, #2a2a2e);
+  color: var(--input-text, #ddd);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.pc-civitai-copy-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pc-civitai-copy-btn:not(:disabled):hover {
+  border-color: #6d5aa8;
+  color: #e8e4f5;
+}
+
+.pc-civitai-copy-btn.copied {
+  border-color: #5f9;
+  color: #5f9;
+}
+
+.pc-civitai-copy-btn svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.pc-civitai-info-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--input-text, #ddd);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--border-color, #3a3a3e);
+  box-sizing: border-box;
+}
+
+.pc-civitai-desc-more {
+  align-self: flex-start;
+  height: 24px;
+  margin-top: 2px;
+  padding: 0 8px;
+  border: 1px dashed var(--border-color, #555);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--descrip-text, #aaa);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.pc-civitai-desc-more:hover {
+  color: var(--input-text, #ddd);
+  border-color: #6d5aa8;
+  background: rgba(109, 90, 168, 0.12);
+}
+
 .pc-mgr-list-suggest {
   min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .pc-ac-mgr-panel {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
   width: 100%;
+}
+
+.pc-ac-mgr-panel > .pc-ac-mgr-toolbar,
+.pc-ac-mgr-panel > .pc-ac-mgr-search,
+.pc-ac-mgr-panel > .pc-ac-mgr-add,
+.pc-ac-mgr-panel > .pc-ac-mgr-footer {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+}
+
+.pc-ac-mgr-search {
+  height: 30px;
+  min-height: 30px;
+  box-sizing: border-box;
 }
 
 /* Side switcher — not a second row of main mgr tabs */
 .pc-ac-mgr-tabs {
+  flex: 0 0 auto;
   display: inline-flex;
   align-self: flex-start;
   gap: 0;
@@ -458,24 +1315,48 @@ const CSS = `
 }
 
 .pc-ac-mgr-add {
+  flex: 0 0 auto;
   display: flex;
+  align-items: center;
   gap: 6px;
-  margin: 6px 0;
+  margin: 2px 0 6px;
 }
 
 .pc-ac-mgr-add .pc-popup-input {
   flex: 1 1 auto;
   min-width: 0;
+  height: 30px;
+  min-height: 30px;
 }
 
 .pc-ac-mgr-list {
-  max-height: 280px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin: 4px 0;
-  min-height: 120px;
+}
+
+.pc-ac-mgr-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color, #444);
+}
+
+.pc-ac-mgr-footer .pc-popup-actions {
+  align-self: stretch;
+  justify-content: flex-end;
+}
+
+.pc-ac-mgr-footer .pc-popup-message {
+  margin: 0;
 }
 
 .pc-ac-mgr-bucket-body {
@@ -627,6 +1508,20 @@ const CSS = `
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--input-text, #ddd);
+}
+
+.pc-prompt-tip-link-row {
+  margin-top: 8px;
+}
+
+.pc-prompt-tip-link {
+  color: #6ea8fe;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.pc-prompt-tip-link:hover {
+  color: #9bc1ff;
 }
 
 .pc-save-folder-row {
@@ -921,6 +1816,27 @@ const CSS = `
   display: block;
 }
 
+.pc-mgr-prompt-tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.pc-mgr-civitai-btn {
+  height: 26px;
+  padding: 0 10px;
+  color: #9fd4f0;
+  border-color: #3a5a6c;
+  background: #1e2a32;
+}
+
+.pc-mgr-civitai-btn:hover {
+  color: #c5e8f8;
+  border-color: #4a7a90;
+  background: #243440;
+}
+
 .pc-mgr-prompt-field {
   display: flex;
   flex-direction: column;
@@ -1039,7 +1955,7 @@ const CSS = `
 }
 `;
 
-function injectPopupStyles() {
+export function injectPopupStyles() {
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement("style");
     style.id = STYLE_ID;
@@ -1134,9 +2050,10 @@ function bindPopupDrag(root, handle, onMoved) {
 }
 
 /**
- * Floating popup anchored to an element or screen point.
- * A non-nested open closes the whole stack. Nested opens stack on top;
- * Escape / outside-click closes only the top dialog.
+ * Modal / floating popup.
+ * Default: blocking overlay (dimmed backdrop, close via X or Escape — not outside click).
+ * Pass `blocking: false` for the old anchored floating card (outside-click closes).
+ * A non-nested open closes the whole stack. Nested opens stack on top.
  *
  * @param {object} opts
  * @param {HTMLElement} [opts.anchor]
@@ -1145,7 +2062,8 @@ function bindPopupDrag(root, handle, onMoved) {
  * @param {number} [opts.width]
  * @param {boolean} [opts.nested]
  * @param {boolean} [opts.centered]
- * @param {boolean} [opts.draggable] — drag window by title (opt-in)
+ * @param {boolean} [opts.blocking] — default true; backdrop + X, no outside-click close
+ * @param {boolean} [opts.draggable] — drag by title (ignored when blocking)
  * @param {(body: HTMLElement, api: { close: () => void, root: HTMLElement, setTitle: (t: string) => void }) => void} opts.render
  * @param {() => void} [opts.onClose]
  */
@@ -1156,10 +2074,11 @@ export function openPopup(opts) {
             popupStack[popupStack.length - 1].close();
     }
 
+    const blocking = opts.blocking !== false;
+
     const root = document.createElement("div");
     root.className = "pc-popup-root";
-    if (opts.nested) root.classList.add("pc-popup-nested");
-    if (opts.centered)
+    if (opts.centered || blocking)
         root.classList.add("pc-popup-centered");
     if (opts.width) root.style.width = `${opts.width}px`;
     root.addEventListener("pointerdown", (e) =>
@@ -1179,11 +2098,47 @@ export function openPopup(opts) {
     const body = document.createElement("div");
     body.className = "pc-popup-body";
 
-    root.append(titleEl, body);
+    let backdrop = null;
+    let host = root;
+
+    if (blocking) {
+        backdrop = document.createElement("div");
+        backdrop.className = "pc-popup-backdrop";
+        if (opts.nested) backdrop.classList.add("pc-popup-nested");
+        backdrop.addEventListener("pointerdown", (e) => {
+            e.stopPropagation();
+        });
+        backdrop.addEventListener(
+            "wheel",
+            (e) => e.stopPropagation(),
+            { passive: true },
+        );
+
+        const head = document.createElement("div");
+        head.className = "pc-popup-head";
+
+        const closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "pc-popup-close";
+        closeBtn.title = "Close";
+        closeBtn.innerHTML = CLOSE_ICON_SVG;
+        closeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            close();
+        });
+
+        head.append(titleEl, closeBtn);
+        root.append(head, body);
+        backdrop.appendChild(root);
+        host = backdrop;
+    } else {
+        if (opts.nested) root.classList.add("pc-popup-nested");
+        root.append(titleEl, body);
+    }
 
     let closed = false;
     let userMoved = false;
-    const draggable = Boolean(opts.draggable);
+    const draggable = Boolean(opts.draggable) && !blocking;
 
     function close() {
         if (closed) return;
@@ -1206,11 +2161,12 @@ export function openPopup(opts) {
             onKey,
             true,
         );
-        root.remove();
+        host.remove();
         opts.onClose?.();
     }
 
     function onDocDown(e) {
+        if (blocking) return;
         if (popupStack[popupStack.length - 1] !== api)
             return;
         if (e.target?.closest?.(".pc-prompt-tip")) return;
@@ -1246,7 +2202,7 @@ export function openPopup(opts) {
         close,
         root,
         reposition() {
-            if (closed || !root.isConnected) return;
+            if (closed || !root.isConnected || blocking) return;
             if (userMoved) {
                 const rect = root.getBoundingClientRect();
                 clampPopupPosition(root, rect.left, rect.top);
@@ -1267,13 +2223,16 @@ export function openPopup(opts) {
     }
 
     popupStack.push(api);
+    document.body.appendChild(host);
     opts.render?.(body, api);
-    placePopup(root, opts);
-    document.addEventListener(
-        "pointerdown",
-        onDocDown,
-        true,
-    );
+    if (!blocking) placePopup(root, opts);
+    if (!blocking) {
+        document.addEventListener(
+            "pointerdown",
+            onDocDown,
+            true,
+        );
+    }
     document.addEventListener("keydown", onKey, true);
     return api;
 }

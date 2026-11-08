@@ -37,7 +37,8 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 ## Features
 
 - **Group cards** — title, positive, negative, drag reorder, collapse, duplicate, enable toggle, **Clear**
-- **External prompt** (session Settings) — one wired pair (`external_pos` / `external_neg`) in the stack
+- **External prompt** (This node Settings) — one wired pair (`external_pos` / `external_neg`) in the stack
+- **Civitai Toolkit LoRA import** (Settings, experimental) — folder browse + search; title → Info with triggers → Append / Replace; notes on demand (node + Edit prompt / template; needs [Toolkit](https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit))
 - **Add group** — type a new name, or pick a library shelf that already has saved pairs (exact name)
 - **Join engine** — merges enabled groups with `, `, skips empty, normalizes commas and spacing
 - **Pin to sidebar** — `Group \| positive` / `Group \| negative` in Inputs / Favorites
@@ -48,7 +49,7 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 - **Smart search** — AND tokens; `shelf\keyword` filters a collection first
 - **Library manager** — Presets / Prompts / Templates (+ **Suggest** when autocomplete is on); duplicate, rename, move, delete; last tab remembered
 - **Prompt autocomplete** (Settings) — suggests segments from **your** library; caret popup (**Tab** accept / Add); Suggest tab + rebuild
-- **PNG-friendly prompts** — session Settings: on queue, write joined text into stock CLIP `text`; wires restore after (off by default)
+- **PNG-friendly prompts** — This node Settings: on queue, write joined text into stock CLIP `text`; wires restore after (off by default)
 - **Local SQLite** — `db/presets.sqlite` (+ `db/autocomplete/` when Suggest is used)
 
 ---
@@ -194,6 +195,7 @@ Pin from the node **Inputs** panel or **Favorites**. Edits sync both ways with t
 **Saved · SQLite** (all Prompt Concatenate Pro nodes):
 
 - **Skip pair overwrite confirms** — Load pair replace + Clear without asking (off by default; Delete / presets untouched)
+- **Civitai Toolkit LoRA import** (experimental) — **Civitai** on pairs (node + Edit prompt / template); folder browse + search; title → Info (triggers + Append / Replace + notes); soft dep [ComfyUI-Civitai-Toolkit](https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit)
 - **Prompt autocomplete** — caret suggestions + Suggest tab from your library
 
 ---

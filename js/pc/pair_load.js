@@ -196,6 +196,12 @@ function groupByCategory(presets) {
     return folders;
 }
 
+function categoryRank(name, priorityNames) {
+    const key = String(name || "").toLowerCase();
+    const idx = priorityNames.findIndex((p) => p === key);
+    return idx === -1 ? priorityNames.length : idx;
+}
+
 function paintList(
     list,
     presets,
@@ -203,6 +209,7 @@ function paintList(
         query,
         others,
         currentCategory,
+        loadedCategory,
         onLoad,
         onAppend,
         includeBody,
@@ -238,14 +245,18 @@ function paintList(
         return;
     }
 
+    // Priority: 1) category of what's loaded in the slot, 2) slot's own shelf.
+    const priorityNames = [];
+    const loaded = (loadedCategory || "").trim().toLowerCase();
+    const shelf = (currentCategory || "").trim().toLowerCase();
+    if (loaded) priorityNames.push(loaded);
+    if (shelf && shelf !== loaded) priorityNames.push(shelf);
+
     const folders = groupByCategory(matched);
     const names = [...folders.keys()].sort((a, b) => {
-        const current = (
-            currentCategory || ""
-        ).toLowerCase();
-        const aCur = a.toLowerCase() === current;
-        const bCur = b.toLowerCase() === current;
-        if (aCur !== bCur) return aCur ? -1 : 1;
+        const rankDiff =
+            categoryRank(a, priorityNames) - categoryRank(b, priorityNames);
+        if (rankDiff !== 0) return rankDiff;
         return a.localeCompare(b, undefined, {
             sensitivity: "base",
         });
@@ -253,14 +264,13 @@ function paintList(
 
     for (const name of names) {
         const items = folders.get(name) || [];
-        const isCurrent =
-            name.toLowerCase() ===
-            (currentCategory || "").toLowerCase();
+        const key = name.toLowerCase();
+        const prioritized = priorityNames.includes(key);
         list.appendChild(
             makeFolder({
                 title: name,
                 presets: items,
-                expanded: isCurrent || Boolean(q),
+                expanded: prioritized || Boolean(q),
                 onLoad,
                 onAppend,
             }),
@@ -271,11 +281,13 @@ function paintList(
 export async function openLoadPairPopup({
     anchor,
     category,
+    loadedCategory = "",
     onPick,
     onAppend,
     nested = false,
 }) {
     const shelf = (category || "").trim();
+    const loadedShelf = (loadedCategory || "").trim();
     if (!shelf) {
         openConfirmPopup({
             nested,
@@ -303,9 +315,13 @@ export async function openLoadPairPopup({
 
             let own = [];
             let all = null;
+            // If the slot already holds a pair from another collection, open Other collections.
+            const loadedElsewhere =
+                Boolean(loadedShelf) &&
+                loadedShelf.toLowerCase() !== shelf.toLowerCase();
             let others = Boolean(
                 getUiPref("otherCollections"),
-            );
+            ) || loadedElsewhere;
             let includeBody = Boolean(
                 getUiPref("searchInPrompts"),
             );
@@ -380,6 +396,7 @@ export async function openLoadPairPopup({
                     query: search.value,
                     others,
                     currentCategory: shelf,
+                    loadedCategory: loadedShelf,
                     onLoad: handleLoad,
                     onAppend: handleAppend,
                     includeBody,

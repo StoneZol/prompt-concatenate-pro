@@ -15,6 +15,8 @@ const DEFAULTS = {
   managerTab: "presets",
   /** Skip Load-pair replace + Clear-pair confirms. */
   skipPairReplaceConfirm: false,
+  /** Show Civitai button on pairs — import triggers from Toolkit local DB. */
+  civitaiToolkitImport: false,
 };
 
 let cache = { ...DEFAULTS };

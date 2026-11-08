@@ -4,6 +4,7 @@ import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
 import { bindPromptAutocomplete } from "./autocomplete.js";
 import { EXTERNAL_TITLE, isExternalGroup } from "./external.js";
 import { confirmClearPair } from "./pair_load.js";
+import { getUiPref } from "./prefs.js";
 
 function isEnabled(group) {
   return group.enabled !== false;
@@ -62,7 +63,7 @@ function makeField(group, key, labelText, { onChange, onPrompt }) {
   return { wrap, area };
 }
 
-export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, onRename, onReorder, onDrop, onSavePair, onLoadPair, onReloadLoaded, onDuplicate }) {
+export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, onRename, onReorder, onDrop, onSavePair, onLoadPair, onCivitaiLoad, onReloadLoaded, onDuplicate }) {
   const card = document.createElement("div");
   card.className = "pc-group" + (isExternalGroup(group) ? " pc-group-external" : "");
   card.dataset.groupId = group.id;
@@ -189,6 +190,24 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   });
   title.addEventListener("blur", commitTitle);
 
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "pc-remove-btn";
+  removeBtn.title = "Remove group";
+  removeBtn.innerHTML = TRASH_ICON_SVG;
+  removeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const name = (group.title || "").trim() || "this group";
+    openConfirmPopup({
+      anchor: removeBtn,
+      title: "Remove group",
+      message: `Delete “${name}”? This cannot be undone.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      onConfirm: () => onRemove?.(),
+    });
+  });
+
   const copyBtn = document.createElement("button");
   copyBtn.type = "button";
   copyBtn.className = "pc-copy-btn";
@@ -225,7 +244,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   if (external) {
     head.append(dragHandle, priority, toggle, title);
   } else {
-    head.append(dragHandle, priority, toggle, title, copyBtn, collapseBtn);
+    head.append(dragHandle, priority, toggle, title, removeBtn, copyBtn, collapseBtn);
   }
 
   const body = document.createElement("div");
@@ -243,24 +262,6 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   } else {
     const toolbar = document.createElement("div");
     toolbar.className = "pc-group-toolbar";
-
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "pc-remove-btn";
-    removeBtn.title = "Remove group";
-    removeBtn.innerHTML = TRASH_ICON_SVG;
-    removeBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const name = (group.title || "").trim() || "this group";
-      openConfirmPopup({
-        anchor: removeBtn,
-        title: "Remove group",
-        message: `Delete “${name}”? This cannot be undone.`,
-        confirmLabel: "Delete",
-        cancelLabel: "Cancel",
-        onConfirm: () => onRemove?.(),
-      });
-    });
 
     const savePairBtn = document.createElement("button");
     savePairBtn.type = "button";
@@ -288,10 +289,22 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     clearPairBtn.title = "Clear pair prompts";
     clearPairBtn.innerHTML = `${CLOSE_ICON_SVG}<span>Clear</span>`;
 
-    const spacer = document.createElement("div");
-    spacer.className = "pc-group-toolbar-spacer";
+    toolbar.append(savePairBtn, loadPairBtn);
 
-    toolbar.append(savePairBtn, loadPairBtn, clearPairBtn, spacer, removeBtn);
+    if (getUiPref("civitaiToolkitImport")) {
+      const civitaiBtn = document.createElement("button");
+      civitaiBtn.type = "button";
+      civitaiBtn.className = "pc-pair-civitai-btn";
+      civitaiBtn.title = "Import triggers from Civitai Toolkit";
+      civitaiBtn.innerHTML = `<span>Civitai</span>`;
+      civitaiBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        onCivitaiLoad?.(civitaiBtn);
+      });
+      toolbar.appendChild(civitaiBtn);
+    }
+
+    toolbar.appendChild(clearPairBtn);
 
     const loadedRow = document.createElement("div");
     loadedRow.className = "pc-loaded-row";

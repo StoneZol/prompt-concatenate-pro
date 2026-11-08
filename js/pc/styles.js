@@ -549,7 +549,8 @@ const CSS = `
 
 .pc-pair-save-btn,
 .pc-pair-load-btn,
-.pc-pair-clear-btn {
+.pc-pair-clear-btn,
+.pc-pair-civitai-btn {
   flex: 0 0 auto;
   height: 28px;
   display: inline-flex;
@@ -569,10 +570,21 @@ const CSS = `
 
 .pc-pair-save-btn:hover,
 .pc-pair-load-btn:hover,
-.pc-pair-clear-btn:hover {
+.pc-pair-clear-btn:hover,
+.pc-pair-civitai-btn:hover {
   color: var(--input-text, #ddd);
   background: var(--comfy-input-bg, #2a2a2e);
   border-color: var(--border-color, #444);
+}
+
+.pc-pair-civitai-btn {
+  color: #9fd4f0;
+}
+
+.pc-pair-civitai-btn:hover {
+  color: #c5e8f8;
+  border-color: #3a5a6c;
+  background: #1e2a32;
 }
 
 .pc-pair-save-btn svg,
@@ -692,7 +704,8 @@ const CSS = `
 
 .pc-ac-popup {
   position: fixed;
-  z-index: 10050;
+  /* Above blocking dialogs (12000+) and nested confirms (12100). */
+  z-index: 13000;
   box-sizing: border-box;
   max-height: 240px;
   overflow-x: hidden;

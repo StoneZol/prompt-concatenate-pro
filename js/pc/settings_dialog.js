@@ -46,6 +46,20 @@ const SKIP_PAIR_REPLACE_HELP = {
     "Does not affect Delete group, preset/template replace, or Suggest rename.",
 };
 
+const CIVITAI_TOOLKIT_HELP = {
+  title: "Civitai Toolkit LoRA import",
+  text:
+    "Off by default. Saved in SQLite (all nodes).\n\n" +
+    "When on, each pair gets a Civitai button. Opens an overlay (closes only via X): browse LoRA folders " +
+    "(same path layout as the loader) or search name / file / tag / base. Click a LoRA title to open Info — " +
+    "pick trigger groups there, then Append / Replace into positive. Info also shows Civitai tags, description + on-demand notes.\n\n" +
+    "Soft dependency — needs ComfyUI-Civitai-Toolkit installed and scanned. Prompt Concatenate Pro works without it.",
+  link: {
+    href: "https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit",
+    label: "ComfyUI-Civitai-Toolkit",
+  },
+};
+
 function makeSectionLabel(text, variant = "node") {
   const el = document.createElement("div");
   el.className = `pc-settings-section pc-settings-section-${variant}`;
@@ -160,8 +174,9 @@ function makeSettingRow({
  * @param {(v: boolean) => void} nodeSettings.setEmbedClipMeta
  * @param {() => boolean} nodeSettings.getExternalPrompt
  * @param {(v: boolean) => void} nodeSettings.setExternalPrompt
+ * @param {() => void} [onUiChange] re-render node chrome after global UI prefs change
  */
-export async function openSettingsPopup({ anchor, nodeSettings } = {}) {
+export async function openSettingsPopup({ anchor, nodeSettings, onUiChange } = {}) {
   await ensureUiPrefs();
 
   openPopup({
@@ -201,6 +216,17 @@ export async function openSettingsPopup({ anchor, nodeSettings } = {}) {
           label: "Skip pair overwrite confirms",
           prefKey: "skipPairReplaceConfirm",
           help: SKIP_PAIR_REPLACE_HELP,
+        }).el,
+      );
+      list.appendChild(
+        makeSettingRow({
+          label: "Civitai Toolkit LoRA import",
+          prefKey: "civitaiToolkitImport",
+          badge: "experimental",
+          help: CIVITAI_TOOLKIT_HELP,
+          onToggle() {
+            onUiChange?.();
+          },
         }).el,
       );
 

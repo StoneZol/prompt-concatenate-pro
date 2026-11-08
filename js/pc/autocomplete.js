@@ -84,6 +84,8 @@ function ensurePopupRoot() {
         return activePopup.root;
     const root = document.createElement("div");
     root.className = "pc-ac-popup";
+    // Always on document.body: dialog backdrops use backdrop-filter, which
+    // would trap position:fixed and misplace the caret-aligned popup.
     document.body.appendChild(root);
     return root;
 }

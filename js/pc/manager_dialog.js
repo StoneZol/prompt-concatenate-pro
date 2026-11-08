@@ -50,6 +50,7 @@ import {
 import { getUiPref, setUiPref, ensureUiPrefs } from "./prefs.js";
 import { bindPromptAutocomplete } from "./autocomplete.js";
 import { mountAutocompletePanel } from "./autocomplete_manager.js";
+import { openCivitaiLoadPopup } from "./civitai_load.js";
 import { baseShelfName, nextDuplicateName } from "./titles.js";
 
 function slotHasPrompt(slot) {
@@ -474,6 +475,31 @@ function makePromptField(labelText, kind, value) {
   return { wrap, area };
 }
 
+function applyCivitaiToArea(area) {
+  openCivitaiLoadPopup({
+    onApply: (text, mode) => {
+      if (!area) return;
+      if (mode === "replace") area.value = text;
+      else area.value = joinFields([area.value, text]);
+      area.dispatchEvent(new Event("input", { bubbles: true }));
+      area.focus();
+    },
+  });
+}
+
+function makeCivitaiBtn(onClick) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "pc-popup-btn pc-mgr-civitai-btn";
+  btn.title = "Import triggers from Civitai Toolkit";
+  btn.innerHTML = `<span>Civitai</span>`;
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    onClick?.(btn);
+  });
+  return btn;
+}
+
 function openEditPromptPopup({ preset, categories, onSaved }) {
   return openPopup({
     nested: true,
@@ -511,6 +537,14 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
 
       const pos = makePromptField("positive", "positive", preset.positive);
       const neg = makePromptField("negative", "negative", preset.negative);
+
+      const promptTools = document.createElement("div");
+      promptTools.className = "pc-mgr-prompt-tools";
+      if (getUiPref("civitaiToolkitImport")) {
+        promptTools.appendChild(
+          makeCivitaiBtn(() => applyCivitaiToArea(pos.area)),
+        );
+      }
 
       const errorEl = document.createElement("div");
       errorEl.className = "pc-popup-error";
@@ -616,6 +650,7 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
 
       const scroll = document.createElement("div");
       scroll.className = "pc-popup-scroll";
+      if (promptTools.childNodes.length) scroll.appendChild(promptTools);
       scroll.append(pos.wrap, neg.wrap);
 
       const footer = document.createElement("div");
@@ -802,7 +837,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             });
           });
 
-          head.append(dragHandle, toggle, nameInput, copyBtn, collapseBtn, removeBtn);
+          head.append(dragHandle, toggle, nameInput, removeBtn, copyBtn, collapseBtn);
 
           card.addEventListener("dragover", (e) => {
             e.preventDefault();
@@ -858,6 +893,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
               nested: true,
               anchor: loadPairBtn,
               category: baseShelfName(slot.title),
+              loadedCategory: slot.loadedCategory || "",
               onPick: (preset) => {
                 const apply = () => {
                   slot.positive = preset.positive || "";
@@ -911,7 +947,24 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             });
           });
 
-          toolbar.append(savePairBtn, loadPairBtn, clearPairBtn);
+          toolbar.append(savePairBtn, loadPairBtn);
+
+          const pos = makePromptField("positive", "positive", slot.positive);
+          const neg = makePromptField("negative", "negative", slot.negative);
+          pos.area.addEventListener("input", () => {
+            slot.positive = pos.area.value;
+          });
+          neg.area.addEventListener("input", () => {
+            slot.negative = neg.area.value;
+          });
+
+          if (getUiPref("civitaiToolkitImport")) {
+            toolbar.appendChild(
+              makeCivitaiBtn(() => applyCivitaiToArea(pos.area)),
+            );
+          }
+
+          toolbar.appendChild(clearPairBtn);
 
           const loadedRow = document.createElement("div");
           loadedRow.className = "pc-loaded-row";
@@ -952,15 +1005,6 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
 
             loadedRow.append(loadedLabel, notesBtn, clearBtn);
           }
-
-          const pos = makePromptField("positive", "positive", slot.positive);
-          const neg = makePromptField("negative", "negative", slot.negative);
-          pos.area.addEventListener("input", () => {
-            slot.positive = pos.area.value;
-          });
-          neg.area.addEventListener("input", () => {
-            slot.negative = neg.area.value;
-          });
 
           const body = document.createElement("div");
           body.className = "pc-tpl-slot-body";

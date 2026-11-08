@@ -216,8 +216,9 @@ export function mountAutocompletePanel(host, { reposition } = {}) {
   };
 
   const tabsHost = document.createElement("div");
+  tabsHost.className = "pc-ac-mgr-toolbar";
   const filter = document.createElement("input");
-  filter.className = "pc-popup-input";
+  filter.className = "pc-popup-input pc-ac-mgr-search";
   filter.type = "text";
   filter.placeholder = "search segments";
 
@@ -249,6 +250,10 @@ export function mountAutocompletePanel(host, { reposition } = {}) {
   rebuild.textContent = "Rebuild from library";
   rebuild.title = "Scan all saved pairs into pos/neg dictionaries";
   actions.appendChild(rebuild);
+
+  const footer = document.createElement("div");
+  footer.className = "pc-ac-mgr-footer";
+  footer.append(status, actions);
 
   let working = false;
 
@@ -545,7 +550,7 @@ export function mountAutocompletePanel(host, { reposition } = {}) {
   });
 
   paintTabs();
-  host.append(tabsHost, filter, addRow, busy.el, list, status, actions);
+  host.append(tabsHost, filter, addRow, busy.el, list, footer);
   load();
 
   return { reload: load };

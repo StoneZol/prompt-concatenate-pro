@@ -83,11 +83,12 @@ export function showPromptTip(anchor, { positive = "", negative = "" } = {}) {
 }
 
 /** Generic help tip (settings, etc.) — same float/toggle pattern as prompt peek. */
-export function showInfoTip(anchor, { title = "", text = "" } = {}) {
+export function showInfoTip(anchor, { title = "", text = "", link = null } = {}) {
   hidePromptTip();
   if (!anchor) return;
   const body = String(text || "").trim();
-  if (!body) return;
+  const href = String(link?.href || "").trim();
+  if (!body && !href) return;
 
   const tip = document.createElement("div");
   tip.className = "pc-prompt-tip pc-info-tip";
@@ -102,10 +103,25 @@ export function showInfoTip(anchor, { title = "", text = "" } = {}) {
     tip.appendChild(label);
   }
 
-  const textEl = document.createElement("div");
-  textEl.className = "pc-prompt-tip-text";
-  textEl.textContent = body;
-  tip.appendChild(textEl);
+  if (body) {
+    const textEl = document.createElement("div");
+    textEl.className = "pc-prompt-tip-text";
+    textEl.textContent = body;
+    tip.appendChild(textEl);
+  }
+
+  if (href) {
+    const linkRow = document.createElement("div");
+    linkRow.className = "pc-prompt-tip-link-row";
+    const a = document.createElement("a");
+    a.className = "pc-prompt-tip-link";
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = String(link?.label || href).trim() || href;
+    linkRow.appendChild(a);
+    tip.appendChild(linkRow);
+  }
 
   mountTip(tip, anchor);
 }
