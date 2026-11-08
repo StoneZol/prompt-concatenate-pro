@@ -6,6 +6,30 @@ Format: newest first.
 
 ---
 
+## [2.2.0] — 2026-11-08
+
+### Civitai Toolkit LoRA import (experimental)
+
+- Settings · SQLite: **Civitai Toolkit LoRA import** — **Civitai** on each pair (node, Edit prompt, Edit template)
+- Overlay browser (closes only via **X**): folder browse from LoRA paths (loader-style crumbs) + search in current folder (name / file / tag / base)
+
+![Civitai · LoRAs — folder browse + search](../docs/screenshots/2.2.0/0.png)
+
+- Click LoRA title → **Info**: cover/meta, Civitai tags, selectable trigger groups (hard-capped), **Append** / **Replace** into positive; description (collapse) + on-demand sidecar notes + Civitai page link
+
+![LoRA info — triggers + Append / Replace](../docs/screenshots/2.2.0/1.png)
+
+- Soft dependency on [ComfyUI-Civitai-Toolkit](https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit) (works without it; overlay explains if missing; Settings help links the repo)
+
+### Pair / library UX
+
+- **Remove group** in the card head between title and Duplicate (node + Edit template)
+- Load pair: prefer the pair’s **loaded** category shelf first
+- Prompt autocomplete also in Edit prompt / Edit template when Suggest is on
+- Popups / Suggest / autocomplete stacking polish (blocking overlays, AC above dialogs)
+
+---
+
 ## [2.1.0] — 2026-11-07
 
 ### Settings: this node vs saved
@@ -34,13 +58,6 @@ Wire any STRING prompts into the builder as a first-class pair: reorder, enable/
 - Autocomplete: when longer matches exist but the typed segment is new (`sweet` vs `sweet dreams`), an **Add** row appears at the bottom — Tab saves it to the dictionary
 
 ![Autocomplete: Tab to add typed segment](../docs/screenshots/2.1.0/1.png)
-
-### Civitai Toolkit LoRA import (experimental)
-
-- Settings · SQLite: **Civitai Toolkit LoRA import** — shows a **Civitai** button on each pair
-- Overlay browser (closes only via **X**): folder browse from LoRA paths (loader-style crumbs) + search in current folder (name / file / tag / base)
-- Click LoRA title → **Info**: cover/meta, Civitai tags, selectable trigger groups (hard-capped), **Append** / **Replace**, description + on-demand sidecar notes + Civitai link
-- Soft dependency on [ComfyUI-Civitai-Toolkit](https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit) (works without it; overlay explains if missing)
 
 ---
 
