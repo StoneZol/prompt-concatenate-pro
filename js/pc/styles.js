@@ -704,7 +704,8 @@ const CSS = `
 
 .pc-ac-popup {
   position: fixed;
-  z-index: 10050;
+  /* Above blocking dialogs (12000+) and nested confirms (12100). */
+  z-index: 13000;
   box-sizing: border-box;
   max-height: 240px;
   overflow-x: hidden;

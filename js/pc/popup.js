@@ -568,7 +568,8 @@ const CSS = `
 .pc-civitai-info-overlay {
   position: fixed;
   inset: 0;
-  z-index: 12000;
+  /* Above blocking dialogs (12000) and nested edit popups (12100). */
+  z-index: 12200;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -579,7 +580,7 @@ const CSS = `
 }
 
 .pc-civitai-info-overlay {
-  z-index: 12020;
+  z-index: 12220;
 }
 
 .pc-civitai-modal,
@@ -942,7 +943,7 @@ const CSS = `
 
 .pc-civitai-cover-tip {
   position: fixed;
-  z-index: 12100;
+  z-index: 12250;
   width: 220px;
   padding: 6px;
   border-radius: 8px;
@@ -1799,6 +1800,27 @@ const CSS = `
   width: 14px;
   height: 14px;
   display: block;
+}
+
+.pc-mgr-prompt-tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.pc-mgr-civitai-btn {
+  height: 26px;
+  padding: 0 10px;
+  color: #9fd4f0;
+  border-color: #3a5a6c;
+  background: #1e2a32;
+}
+
+.pc-mgr-civitai-btn:hover {
+  color: #c5e8f8;
+  border-color: #4a7a90;
+  background: #243440;
 }
 
 .pc-mgr-prompt-field {

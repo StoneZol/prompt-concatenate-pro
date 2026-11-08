@@ -659,6 +659,7 @@ app.registerExtension({
               openLoadPairPopup({
                 anchor,
                 category: baseShelfName(group.title),
+                loadedCategory: group.loadedCategory || "",
                 onPick: (preset) => {
                   const apply = () => {
                     group.positive = preset.positive || "";
