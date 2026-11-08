@@ -190,6 +190,24 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   });
   title.addEventListener("blur", commitTitle);
 
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "pc-remove-btn";
+  removeBtn.title = "Remove group";
+  removeBtn.innerHTML = TRASH_ICON_SVG;
+  removeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const name = (group.title || "").trim() || "this group";
+    openConfirmPopup({
+      anchor: removeBtn,
+      title: "Remove group",
+      message: `Delete “${name}”? This cannot be undone.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      onConfirm: () => onRemove?.(),
+    });
+  });
+
   const copyBtn = document.createElement("button");
   copyBtn.type = "button";
   copyBtn.className = "pc-copy-btn";
@@ -226,7 +244,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   if (external) {
     head.append(dragHandle, priority, toggle, title);
   } else {
-    head.append(dragHandle, priority, toggle, title, copyBtn, collapseBtn);
+    head.append(dragHandle, priority, toggle, title, removeBtn, copyBtn, collapseBtn);
   }
 
   const body = document.createElement("div");
@@ -244,24 +262,6 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
   } else {
     const toolbar = document.createElement("div");
     toolbar.className = "pc-group-toolbar";
-
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "pc-remove-btn";
-    removeBtn.title = "Remove group";
-    removeBtn.innerHTML = TRASH_ICON_SVG;
-    removeBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const name = (group.title || "").trim() || "this group";
-      openConfirmPopup({
-        anchor: removeBtn,
-        title: "Remove group",
-        message: `Delete “${name}”? This cannot be undone.`,
-        confirmLabel: "Delete",
-        cancelLabel: "Cancel",
-        onConfirm: () => onRemove?.(),
-      });
-    });
 
     const savePairBtn = document.createElement("button");
     savePairBtn.type = "button";
@@ -289,9 +289,6 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     clearPairBtn.title = "Clear pair prompts";
     clearPairBtn.innerHTML = `${CLOSE_ICON_SVG}<span>Clear</span>`;
 
-    const spacer = document.createElement("div");
-    spacer.className = "pc-group-toolbar-spacer";
-
     toolbar.append(savePairBtn, loadPairBtn);
 
     if (getUiPref("civitaiToolkitImport")) {
@@ -307,7 +304,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
       toolbar.appendChild(civitaiBtn);
     }
 
-    toolbar.append(clearPairBtn, spacer, removeBtn);
+    toolbar.appendChild(clearPairBtn);
 
     const loadedRow = document.createElement("div");
     loadedRow.className = "pc-loaded-row";

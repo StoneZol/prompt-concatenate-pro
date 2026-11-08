@@ -837,7 +837,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             });
           });
 
-          head.append(dragHandle, toggle, nameInput, copyBtn, collapseBtn, removeBtn);
+          head.append(dragHandle, toggle, nameInput, removeBtn, copyBtn, collapseBtn);
 
           card.addEventListener("dragover", (e) => {
             e.preventDefault();

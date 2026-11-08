@@ -1510,6 +1510,20 @@ const CSS = `
   color: var(--input-text, #ddd);
 }
 
+.pc-prompt-tip-link-row {
+  margin-top: 8px;
+}
+
+.pc-prompt-tip-link {
+  color: #6ea8fe;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.pc-prompt-tip-link:hover {
+  color: #9bc1ff;
+}
+
 .pc-save-folder-row {
   display: flex;
   align-items: center;
