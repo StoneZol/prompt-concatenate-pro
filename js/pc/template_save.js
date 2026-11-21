@@ -1,68 +1,10 @@
 import { openConfirmPopup, openPopup } from "./popup.js";
-import { listTemplateFolders, saveTemplate, shelfNames } from "./api.js";
+import { listTemplateFolders, listTemplates, saveTemplate } from "./api.js";
 import { serializeTemplateSlots } from "./template_apply.js";
+import { openExistingNamePicker } from "./save_name_picker.js";
+import { openShelfPicker, splitShelfName, wrapShelfInput } from "./shelf_paths.js";
 
 const UNCATEGORISED = "Uncategorised";
-
-function matchesFolder(name, query) {
-  if (!query) return true;
-  const label = name || UNCATEGORISED;
-  return label.toLowerCase().includes(query);
-}
-
-function openFolderPicker({ anchor, folders, current, onPick, onClose }) {
-  return openPopup({
-    nested: true,
-    anchor,
-    title: "Folder",
-    width: 260,
-    onClose,
-    render(body, { close }) {
-      const filter = document.createElement("input");
-      filter.className = "pc-popup-input";
-      filter.type = "text";
-      filter.placeholder = "filter";
-
-      const list = document.createElement("div");
-      list.className = "pc-pick-list";
-
-      const items = ["", ...folders];
-      const selected = (current || "").trim();
-
-      function paint() {
-        const q = filter.value.trim().toLowerCase();
-        const shown = items.filter((name) => matchesFolder(name, q));
-
-        list.replaceChildren();
-        if (!shown.length) {
-          const empty = document.createElement("div");
-          empty.className = "pc-popup-message";
-          empty.textContent = "No folders";
-          list.appendChild(empty);
-          return;
-        }
-        for (const name of shown) {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "pc-pick-item";
-          btn.textContent = name || UNCATEGORISED;
-          if ((name || "") === selected) btn.classList.add("selected");
-          btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            close();
-            onPick?.(name);
-          });
-          list.appendChild(btn);
-        }
-      }
-
-      filter.addEventListener("input", paint);
-      paint();
-      body.append(filter, list);
-      requestAnimationFrame(() => filter.focus());
-    },
-  });
-}
 
 export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved }) {
   const slots = serializeTemplateSlots(groups);
@@ -91,8 +33,19 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
       const title = document.createElement("input");
       title.className = "pc-popup-input";
       title.type = "text";
-      title.placeholder = "template name";
+      title.placeholder = "template name or path/name";
       title.value = (loadedTemplate?.title || "").trim();
+
+      const nameRow = document.createElement("div");
+      nameRow.className = "pc-save-folder-row";
+
+      const existingBtn = document.createElement("button");
+      existingBtn.type = "button";
+      existingBtn.className = "pc-popup-btn";
+      existingBtn.textContent = "Existing";
+      existingBtn.title = "Overwrite an existing template";
+
+      nameRow.append(title, existingBtn);
 
       const folderRow = document.createElement("div");
       folderRow.className = "pc-save-folder-row";
@@ -100,7 +53,7 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
       const folder = document.createElement("input");
       folder.className = "pc-popup-input";
       folder.type = "text";
-      folder.placeholder = UNCATEGORISED;
+      folder.placeholder = "Uncategorised or path/sub";
       folder.value = (loadedTemplate?.folder || "").trim();
 
       const pickBtn = document.createElement("button");
@@ -108,7 +61,7 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
       pickBtn.className = "pc-popup-btn";
       pickBtn.textContent = "Choose";
 
-      folderRow.append(folder, pickBtn);
+      folderRow.append(wrapShelfInput(folder, () => folders), pickBtn);
 
       const desc = document.createElement("textarea");
       desc.className = "pc-popup-textarea";
@@ -130,6 +83,7 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
       let overwrite = false;
       let folders = [];
       let picker = null;
+      let existingPicker = null;
 
       function resetOverwrite() {
         if (!overwrite) return;
@@ -139,6 +93,48 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
         confirm.classList.add("primary");
       }
 
+      function armOverwrite(message) {
+        overwrite = true;
+        errorEl.textContent = message;
+        confirm.textContent = "Overwrite";
+        confirm.classList.add("danger");
+        confirm.classList.remove("primary");
+      }
+
+      existingBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (existingPicker) {
+          existingPicker.close();
+          existingPicker = null;
+          return;
+        }
+        existingPicker = openExistingNamePicker({
+          anchor: existingBtn,
+          title: "Existing templates",
+          currentGroup: folder.value.trim(),
+          currentName: title.value.trim(),
+          load: async () => {
+            const result = await listTemplates();
+            if (!result.ok) throw new Error(result.error || "Failed to load templates");
+            return (result.templates || []).map((template) => ({
+              name: template.name || "",
+              group: template.folder || "",
+              description: template.description || "",
+            }));
+          },
+          onPick: (item) => {
+            title.value = item.name;
+            folder.value = item.group;
+            if (!desc.value.trim()) desc.value = item.description || "";
+            title.classList.remove("invalid");
+            armOverwrite(`Will overwrite in ${item.group || UNCATEGORISED}: ${item.name}`);
+          },
+          onClose: () => {
+            existingPicker = null;
+          },
+        });
+      });
+
       pickBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         if (picker) {
@@ -146,12 +142,17 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
           picker = null;
           return;
         }
-        picker = openFolderPicker({
+        picker = openShelfPicker({
           anchor: pickBtn,
-          folders,
+          title: "Folder",
+          categories: folders,
           current: folder.value.trim(),
+          allowEmpty: true,
+          emptyLabel: UNCATEGORISED,
+          allowCreate: true,
           onPick: (name) => {
             folder.value = name || "";
+            resetOverwrite();
           },
           onClose: () => {
             picker = null;
@@ -160,7 +161,10 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
       });
 
       async function submit() {
-        const name = title.value.trim();
+        const split = splitShelfName(folder.value, title.value);
+        const name = split.name;
+        title.value = name;
+        folder.value = split.folder;
         title.classList.toggle("invalid", !name);
         if (!name) {
           errorEl.textContent = "Name is required";
@@ -173,15 +177,12 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
             name,
             description: desc.value.trim(),
             slots,
-            folder: folder.value.trim(),
+            folder: split.folder,
             overwrite,
           });
           if (result.conflicts?.length) {
-            errorEl.textContent = `Already exists: ${name}`;
-            confirm.textContent = "Overwrite";
-            confirm.classList.add("danger");
-            confirm.classList.remove("primary");
-            overwrite = true;
+            const hit = result.conflicts[0];
+            armOverwrite(`Already exists in ${hit.folder || split.folder || UNCATEGORISED}: ${hit.name || name}`);
             return;
           }
           if (!result.ok) {
@@ -189,8 +190,8 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
             return;
           }
           onSaved?.({
-            title: name,
-            folder: folder.value.trim(),
+            title: result.name || name,
+            folder: result.folder || split.folder,
             description: desc.value.trim(),
           });
           close();
@@ -210,6 +211,10 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
         if (errorEl.textContent) errorEl.textContent = "";
         resetOverwrite();
       });
+      folder.addEventListener("input", () => {
+        if (errorEl.textContent) errorEl.textContent = "";
+        resetOverwrite();
+      });
       title.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -224,12 +229,12 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
       });
 
       actions.appendChild(confirm);
-      body.append(hint, title, folderRow, desc, errorEl, actions);
+      body.append(hint, nameRow, folderRow, desc, errorEl, actions);
       requestAnimationFrame(() => title.focus());
 
       listTemplateFolders()
         .then((result) => {
-          folders = shelfNames(result.folders);
+          folders = (result.folders || []).filter((entry) => entry?.name);
         })
         .catch(() => {});
     },

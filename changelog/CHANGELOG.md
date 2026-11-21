@@ -6,6 +6,67 @@ Format: newest first.
 
 ---
 
+## [2.3.0] — 2026-11-21
+
+### Pair browse (optional)
+
+- Settings · SQLite: **Pair browse** (off by default) — flip through saved pairs right on the node card
+- **‹ ›** in the Loaded row step to the previous / next pair under the browse folder, **including sub-folders** (e.g. `Scene` → `Scene/Walk` → …; same order as Load pair); hidden when fewer than two pairs are in scope
+- Counter after the name: **Loaded · name · 38/45** (position / pairs in the folder tree)
+- Nothing loaded → **› Browse** opens a folder picker (incl. empty parents that only have pairs in sub-folders), then starts from the first pair in that scope
+- Browse root is remembered on the group: Load a pair inside the scope keeps it; a pair outside raises the root to that pair’s folder
+- Replace confirm follows **Skip pair overwrite confirms** (asked only if the pair has text)
+
+![Pair browse — ‹ › + counter in the Loaded row](../docs/screenshots/2.3.0/0.png)
+
+### Nested collections / folders
+
+- Paths with `/` for pair collections **and** preset / template folders: `Scene/Walk`, `Looks/Portrait` — as deep as you like; folders appear on first save
+- A name with `/` is also a path: `Looks` + `Portrait/Soft` saves as collection `Looks/Portrait`, name `Soft` (same for presets / templates)
+- Type the path by hand (sub-folder hints after `/`, **Tab** completes) or **Choose** → folder browser: crumbs, sub-folders with counts, filter, **+ New folder** (Save only; Browse for flipping has no create)
+
+![Save pair — nested path in collection](../docs/screenshots/2.3.0/1.png)
+
+- **Load pair** opens the group’s root collection (or the loaded pair’s folder) with crumbs + sub-folders; search covers the subtree; `Scene/Walk\rain` or `looks\port\` filters by path
+- Manager · Prompts / Presets / Templates are trees; **Rename** takes a full path (move a branch), **Delete** removes the branch
+
+![Manager · nested folder tree](../docs/screenshots/2.3.0/1.1.png)
+
+![Manager · path search in the tree](../docs/screenshots/2.3.0/1.2.png)
+
+- **Add group** lists root collections only
+- Migration on first start: folder / collection names that already contained `/` become `|` (`A/B` → `A|B`); then names like `Studio/Soft` are split into folder + leaf so existing libraries nest correctly
+- Templates and presets are unique per **folder + name** (same as pairs per collection) — `soft-light` can live in `Studio` and in `Looks` at once
+
+### Save over existing
+
+- Save pair / Save preset / Save template: **Existing** next to the name — pick an already saved name (grouped by collection, filterable) to overwrite it; notes prefilled if empty
+- After a pick the button turns into **Overwrite** (danger); changing the name or collection resets it
+- Same picker in the manager’s **Edit** dialogs (pair / preset / template); manual rename is re-checked on save — if the name is taken you get a warning and an explicit **Overwrite**
+- Uniqueness: pairs by collection + name; presets and templates by folder + name
+
+### Templates: replace or merge
+
+- Load template card has two actions: **Load** — full swap of the node’s pairs (confirm if any pairs exist; External stays in place), **+** — merge by slot name (previous behaviour)
+
+### Library toggles
+
+- Settings · SQLite: **Presets** and **Templates** — turn off to hide those sections on the node and their tabs in the manager (on by default)
+
+### Bulk actions
+
+- Add group row: **Clear all** (✕) empties every pair’s prompts + loaded names, **Remove all** (trash) deletes all groups (External kept); both confirm first
+
+![Add group row — Clear all / Remove all](../docs/screenshots/2.3.0/2.png)
+
+### What's new popup
+
+- First time a Prompt Concatenate Pro node opens on a new package version, a short **What's new** dialog shows the current release notes (Got it + link to the full GitHub changelog)
+
+> New settings keys need a full ComfyUI restart after update (then Ctrl+F5).
+
+---
+
 ## [2.2.0] — 2026-11-08
 
 ### Civitai Toolkit LoRA import (experimental)

@@ -9,7 +9,7 @@ Built-in **SQLite library** (no cloud, no external tag DB):
 | Layer | What it stores | Typical use |
 | ----- | -------------- | ----------- |
 | **Preset** | Slot names + order only | Empty canvas: `Base · Scene · Character · Style` |
-| **Template** | Full prompt pack (non-empty pairs) | Drop a look onto the node; merge by slot name |
+| **Template** | Full prompt pack (non-empty pairs) | Drop a look onto the node; replace or merge by slot name |
 | **Pair** | One pos/neg (+ notes) in a **group** shelf | Reuse “alisa…”, “sunset room…”, etc. |
 | **External** | Wired `external_pos` / `external_neg` slot | Drop outside prompts into the stack |
 | **Group** | Live card on the node | Edit, pin to sidebar, Save/Load pair |
@@ -36,16 +36,20 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 
 ## Features
 
-- **Group cards** — title, positive, negative, drag reorder, collapse, duplicate, enable toggle, **Clear**
+- **Group cards** — title, positive, negative, drag reorder, collapse, duplicate, remove, enable toggle, **Clear**
+- **Bulk actions** — next to **Add group**: **Clear all** pairs / **Remove all** groups (External kept), with confirm
 - **External prompt** (This node Settings) — one wired pair (`external_pos` / `external_neg`) in the stack
 - **Civitai Toolkit LoRA import** (Settings, experimental) — folder browse + search; title → Info with triggers → Append / Replace; notes on demand (node + Edit prompt / template; needs [Toolkit](https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit))
 - **Add group** — type a new name, or pick a library shelf that already has saved pairs (exact name)
 - **Join engine** — merges enabled groups with `, `, skips empty, normalizes commas and spacing
 - **Pin to sidebar** — `Group \| positive` / `Group \| negative` in Inputs / Favorites
 - **Loaded tracking** — after Load, **Loaded ·** name (+ folder); notes / reload / detach; Save prefills from the chip
+- **Pair browse** (Settings, optional) — **‹ ›** flip through the browse folder **and sub-folders** with a **38/45** counter; **› Browse** picks a folder when nothing is loaded
+- **Save over existing** — **Existing** in Save / Edit dialogs picks a saved name (grouped by collection) to overwrite; taken names warn with an explicit **Overwrite**
 - **Presets** — slot names + order; folders; edit as comma-separated text in the manager
-- **Templates** — full packs; load merges by slot name (insert missing, leave unrelated groups alone); empty pairs omitted on save
+- **Templates** — full packs; Load **replaces** all pairs, **+** merges by slot name (insert missing, leave unrelated groups alone); empty pairs omitted on save
 - **Prompt pairs** — save / load / append per group shelf; preview; **Search in prompts**
+- **Nested collections / folders** — `Scene/Walk/Night` paths for pairs, presets, and templates; a name with `/` nests under the current folder; type with hints or pick in a folder browser; manager trees; rename / move whole branches
 - **Smart search** — AND tokens; `shelf\keyword` filters a collection first
 - **Library manager** — Presets / Prompts / Templates (+ **Suggest** when autocomplete is on); duplicate, rename, move, delete; last tab remembered
 - **Prompt autocomplete** (Settings) — suggests segments from **your** library; caret popup (**Tab** accept / Add); Suggest tab + rebuild
@@ -76,8 +80,8 @@ No pip dependencies — Python 3.8+ stdlib + SQLite only.
 2. **Add group** — new name, or pick from **Groups**: library shelves that already contain saved pairs (not every card ever added on a node).
 3. Fill positive / negative; connect **`str_pos`** / **`str_neg`** to two stock **CLIP Text Encode (Prompt)** nodes.
 4. **Preset → Save / Load** — snapshot or restore the empty slot layout.
-5. **Template → Save / Load** — ship or apply a full look (merge by slot name).
-6. On a card: **Save / Load / Clear** pair; use **Loaded ·** reload / detach when linked.
+5. **Template → Save / Load** — ship or apply a full look (**Load** replaces pairs, **+** merges by slot name).
+6. On a card: **Save / Load / Clear** pair; use **Loaded ·** reload / detach when linked (or **‹ ›** with Pair browse on).
 7. **Manage library** — edit presets, prompts, templates; optional Suggest after enabling autocomplete in **Settings**.
 
 ![Add group: pick an existing group](docs/screenshots/2.0.0/7.png)
@@ -96,6 +100,10 @@ From a group card: store or recall pos/neg under a **group** shelf (defaults to 
 
 ![Save pair dialog](docs/screenshots/2.png)
 
+**Existing** next to the name lists already saved pairs by collection — pick one to overwrite it (the button turns into **Overwrite**; editing the name or collection resets it).
+
+![Save pair — Existing + nested collection path](docs/screenshots/2.3.0/1.png)
+
 ![Load pair with prompt preview](docs/screenshots/4.png)
 
 After load: **Loaded ·** chip — Save prefills; **×** detaches; reload pulls the last saved copy from SQLite.
@@ -104,9 +112,22 @@ After load: **Loaded ·** chip — Save prefills; **×** detaches; reload pulls 
 
 ![Pair toolbar: Save / Load / Clear](docs/screenshots/2.0.0/0.png)
 
+With **Settings → Pair browse** on, **‹ ›** step through the browse folder including sub-folders (Load pair order, wraps); the counter shows position / total. Nothing loaded → **› Browse** opens a folder picker (empty parents with pairs below are fine), then starts from the first pair. Replace confirms follow **Skip pair overwrite confirms**.
+
+![Pair browse — ‹ › + counter](docs/screenshots/2.3.0/0.png)
+
+### Clear / remove all
+
+Two buttons next to **Add group**: **✕** empties every pair (prompts + Loaded names), **trash** removes all groups. External stays; both confirm first.
+
+![Add group row — Clear all / Remove all](docs/screenshots/2.3.0/2.png)
+
 ### Templates
 
-**Save template** stores non-empty pairs (+ Loaded pair meta). **Load template** keeps your node order, fills matching titles, inserts missing slots before the next already-present pack slot, and leaves groups that aren’t in the pack alone.
+**Save template** stores non-empty pairs (+ Loaded pair meta). **Load template** offers two actions per card:
+
+- **Load** — full swap: node pairs are replaced by the pack (confirm if pairs exist; External keeps its place)
+- **+** — merge: keeps your node order, fills matching titles, inserts missing slots before the next already-present pack slot, and leaves groups that aren’t in the pack alone
 
 ![Library manager · Templates](docs/screenshots/2.0.0/4.png)
 
@@ -135,7 +156,7 @@ Sidebar labels (`Skin | positive`) are stamped **when the group is created**. Re
 
 ### Templates (prompt packs)
 
-**Save / Load template** in the header. Content packs merged **by slot name**. Use when a look should land on the node without wiping unrelated groups.
+**Save / Load template** in the header. Content packs — **Load** swaps the node’s pairs for the pack, **+** merges **by slot name** without wiping unrelated groups.
 
 ### Prompt pairs
 
@@ -153,6 +174,12 @@ Optional wired slot (Settings → **External prompt**). Fixed id, title `Externa
 | **Group** (collection) | Prompt pairs | `categories` |
 
 Shelves are created when you **Save pair**. Those with at least one pair show under **Add group → Groups** (so you can reuse exact names like `Scene255`).
+
+Collections and preset/template folders nest via `/`: `Scene/Walk`, `Looks/Portrait`. Type a path in Save (hints after `/`, **Tab** completes) or **Choose** a folder (crumbs, sub-folders, **+ New folder**). Writing `Portrait/Soft` in the name field under `Looks` saves as `Looks/Portrait` · `Soft`. A group named `Scene` opens `Scene` in Load pair with its sub-folders; Add group lists root collections only. Manager **Rename** accepts a full path, so it also moves a branch. Since 2.3.0 `/` is reserved — older folder names with `/` were migrated to `|`, then slash-in-names were split into nested folders. Templates and presets are unique by **folder + name** (pairs by collection + name).
+
+![Manager · nested folder tree](docs/screenshots/2.3.0/1.1.png)
+
+![Manager · path search in the tree](docs/screenshots/2.3.0/1.2.png)
 
 ---
 
@@ -176,6 +203,8 @@ Pin from the node **Inputs** panel or **Favorites**. Edits sync both ways with t
 - **Templates** — packs; edit pairs (Save / Load / Clear, reorder, collapse); **duplicate**
 - **Suggest** — autocomplete dictionary (when the Settings toggle is on)
 - **Show empty** / **Search in prompts** — toggles; last opened tab + prefs in SQLite
+- **Edit** dialogs — **Existing** name picker; renaming onto a taken name warns and asks for **Overwrite**
+- Presets / Templates tabs disappear when turned off in **Settings**
 
 ![Library manager · Presets](docs/screenshots/5.png)
 
@@ -194,7 +223,9 @@ Pin from the node **Inputs** panel or **Favorites**. Edits sync both ways with t
 
 **Saved · SQLite** (all Prompt Concatenate Pro nodes):
 
-- **Skip pair overwrite confirms** — Load pair replace + Clear without asking (off by default; Delete / presets untouched)
+- **Presets** / **Templates** — show those sections on the node and tabs in the manager (on by default)
+- **Pair browse** — **‹ ›** + counter (folder + sub-folders), **› Browse** folder picker when empty (off by default)
+- **Skip pair overwrite confirms** — Load pair replace / Pair browse + Clear without asking (off by default; Delete / presets untouched)
 - **Civitai Toolkit LoRA import** (experimental) — **Civitai** on pairs (node + Edit prompt / template); folder browse + search; title → Info (triggers + Append / Replace + notes); soft dep [ComfyUI-Civitai-Toolkit](https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit)
 - **Prompt autocomplete** — caret suggestions + Suggest tab from your library
 

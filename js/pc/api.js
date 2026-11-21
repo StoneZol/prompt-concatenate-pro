@@ -88,9 +88,9 @@ export async function savePreset({
   return readJson(res);
 }
 
-export async function listPresets({ category = "" } = {}) {
+export async function listPresets({ category = "", recursive = false } = {}) {
   const url = category
-    ? `${PRESETS_URL}?category=${encodeURIComponent(category)}`
+    ? `${PRESETS_URL}?category=${encodeURIComponent(category)}${recursive ? "&recursive=1" : ""}`
     : PRESETS_URL;
   const res = await fetch(url);
   return readJson(res);
@@ -208,6 +208,13 @@ export async function updateUiPrefs(patch) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch || {}),
   });
+  return readJson(res);
+}
+
+const WHATS_NEW_URL = "/prompt_craft/whats_new";
+
+export async function fetchWhatsNew() {
+  const res = await fetch(WHATS_NEW_URL);
   return readJson(res);
 }
 

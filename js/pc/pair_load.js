@@ -19,6 +19,28 @@ import {
     matchesPromptPreset,
     parseSearchQuery,
 } from "./search.js";
+import {
+    isInShelfTree,
+    makeShelfCrumbs,
+    makeShelfFolderRow,
+    normalizeShelfPath,
+    shelfChildren,
+    shelfLeaf,
+    shelfSegments,
+} from "./shelf_paths.js";
+
+function shelfCounts(presets) {
+    const counts = new Map();
+    for (const preset of presets) {
+        const name = normalizeShelfPath(preset.category);
+        if (!name) continue;
+        const key = name.toLowerCase();
+        const entry = counts.get(key) || { name, count: 0 };
+        entry.count += 1;
+        counts.set(key, entry);
+    }
+    return [...counts.values()];
+}
 
 const DESC_PREVIEW_CHARS = 60;
 
@@ -128,6 +150,9 @@ function makeFolder({
     expanded,
     onLoad,
     onAppend,
+    children = [],
+    count,
+    tooltip,
 }) {
     const folder = document.createElement("div");
     folder.className = "pc-preset-folder";
@@ -144,12 +169,13 @@ function makeFolder({
     const label = document.createElement("span");
     label.className = "pc-preset-folder-name";
     label.textContent = title;
+    if (tooltip) label.title = tooltip;
 
-    const count = document.createElement("span");
-    count.className = "pc-preset-folder-count";
-    count.textContent = String(presets.length);
+    const countEl = document.createElement("span");
+    countEl.className = "pc-preset-folder-count";
+    countEl.textContent = String(count ?? presets.length);
 
-    head.append(chevron, label, count);
+    head.append(chevron, label, countEl);
     head.title = expanded
         ? "Collapse folder"
         : "Expand folder";
@@ -160,6 +186,9 @@ function makeFolder({
 
     const body = document.createElement("div");
     body.className = "pc-preset-folder-body";
+    for (const child of children) {
+        body.appendChild(child);
+    }
     for (const preset of presets) {
         body.appendChild(
             makePromptCard(preset, { onLoad, onAppend }),
@@ -183,23 +212,43 @@ function makeFolder({
     return folder;
 }
 
-function groupByCategory(presets) {
-    const folders = new Map();
+function buildCategoryTree(presets) {
+    const root = { path: "", items: [], children: new Map() };
     for (const preset of presets) {
-        const name =
-            (preset.category || "").trim() ||
-            "Uncategorised";
-        const list = folders.get(name) || [];
-        list.push(preset);
-        folders.set(name, list);
+        const path =
+            normalizeShelfPath(preset.category) || "Uncategorised";
+        let node = root;
+        for (const segment of shelfSegments(path)) {
+            const key = segment.toLowerCase();
+            if (!node.children.has(key)) {
+                node.children.set(key, {
+                    path: node.path ? `${node.path}/${segment}` : segment,
+                    items: [],
+                    children: new Map(),
+                });
+            }
+            node = node.children.get(key);
+        }
+        node.items.push(preset);
     }
-    return folders;
+    return root;
+}
+
+function treeTotal(node) {
+    return (
+        node.items.length +
+        [...node.children.values()].reduce((sum, child) => sum + treeTotal(child), 0)
+    );
 }
 
 function categoryRank(name, priorityNames) {
     const key = String(name || "").toLowerCase();
-    const idx = priorityNames.findIndex((p) => p === key);
-    return idx === -1 ? priorityNames.length : idx;
+    const exact = priorityNames.findIndex((p) => p === key);
+    if (exact !== -1) return exact;
+    const nested = priorityNames.findIndex(
+        (p) => key && (p === key || p.startsWith(key + "/") || key.startsWith(p + "/")),
+    );
+    return nested === -1 ? priorityNames.length : nested;
 }
 
 function paintList(
@@ -213,6 +262,7 @@ function paintList(
         onLoad,
         onAppend,
         includeBody,
+        quietEmpty = false,
     },
 ) {
     hidePromptTip();
@@ -222,6 +272,7 @@ function paintList(
     );
     list.replaceChildren();
     if (!matched.length) {
+        if (quietEmpty) return;
         const empty = document.createElement("div");
         empty.className = "pc-popup-message";
         empty.textContent = q
@@ -247,34 +298,47 @@ function paintList(
 
     // Priority: 1) category of what's loaded in the slot, 2) slot's own shelf.
     const priorityNames = [];
-    const loaded = (loadedCategory || "").trim().toLowerCase();
-    const shelf = (currentCategory || "").trim().toLowerCase();
+    const loaded = normalizeShelfPath(loadedCategory).toLowerCase();
+    const shelf = normalizeShelfPath(currentCategory).toLowerCase();
     if (loaded) priorityNames.push(loaded);
     if (shelf && shelf !== loaded) priorityNames.push(shelf);
 
-    const folders = groupByCategory(matched);
-    const names = [...folders.keys()].sort((a, b) => {
-        const rankDiff =
-            categoryRank(a, priorityNames) - categoryRank(b, priorityNames);
-        if (rankDiff !== 0) return rankDiff;
-        return a.localeCompare(b, undefined, {
-            sensitivity: "base",
+    const root = buildCategoryTree(matched);
+    const sorted = (node) =>
+        [...node.children.values()].sort((a, b) => {
+            const rankDiff =
+                categoryRank(a.path, priorityNames) -
+                categoryRank(b.path, priorityNames);
+            if (rankDiff !== 0) return rankDiff;
+            return shelfLeaf(a.path).localeCompare(shelfLeaf(b.path), undefined, {
+                sensitivity: "base",
+            });
         });
-    });
 
-    for (const name of names) {
-        const items = folders.get(name) || [];
-        const key = name.toLowerCase();
-        const prioritized = priorityNames.includes(key);
-        list.appendChild(
-            makeFolder({
-                title: name,
-                presets: items,
-                expanded: prioritized || Boolean(q),
-                onLoad,
-                onAppend,
-            }),
+    const shouldExpand = (path) => {
+        if (q) return true;
+        const key = path.toLowerCase();
+        return priorityNames.some(
+            (p) => p === key || p.startsWith(key + "/") || key.startsWith(p + "/"),
         );
+    };
+
+    const renderNode = (node) => {
+        const isUncat = node.path.toLowerCase() === "uncategorised";
+        return makeFolder({
+            title: isUncat ? node.path : shelfLeaf(node.path),
+            tooltip: isUncat ? undefined : node.path,
+            presets: node.items,
+            count: treeTotal(node),
+            children: sorted(node).map(renderNode),
+            expanded: shouldExpand(node.path),
+            onLoad,
+            onAppend,
+        });
+    };
+
+    for (const node of sorted(root)) {
+        list.appendChild(renderNode(node));
     }
 }
 
@@ -286,8 +350,8 @@ export async function openLoadPairPopup({
     onAppend,
     nested = false,
 }) {
-    const shelf = (category || "").trim();
-    const loadedShelf = (loadedCategory || "").trim();
+    const shelf = normalizeShelfPath(category);
+    const loadedShelf = normalizeShelfPath(loadedCategory);
     if (!shelf) {
         openConfirmPopup({
             nested,
@@ -305,7 +369,7 @@ export async function openLoadPairPopup({
         nested,
         anchor,
         title: shelf ? `Load pair · ${shelf}` : "Load pair",
-        width: 340,
+        width: 680,
         onClose: hidePromptTip,
         render(body, { close, reposition }) {
             const status = document.createElement("div");
@@ -317,8 +381,12 @@ export async function openLoadPairPopup({
             let all = null;
             // If the slot already holds a pair from another collection, open Other collections.
             const loadedElsewhere =
-                Boolean(loadedShelf) &&
-                loadedShelf.toLowerCase() !== shelf.toLowerCase();
+                Boolean(loadedShelf) && !isInShelfTree(loadedShelf, shelf);
+            let root = shelf;
+            let path = loadedShelf && !loadedElsewhere ? loadedShelf : shelf;
+
+            const nav = document.createElement("div");
+            nav.className = "pc-load-shelf-nav";
             let others = Boolean(
                 getUiPref("otherCollections"),
             ) || loadedElsewhere;
@@ -392,14 +460,63 @@ export async function openLoadPairPopup({
             }
 
             function paint() {
-                paintList(list, currentItems(), {
-                    query: search.value,
-                    others,
-                    currentCategory: shelf,
+                nav.replaceChildren();
+                const browsing = !others && !search.value.trim();
+                if (!browsing) {
+                    paintList(list, currentItems(), {
+                        query: search.value,
+                        others: true,
+                        currentCategory: path,
+                        loadedCategory: loadedShelf,
+                        onLoad: handleLoad,
+                        onAppend: handleAppend,
+                        includeBody,
+                    });
+                    reposition();
+                    return;
+                }
+
+                const children = shelfChildren(shelfCounts(own), path);
+                const atRoot = path.toLowerCase() === root.toLowerCase();
+                if (!atRoot || children.length) {
+                    nav.appendChild(
+                        makeShelfCrumbs({
+                            path,
+                            root,
+                            onNavigate: (target) => {
+                                path = target;
+                                paint();
+                            },
+                        }),
+                    );
+                }
+                for (const child of children) {
+                    nav.appendChild(
+                        makeShelfFolderRow({
+                            leaf: child.leaf,
+                            total: child.total,
+                            title: child.path,
+                            onOpen: () => {
+                                path = child.path;
+                                paint();
+                            },
+                        }),
+                    );
+                }
+                const key = path.toLowerCase();
+                const here = own.filter(
+                    (preset) =>
+                        normalizeShelfPath(preset.category).toLowerCase() === key,
+                );
+                paintList(list, here, {
+                    query: "",
+                    others: false,
+                    currentCategory: path,
                     loadedCategory: loadedShelf,
                     onLoad: handleLoad,
                     onAppend: handleAppend,
                     includeBody,
+                    quietEmpty: children.length > 0,
                 });
                 reposition();
             }
@@ -488,7 +605,7 @@ export async function openLoadPairPopup({
                 paint();
             });
 
-            listPresets({ category: shelf })
+            listPresets({ category: shelf, recursive: true })
                 .then(async (result) => {
                     if (!result.ok) {
                         status.textContent =
@@ -498,11 +615,19 @@ export async function openLoadPairPopup({
                         return;
                     }
                     own = result.presets || [];
+                    if (
+                        own.length &&
+                        !own.some((preset) => isInShelfTree(preset.category, root))
+                    ) {
+                        root = normalizeShelfPath(own[0].category);
+                        path = root;
+                    }
                     status.remove();
                     body.append(
                         search,
                         extra,
                         bodyRow,
+                        nav,
                         list,
                     );
                     if (others) {

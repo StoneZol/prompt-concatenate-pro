@@ -1,7 +1,8 @@
-import { CHEVRON_ICON_SVG, LOAD_ICON_SVG } from "./icons.js";
+import { CHEVRON_ICON_SVG, LOAD_ICON_SVG, PLUS_ICON_SVG } from "./icons.js";
 import { openConfirmPopup, openPopup } from "./popup.js";
 import { listTemplates } from "./api.js";
 import { matchesTemplatePreset } from "./search.js";
+import { normalizeShelfPath, shelfLeaf, shelfSegments } from "./shelf_paths.js";
 
 const DESC_PREVIEW_CHARS = 60;
 const UNCATEGORISED = "Uncategorised";
@@ -30,14 +31,24 @@ function makeTemplateCard(template, { onLoad }) {
   const loadBtn = document.createElement("button");
   loadBtn.type = "button";
   loadBtn.className = "pc-preset-load";
-  loadBtn.title = "Load onto current groups by slot name";
+  loadBtn.title = "Replace all pairs with this template";
   loadBtn.innerHTML = LOAD_ICON_SVG;
   loadBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    onLoad?.(template);
+    onLoad?.(template, "replace");
   });
 
-  head.append(name, loadBtn);
+  const mergeBtn = document.createElement("button");
+  mergeBtn.type = "button";
+  mergeBtn.className = "pc-preset-append";
+  mergeBtn.title = "Merge into current pairs by slot name";
+  mergeBtn.innerHTML = PLUS_ICON_SVG;
+  mergeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    onLoad?.(template, "merge");
+  });
+
+  head.append(name, loadBtn, mergeBtn);
 
   const slots = document.createElement("div");
   slots.className = "pc-preset-slots";
@@ -88,24 +99,46 @@ function makeTemplateCard(template, { onLoad }) {
   return card;
 }
 
-function groupTemplates(templates) {
-  const folders = new Map();
-  const uncategorised = [];
-  for (const template of templates) {
-    const folder = String(template.folder || "").trim();
-    if (!folder) {
-      uncategorised.push(template);
-      continue;
+function buildFolderTree(items, folderKey) {
+  const root = { path: "", items: [], children: new Map() };
+  for (const item of items) {
+    const path = normalizeShelfPath(item[folderKey]) || UNCATEGORISED;
+    let node = root;
+    for (const segment of shelfSegments(path)) {
+      const key = segment.toLowerCase();
+      if (!node.children.has(key)) {
+        node.children.set(key, {
+          path: node.path ? `${node.path}/${segment}` : segment,
+          items: [],
+          children: new Map(),
+        });
+      }
+      node = node.children.get(key);
     }
-    const list = folders.get(folder) || [];
-    list.push(template);
-    folders.set(folder, list);
+    node.items.push(item);
   }
-  const named = [...folders.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  return { uncategorised, named, folders };
+  return root;
 }
 
-function makeFolder({ title, templates, expanded, onLoad }) {
+function treeTotal(node) {
+  return (
+    node.items.length +
+    [...node.children.values()].reduce((sum, child) => sum + treeTotal(child), 0)
+  );
+}
+
+function sortedChildren(node) {
+  return [...node.children.values()].sort((a, b) => {
+    const aUncat = a.path.toLowerCase() === UNCATEGORISED.toLowerCase();
+    const bUncat = b.path.toLowerCase() === UNCATEGORISED.toLowerCase();
+    if (aUncat !== bUncat) return aUncat ? -1 : 1;
+    return shelfLeaf(a.path).localeCompare(shelfLeaf(b.path), undefined, {
+      sensitivity: "base",
+    });
+  });
+}
+
+function makeFolder({ title, templates, expanded, onLoad, children = [], count, tooltip }) {
   const folder = document.createElement("div");
   folder.className = "pc-preset-folder";
   if (!expanded) folder.classList.add("collapsed");
@@ -121,17 +154,19 @@ function makeFolder({ title, templates, expanded, onLoad }) {
   const label = document.createElement("span");
   label.className = "pc-preset-folder-name";
   label.textContent = title;
+  if (tooltip) label.title = tooltip;
 
-  const count = document.createElement("span");
-  count.className = "pc-preset-folder-count";
-  count.textContent = String(templates.length);
+  const countEl = document.createElement("span");
+  countEl.className = "pc-preset-folder-count";
+  countEl.textContent = String(count ?? templates.length);
 
-  head.append(chevron, label, count);
+  head.append(chevron, label, countEl);
   head.title = expanded ? "Collapse folder" : "Expand folder";
   head.setAttribute("aria-expanded", expanded ? "true" : "false");
 
   const body = document.createElement("div");
   body.className = "pc-preset-folder-body";
+  for (const child of children) body.appendChild(child);
   for (const template of templates) {
     body.appendChild(makeTemplateCard(template, { onLoad }));
   }
@@ -161,28 +196,22 @@ function paintTemplateList(list, templates, query, onLoad) {
     return;
   }
 
-  const grouped = groupTemplates(matched);
   const searching = Boolean(q);
-
-  if (grouped.uncategorised.length) {
-    list.appendChild(
-      makeFolder({
-        title: UNCATEGORISED,
-        templates: grouped.uncategorised,
-        expanded: true,
-        onLoad,
-      }),
-    );
-  }
-  for (const name of grouped.named) {
-    list.appendChild(
-      makeFolder({
-        title: name,
-        templates: grouped.folders.get(name) || [],
-        expanded: searching,
-        onLoad,
-      }),
-    );
+  const root = buildFolderTree(matched, "folder");
+  const renderNode = (node) => {
+    const isUncat = node.path.toLowerCase() === UNCATEGORISED.toLowerCase();
+    return makeFolder({
+      title: isUncat ? node.path : shelfLeaf(node.path),
+      tooltip: isUncat ? undefined : node.path,
+      templates: node.items,
+      count: treeTotal(node),
+      children: sortedChildren(node).map(renderNode),
+      expanded: searching || isUncat,
+      onLoad,
+    });
+  };
+  for (const node of sortedChildren(root)) {
+    list.appendChild(renderNode(node));
   }
 }
 
@@ -190,7 +219,7 @@ export function openLoadTemplatePopup({ anchor, onPick }) {
   return openPopup({
     anchor,
     title: "Load template",
-    width: 340,
+    width: 680,
     render(body, { close, reposition }) {
       const status = document.createElement("div");
       status.className = "pc-popup-message";
@@ -220,9 +249,9 @@ export function openLoadTemplatePopup({ anchor, onPick }) {
           const list = document.createElement("div");
           list.className = "pc-preset-list";
 
-          const onLoad = (picked) => {
+          const onLoad = (picked, mode) => {
             close();
-            onPick?.(picked);
+            onPick?.(picked, mode);
           };
 
           search.addEventListener("input", () => {
@@ -240,6 +269,18 @@ export function openLoadTemplatePopup({ anchor, onPick }) {
           reposition();
         });
     },
+  });
+}
+
+export function confirmReplaceTemplate({ anchor, onConfirm }) {
+  openConfirmPopup({
+    anchor,
+    title: "Load template",
+    message: "Replace all pairs on this node with this template?",
+    confirmLabel: "Replace",
+    cancelLabel: "Cancel",
+    danger: true,
+    onConfirm,
   });
 }
 

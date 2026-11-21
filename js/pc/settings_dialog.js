@@ -46,6 +46,34 @@ const SKIP_PAIR_REPLACE_HELP = {
     "Does not affect Delete group, preset/template replace, or Suggest rename.",
 };
 
+const PRESETS_ENABLED_HELP = {
+  title: "Presets",
+  text:
+    "On by default. Saved in SQLite (all nodes).\n\n" +
+    "Presets store slot names + order (empty structure). Off hides the Preset section on every node " +
+    "and the Presets tab in Library manager. Saved presets stay in the database.",
+};
+
+const TEMPLATES_ENABLED_HELP = {
+  title: "Templates",
+  text:
+    "On by default. Saved in SQLite (all nodes).\n\n" +
+    "Templates store full prompt packs. Off hides the Template section on every node " +
+    "and the Templates tab in Library manager. Saved templates stay in the database.",
+};
+
+const PAIR_BROWSE_HELP = {
+  title: "Pair browse",
+  text:
+    "Off by default. Saved in SQLite (all nodes).\n\n" +
+    "Adds ‹ › before the Loaded name on each pair: flip to the previous / next saved pair " +
+    "under the browse folder, including sub-folders (e.g. Scene → Scene/Walk → …). " +
+    "Nothing loaded → Browse opens a folder picker (empty parents with pairs below are allowed), " +
+    "then starts from the first pair in that scope.\n\n" +
+    "Arrows and the counter hide when fewer than two pairs are in scope.\n\n" +
+    "Replacing prompts asks for confirmation unless Skip pair overwrite confirms is on.",
+};
+
 const CIVITAI_TOOLKIT_HELP = {
   title: "Civitai Toolkit LoRA import",
   text:
@@ -216,6 +244,30 @@ export async function openSettingsPopup({ anchor, nodeSettings, onUiChange } = {
           label: "Skip pair overwrite confirms",
           prefKey: "skipPairReplaceConfirm",
           help: SKIP_PAIR_REPLACE_HELP,
+        }).el,
+      );
+      list.appendChild(
+        makeSettingRow({
+          label: "Presets",
+          prefKey: "presetsEnabled",
+          help: PRESETS_ENABLED_HELP,
+        }).el,
+      );
+      list.appendChild(
+        makeSettingRow({
+          label: "Templates",
+          prefKey: "templatesEnabled",
+          help: TEMPLATES_ENABLED_HELP,
+        }).el,
+      );
+      list.appendChild(
+        makeSettingRow({
+          label: "Pair browse",
+          prefKey: "pairBrowse",
+          help: PAIR_BROWSE_HELP,
+          onToggle() {
+            onUiChange?.();
+          },
         }).el,
       );
       list.appendChild(

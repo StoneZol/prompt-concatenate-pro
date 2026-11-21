@@ -8,6 +8,7 @@ import {
   RESET_ICON_SVG,
   SAVE_ICON_SVG,
   TEXT_ICON_SVG,
+  TRASH_ICON_SVG,
 } from "./pc/icons.js";
 import { makeGroupCard } from "./pc/group_card.js";
 import { openConfirmPopup } from "./pc/popup.js";
@@ -15,14 +16,23 @@ import { openAddGroupPopup } from "./pc/add_group.js";
 import { openSavePresetsPopup } from "./pc/save_dialog.js";
 import { confirmReplaceGroups, openLoadPresetPopup } from "./pc/load_dialog.js";
 import { openSaveTemplatePopup } from "./pc/template_save.js";
-import { confirmReloadTemplate, openLoadTemplatePopup } from "./pc/template_load.js";
-import { mergeTemplateGroups } from "./pc/template_apply.js";
+import {
+  confirmReloadTemplate,
+  confirmReplaceTemplate,
+  openLoadTemplatePopup,
+} from "./pc/template_load.js";
+import { mergeTemplateGroups, replaceTemplateGroups } from "./pc/template_apply.js";
 import { openSavePairPopup } from "./pc/pair_save.js";
 import { confirmReplacePair, openLoadPairPopup } from "./pc/pair_load.js";
 import { openCivitaiLoadPopup } from "./pc/civitai_load.js";
 import { openManagerPopup } from "./pc/manager_dialog.js";
 import { openSettingsPopup } from "./pc/settings_dialog.js";
-import { listLayouts, listPresets, listTemplates } from "./pc/api.js";
+import { listCategories, listLayouts, listPresets, listTemplates } from "./pc/api.js";
+import {
+  isInShelfTree,
+  normalizeShelfPath,
+  openShelfPicker,
+} from "./pc/shelf_paths.js";
 import {
   createShadowString,
   hideOnCanvasKeepInPanel,
@@ -32,7 +42,8 @@ import {
 import { craftOutput, isJoinDebugEnabled, joinFields } from "./pc/join.js";
 import { baseShelfName, nextDuplicateTitle } from "./pc/titles.js";
 import { attachPromptMaterializeHooks } from "./pc/metadata.js";
-import { ensureUiPrefs } from "./pc/prefs.js";
+import { UI_PREFS_EVENT, ensureUiPrefs, getUiPref } from "./pc/prefs.js";
+import { maybeShowWhatsNew } from "./pc/whats_new.js";
 import { bindInfoTip, hidePromptTip } from "./pc/preview_tip.js";
 import {
   EXTERNAL_GROUP_ID,
@@ -52,6 +63,8 @@ const MIN_NODE_WIDTH = 400;
 const SOCKET_ROWS_HEIGHT = 56;
 const HEADER_HEIGHT = 156;
 const LOADED_CHIP_ROW_HEIGHT = 26;
+/** One Preset / Template section incl. the header gap above it. */
+const LIB_SECTION_HEIGHT = 44;
 const CONTAINER_PADDING_V = 10;
 const GAP_BETWEEN_SECTIONS = 8;
 const GROUP_HEIGHT = 266;
@@ -222,6 +235,22 @@ app.registerExtension({
       addBtn.className = "pc-add-btn";
       addBtn.innerHTML = `${PLUS_ICON_SVG}<span>Add group</span>`;
 
+      const clearAllBtn = document.createElement("button");
+      clearAllBtn.type = "button";
+      clearAllBtn.className = "pc-header-icon-btn";
+      clearAllBtn.title = "Clear prompts in all groups";
+      clearAllBtn.innerHTML = CLOSE_ICON_SVG;
+
+      const removeAllBtn = document.createElement("button");
+      removeAllBtn.type = "button";
+      removeAllBtn.className = "pc-header-icon-btn danger";
+      removeAllBtn.title = "Remove all groups";
+      removeAllBtn.innerHTML = TRASH_ICON_SVG;
+
+      const addRow = document.createElement("div");
+      addRow.className = "pc-header-row";
+      addRow.append(addBtn, clearAllBtn, removeAllBtn);
+
       function makeLibrarySection(kind, titleText) {
         const section = document.createElement("div");
         section.className = `pc-lib-section pc-lib-section-${kind}`;
@@ -357,7 +386,7 @@ app.registerExtension({
       toolsRow.className = "pc-header-row";
       toolsRow.append(managerBtn, settingsBtn);
 
-      header.append(addBtn, presetBlock.section, templateBlock.section, toolsRow);
+      header.append(addRow, presetBlock.section, templateBlock.section, toolsRow);
 
       const groupsWrap = document.createElement("div");
       groupsWrap.className = "pc-groups";
@@ -565,11 +594,20 @@ app.registerExtension({
         }
       }
 
+      function applyLibraryVisibility() {
+        presetBlock.section.hidden = !getUiPref("presetsEnabled");
+        templateBlock.section.hidden = !getUiPref("templatesEnabled");
+      }
+
       function fillDom() {
         syncWidth();
+        const presetsOn = !presetBlock.section.hidden;
+        const templatesOn = !templateBlock.section.hidden;
         const headerExtra =
-          (loadedStack?.title ? LOADED_CHIP_ROW_HEIGHT : 0) +
-          (loadedTemplate?.title ? LOADED_CHIP_ROW_HEIGHT : 0);
+          (presetsOn && loadedStack?.title ? LOADED_CHIP_ROW_HEIGHT : 0) +
+          (templatesOn && loadedTemplate?.title ? LOADED_CHIP_ROW_HEIGHT : 0) -
+          (presetsOn ? 0 : LIB_SECTION_HEIGHT) -
+          (templatesOn ? 0 : LIB_SECTION_HEIGHT);
         const chromeHeight =
           HEADER_HEIGHT + headerExtra + GAP_BETWEEN_SECTIONS + CONTAINER_PADDING_V + BOTTOM_SLACK;
         const bodyH = Math.max((node.size?.[1] || 0) - SOCKET_ROWS_HEIGHT, MIN_UI_HEIGHT);
@@ -655,25 +693,15 @@ app.registerExtension({
                   persist();
                 },
               }),
+            onBrowsePair: (anchor, dir) => browsePair(group, card, anchor, dir),
+            onBrowseCount: () => browseCount(group),
             onLoadPair: (anchor) => {
               openLoadPairPopup({
                 anchor,
                 category: baseShelfName(group.title),
                 loadedCategory: group.loadedCategory || "",
                 onPick: (preset) => {
-                  const apply = () => {
-                    group.positive = preset.positive || "";
-                    group.negative = preset.negative || "";
-                    group.loadedTitle = (preset.title || "").trim();
-                    group.loadedCategory = (preset.category || "").trim();
-                    group.loadedDescription = (preset.description || "").trim();
-                    card.setField("positive", group.positive);
-                    card.setField("negative", group.negative);
-                    card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
-                    writeShadow(group, "positive", group.positive);
-                    writeShadow(group, "negative", group.negative);
-                    persist();
-                  };
+                  const apply = () => applyPairPreset(group, card, preset);
                   if ((group.positive || "").trim() || (group.negative || "").trim()) {
                     confirmReplacePair({ anchor, onConfirm: apply });
                     return;
@@ -750,6 +778,7 @@ app.registerExtension({
               group.loadedTitle = (preset.title || "").trim();
               group.loadedCategory = (preset.category || "").trim();
               group.loadedDescription = (preset.description || "").trim();
+              reconcileBrowseShelf(group, group.loadedCategory);
               card.setField("positive", group.positive);
               card.setField("negative", group.negative);
               card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
@@ -810,6 +839,7 @@ app.registerExtension({
           loadedTitle: (source.loadedTitle || "").trim(),
           loadedCategory: (source.loadedCategory || "").trim(),
           loadedDescription: (source.loadedDescription || "").trim(),
+          browseShelf: normalizeShelfPath(source.browseShelf),
           enabled: source.enabled !== false,
           collapsed: false,
           ...stampLabels(name),
@@ -836,6 +866,163 @@ app.registerExtension({
         hideDataWidget(dataWidget);
       }
 
+      function applyPairPreset(group, card, preset) {
+        group.positive = preset.positive || "";
+        group.negative = preset.negative || "";
+        group.loadedTitle = (preset.title || "").trim();
+        group.loadedCategory = (preset.category || "").trim();
+        group.loadedDescription = (preset.description || "").trim();
+        reconcileBrowseShelf(group, group.loadedCategory);
+        card.setField("positive", group.positive);
+        card.setField("negative", group.negative);
+        card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
+        writeShadow(group, "positive", group.positive);
+        writeShadow(group, "negative", group.negative);
+        persist();
+      }
+
+      /** Keep pin if prompt is under it; otherwise raise browse root to the prompt folder. */
+      function reconcileBrowseShelf(group, category) {
+        const cat = normalizeShelfPath(category);
+        if (!cat) return;
+        const root = normalizeShelfPath(group.browseShelf);
+        if (root && isInShelfTree(cat, root)) return;
+        group.browseShelf = cat;
+      }
+
+      function browseShelf(group) {
+        const pinned = normalizeShelfPath(group.browseShelf);
+        if (pinned) return pinned;
+        const loadedTitle = (group.loadedTitle || "").trim();
+        if (loadedTitle) {
+          return normalizeShelfPath(group.loadedCategory) || baseShelfName(group.title);
+        }
+        return baseShelfName(group.title);
+      }
+
+      function browseListOpts(shelf) {
+        return {
+          category: shelf,
+          recursive: true,
+        };
+      }
+
+      function browseIndex(list, group) {
+        const key = (group.loadedTitle || "").trim().toLowerCase();
+        if (!key) return -1;
+        const cat = (group.loadedCategory || "").trim().toLowerCase();
+        return list.findIndex((preset) => {
+          if ((preset.title || "").trim().toLowerCase() !== key) return false;
+          if (!cat) return true;
+          return (preset.category || "").trim().toLowerCase() === cat;
+        });
+      }
+
+      async function browseCount(group) {
+        const shelf = browseShelf(group);
+        if (!shelf) return null;
+        const result = await listPresets(browseListOpts(shelf));
+        if (!result.ok) return null;
+        const list = result.presets || [];
+        return { shelf, index: browseIndex(list, group), total: list.length };
+      }
+
+      function browseNotice(anchor, message) {
+        openConfirmPopup({
+          anchor,
+          title: "Browse pairs",
+          message,
+          confirmLabel: "OK",
+          showCancel: false,
+          danger: false,
+        });
+      }
+
+      async function browseFlip(group, card, anchor, dir, shelf) {
+        const result = await listPresets(browseListOpts(shelf));
+        if (!result.ok) {
+          browseNotice(anchor, result.error || "Failed to load prompts");
+          return;
+        }
+        const list = result.presets || [];
+        if (!list.length) {
+          browseNotice(anchor, `No saved pairs in ${shelf} or its sub-folders.`);
+          return;
+        }
+        const current = browseIndex(list, group);
+        let nextIndex;
+        if (current < 0) nextIndex = dir < 0 ? list.length - 1 : 0;
+        else nextIndex = (current + dir + list.length) % list.length;
+        if (nextIndex === current) return;
+
+        collectFromShadows();
+        const preset = list[nextIndex];
+        const apply = () => applyPairPreset(group, card, preset);
+        if ((group.positive || "").trim() || (group.negative || "").trim()) {
+          confirmReplacePair({ anchor, onConfirm: apply });
+          return;
+        }
+        apply();
+      }
+
+      async function browsePair(group, card, anchor, dir) {
+        const loaded = (group.loadedTitle || "").trim();
+        // Empty card → pick a browse folder first (incl. empty parents with pairs below).
+        if (!loaded) {
+          const cats = await listCategories();
+          if (!cats.ok) {
+            browseNotice(anchor, cats.error || "Failed to load collections");
+            return;
+          }
+          openShelfPicker({
+            anchor,
+            title: "Browse folder",
+            categories: cats.categories || [],
+            current: normalizeShelfPath(group.browseShelf) || baseShelfName(group.title),
+            onlyWithPairs: true,
+            pairScope: "tree",
+            onPick: (path) => {
+              group.browseShelf = normalizeShelfPath(path);
+              persist();
+              browseFlip(group, card, anchor, dir, group.browseShelf);
+            },
+          });
+          return;
+        }
+
+        const shelf = browseShelf(group);
+        if (!shelf) {
+          browseNotice(anchor, "Name the group first.");
+          return;
+        }
+        await browseFlip(group, card, anchor, dir, shelf);
+      }
+
+      function clearAllGroups() {
+        collectFromShadows();
+        for (const group of groups) {
+          if (isExternalGroup(group)) continue;
+          group.positive = "";
+          group.negative = "";
+          group.loadedTitle = "";
+          group.loadedCategory = "";
+          group.loadedDescription = "";
+          writeShadow(group, "positive", "");
+          writeShadow(group, "negative", "");
+        }
+        clearLoadedTemplate();
+        persist();
+        renderCards();
+        fillDom();
+      }
+
+      function removeAllGroups() {
+        collectFromShadows();
+        clearLoadedStack();
+        clearLoadedTemplate();
+        rebuildFromGroups(groups.filter((group) => isExternalGroup(group)));
+      }
+
       function rebuildFromGroups(nextGroups) {
         const ids = groups.map((group) => group.id);
         groups = nextGroups;
@@ -847,12 +1034,21 @@ app.registerExtension({
         hideDataWidget(dataWidget);
       }
 
-      function applyTemplate(template) {
+      function applyTemplate(template, mode = "merge") {
         collectFromShadows();
-        const next = mergeTemplateGroups(groups, template.slots || [], {
-          newGroupId,
-          stampLabels,
-        });
+        let next;
+        if (mode === "replace") {
+          next = replaceTemplateGroups(template.slots || [], { newGroupId, stampLabels });
+          const externalIndex = findExternalIndex(groups);
+          if (externalIndex >= 0) {
+            next.splice(Math.min(externalIndex, next.length), 0, groups[externalIndex]);
+          }
+        } else {
+          next = mergeTemplateGroups(groups, template.slots || [], {
+            newGroupId,
+            stampLabels,
+          });
+        }
         setLoadedTemplate({
           title: template.name,
           folder: template.folder,
@@ -973,6 +1169,39 @@ app.registerExtension({
         });
       });
 
+      clearAllBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        const hasText = groups.some(
+          (g) => !isExternalGroup(g) && ((g.positive || "").trim() || (g.negative || "").trim()),
+        );
+        if (!hasText) return;
+        openConfirmPopup({
+          anchor: clearAllBtn,
+          title: "Clear all groups",
+          message: "Clear positive / negative in every group? Groups stay, saved library is untouched.",
+          confirmLabel: "Clear all",
+          cancelLabel: "Cancel",
+          danger: true,
+          onConfirm: clearAllGroups,
+        });
+      });
+
+      removeAllBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        if (!groups.some((g) => !isExternalGroup(g))) return;
+        openConfirmPopup({
+          anchor: removeAllBtn,
+          title: "Remove all groups",
+          message: "Remove every group from this node? Saved library is untouched.",
+          confirmLabel: "Remove all",
+          cancelLabel: "Cancel",
+          danger: true,
+          onConfirm: removeAllGroups,
+        });
+      });
+
       loadedStackClearBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         hidePromptTip();
@@ -1061,7 +1290,16 @@ app.registerExtension({
         e.stopPropagation();
         openLoadTemplatePopup({
           anchor: loadTemplateBtn,
-          onPick: (template) => applyTemplate(template),
+          onPick: (template, mode) => {
+            if (mode === "replace" && groups.some((group) => !isExternalGroup(group))) {
+              confirmReplaceTemplate({
+                anchor: loadTemplateBtn,
+                onConfirm: () => applyTemplate(template, "replace"),
+              });
+              return;
+            }
+            applyTemplate(template, mode);
+          },
         });
       });
 
@@ -1158,6 +1396,24 @@ app.registerExtension({
         }
       }
 
+      function onUiPrefsChanged() {
+        applyLibraryVisibility();
+        renderCards();
+        fillDom();
+      }
+      window.addEventListener(UI_PREFS_EVENT, onUiPrefsChanged);
+      const onRemoved = node.onRemoved;
+      node.onRemoved = function () {
+        window.removeEventListener(UI_PREFS_EVENT, onUiPrefsChanged);
+        return onRemoved?.apply(this, arguments);
+      };
+      ensureUiPrefs().then(() => {
+        applyLibraryVisibility();
+        fillDom();
+        maybeShowWhatsNew();
+      });
+
+      applyLibraryVisibility();
       paintLoadedStack();
       paintLoadedTemplate();
       renderCards();

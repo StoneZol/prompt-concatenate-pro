@@ -17,7 +17,17 @@ const DEFAULTS = {
   skipPairReplaceConfirm: false,
   /** Show Civitai button on pairs — import triggers from Toolkit local DB. */
   civitaiToolkitImport: false,
+  /** Preset section on nodes + Presets tab in the manager. */
+  presetsEnabled: true,
+  /** Template section on nodes + Templates tab in the manager. */
+  templatesEnabled: true,
+  /** Prev / next arrows on pairs — flip through saved pairs under the browse folder (incl. sub-folders). */
+  pairBrowse: false,
+  /** Last changelog version the user dismissed (What's new). */
+  lastSeenChangelog: "",
 };
+
+export const UI_PREFS_EVENT = "pc-ui-prefs-changed";
 
 let cache = { ...DEFAULTS };
 let loaded = false;
@@ -31,6 +41,7 @@ function normalizeManagerTab(value) {
 
 function coercePref(key, value) {
   if (key === "managerTab") return normalizeManagerTab(value);
+  if (key === "lastSeenChangelog") return String(value || "").trim();
   return Boolean(value);
 }
 
@@ -108,6 +119,7 @@ export function getUiPref(key) {
 export function setUiPref(key, value) {
   if (!Object.prototype.hasOwnProperty.call(DEFAULTS, key)) return;
   cache[key] = coercePref(key, value);
+  window.dispatchEvent(new CustomEvent(UI_PREFS_EVENT, { detail: { key } }));
   updateUiPrefs({ [key]: cache[key] }).then((result) => {
     if (result?.ok && result.prefs) applyPrefs(result.prefs);
   });

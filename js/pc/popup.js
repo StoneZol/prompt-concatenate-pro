@@ -73,7 +73,8 @@ const CSS = `
 /* List / editor dialogs: stable shell height so tabs don't jump. */
 .pc-popup-backdrop > .pc-popup-root:has(.pc-mgr-list),
 .pc-popup-backdrop > .pc-popup-root:has(.pc-preset-list),
-.pc-popup-backdrop > .pc-popup-root:has(.pc-popup-scroll) {
+.pc-popup-backdrop > .pc-popup-root:has(.pc-popup-scroll),
+.pc-popup-backdrop > .pc-popup-root:has(.pc-shelf-pick-list) {
   height: min(88vh, 720px);
   max-height: min(88vh, 720px);
 }
@@ -137,7 +138,9 @@ const CSS = `
 /* Editors / manager: outer body does not scroll — inner list/scroll does. */
 .pc-popup-backdrop .pc-popup-body:has(> .pc-popup-fixed),
 .pc-popup-backdrop .pc-popup-body:has(.pc-mgr-list),
-.pc-popup-backdrop .pc-popup-body:has(.pc-preset-list) {
+.pc-popup-backdrop .pc-popup-body:has(.pc-preset-list),
+.pc-popup-backdrop .pc-popup-body:has(.pc-whats-new),
+.pc-popup-backdrop .pc-popup-body:has(.pc-shelf-pick-list) {
   overflow: hidden;
 }
 
@@ -183,7 +186,8 @@ const CSS = `
 }
 
 .pc-popup-backdrop .pc-mgr-list,
-.pc-popup-backdrop .pc-preset-list {
+.pc-popup-backdrop .pc-preset-list,
+.pc-popup-backdrop .pc-shelf-pick-list {
   flex: 1 1 auto;
   min-height: 0;
   overflow-x: hidden;
@@ -302,6 +306,84 @@ const CSS = `
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.pc-whats-new {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(62vh, 520px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 2px;
+}
+
+.pc-whats-new-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pc-whats-new-heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--input-text, #ddd);
+}
+
+.pc-whats-new-list {
+  margin: 0;
+  padding: 0 0 0 1.15em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--descrip-text, #aaa);
+  line-height: 1.4;
+}
+
+.pc-whats-new-list li::marker {
+  color: var(--descrip-text, #777);
+}
+
+.pc-whats-new-figure {
+  margin: 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pc-whats-new-img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--comfy-input-bg, #2a2a2e);
+}
+
+.pc-whats-new-cap {
+  font-size: 11px;
+  color: var(--descrip-text, #888);
+  line-height: 1.35;
+}
+
+.pc-whats-new-note {
+  font-size: 11px;
+  color: var(--descrip-text, #888);
+  line-height: 1.4;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--comfy-input-bg, #2a2a2e);
+}
+
+.pc-whats-new-actions {
+  flex: 0 0 auto;
+  margin-top: 4px;
 }
 
 .pc-popup-btn:hover:not(:disabled) {
@@ -1548,6 +1630,61 @@ const CSS = `
   overflow-y: auto;
 }
 
+.pc-shelf-pick-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+}
+
+.pc-existing-list {
+  gap: 6px;
+  max-height: min(60vh, 420px);
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.pc-existing-list .pc-preset-folder {
+  min-width: 400px;
+}
+
+.pc-existing-list .pc-preset-folder-body {
+  gap: 4px;
+}
+
+.pc-existing-list .pc-pick-item {
+  width: 100%;
+  min-width: 400px;
+  box-sizing: border-box;
+  height: auto;
+  min-height: 28px;
+  padding: 4px 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: left;
+  line-height: 1.35;
+}
+
+.pc-existing-list .pc-preset-folder-body > .pc-pick-item {
+  margin-left: 2px;
+}
+
+.pc-existing-list .pc-preset-folder-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.pc-existing-list .pc-preset-folder-head {
+  height: auto;
+  align-items: flex-start;
+  padding: 4px;
+}
+
 .pc-add-group-error:empty {
   display: none;
   min-height: 0;
@@ -1593,6 +1730,128 @@ const CSS = `
 
 .pc-pick-item:hover {
   filter: brightness(1.12);
+}
+
+.pc-pick-group {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--descrip-text, #999);
+  padding: 6px 2px 2px;
+}
+
+.pc-pick-group:first-child {
+  padding-top: 0;
+}
+
+.pc-shelf-folder-row {
+  gap: 6px;
+}
+
+.pc-shelf-folder-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--descrip-text, #999);
+}
+
+.pc-shelf-folder-icon svg {
+  width: 11px;
+  height: 11px;
+  transform: rotate(-90deg);
+}
+
+.pc-shelf-folder-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.pc-shelf-folder-count {
+  flex: 0 0 auto;
+  color: var(--descrip-text, #888);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pc-shelf-new-btn {
+  gap: 4px;
+  margin-right: auto;
+}
+
+.pc-shelf-new-btn svg {
+  width: 11px;
+  height: 11px;
+}
+
+.pc-save-folder-row[hidden] {
+  display: none !important;
+}
+
+.pc-shelf-input-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+}
+
+.pc-shelf-input-wrap .pc-popup-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.pc-shelf-hints {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 2px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  padding: 3px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--comfy-menu-bg, #1f1f23);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.pc-shelf-hints[hidden] {
+  display: none !important;
+}
+
+.pc-shelf-hint {
+  text-align: left;
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--input-text, #ddd);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pc-shelf-hint.active,
+.pc-shelf-hint:hover {
+  background: #2f2b3d;
+  color: #e8e4f5;
+}
+
+.pc-load-shelf-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pc-load-shelf-nav:empty {
+  display: none;
 }
 
 .pc-pick-item.selected {
@@ -1674,6 +1933,12 @@ const CSS = `
 
 .pc-preset-folder.collapsed .pc-preset-folder-body {
   display: none;
+}
+
+.pc-preset-folder-body > .pc-preset-folder {
+  margin-left: 10px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .pc-mgr-tabs {
@@ -2080,7 +2345,10 @@ export function openPopup(opts) {
     root.className = "pc-popup-root";
     if (opts.centered || blocking)
         root.classList.add("pc-popup-centered");
-    if (opts.width) root.style.width = `${opts.width}px`;
+    if (opts.width) {
+        root.style.width = `${opts.width}px`;
+        root.style.maxWidth = `min(${opts.width}px, calc(100vw - 32px))`;
+    }
     root.addEventListener("pointerdown", (e) =>
         e.stopPropagation(),
     );
