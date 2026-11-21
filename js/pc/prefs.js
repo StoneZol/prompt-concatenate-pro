@@ -23,6 +23,7 @@ const DEFAULTS = {
   templatesEnabled: true,
   /** Prev / next arrows on pairs — flip through saved pairs of a collection. */
   pairBrowse: false,
+  pairBrowseNested: false,
 };
 
 export const UI_PREFS_EVENT = "pc-ui-prefs-changed";

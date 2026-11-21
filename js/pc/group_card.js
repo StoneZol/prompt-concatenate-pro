@@ -396,16 +396,21 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     function refreshCount(name) {
       const token = ++countToken;
       countEl.hidden = true;
+      browseNav.hidden = true;
       if (!browseOn || !onBrowseCount) return;
       Promise.resolve(onBrowseCount())
         .then((info) => {
           if (token !== countToken || (group.loadedTitle || "").trim() !== name) return;
-          if (!info || !info.total) return;
+          // Nothing to flip through: empty / deleted shelf, or a single pair (1/1).
+          if (!info || info.total < 2) return;
           countEl.textContent = info.index >= 0 ? `${info.index + 1}/${info.total}` : `${info.total}`;
+          const nested = Boolean(getUiPref("pairBrowseNested"));
+          const scope = nested ? `${info.shelf} (+ sub-folders)` : info.shelf;
           countEl.title = info.index >= 0
-            ? `Pair ${info.index + 1} of ${info.total} in ${info.shelf}`
-            : `${info.total} pairs in ${info.shelf}`;
+            ? `Pair ${info.index + 1} of ${info.total} in ${scope}`
+            : `${info.total} pairs in ${scope}`;
           countEl.hidden = false;
+          browseNav.hidden = false;
         })
         .catch(() => {});
     }
@@ -414,7 +419,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
       const name = (group.loadedTitle || "").trim();
       const notes = (group.loadedDescription || "").trim();
       const loaded = Boolean(name);
-      browseNav.hidden = !loaded;
+      browseNav.hidden = true;
       startBtn.hidden = loaded;
       loadedInfo.hidden = !loaded;
       resetBtn.hidden = !loaded;

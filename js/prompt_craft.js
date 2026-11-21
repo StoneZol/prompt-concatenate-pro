@@ -877,21 +877,34 @@ app.registerExtension({
         return (loadedTitle && (group.loadedCategory || "").trim()) || baseShelfName(group.title);
       }
 
+      function browseListOpts(shelf) {
+        return {
+          category: shelf,
+          recursive: Boolean(getUiPref("pairBrowseNested")),
+        };
+      }
+
+      function browseIndex(list, group) {
+        const key = (group.loadedTitle || "").trim().toLowerCase();
+        if (!key) return -1;
+        const cat = (group.loadedCategory || "").trim().toLowerCase();
+        return list.findIndex((preset) => {
+          if ((preset.title || "").trim().toLowerCase() !== key) return false;
+          if (!cat) return true;
+          return (preset.category || "").trim().toLowerCase() === cat;
+        });
+      }
+
       async function browseCount(group) {
         const shelf = browseShelf(group);
         if (!shelf) return null;
-        const result = await listPresets({ category: shelf });
+        const result = await listPresets(browseListOpts(shelf));
         if (!result.ok) return null;
         const list = result.presets || [];
-        const key = (group.loadedTitle || "").trim().toLowerCase();
-        const index = key
-          ? list.findIndex((preset) => (preset.title || "").trim().toLowerCase() === key)
-          : -1;
-        return { shelf, index, total: list.length };
+        return { shelf, index: browseIndex(list, group), total: list.length };
       }
 
       async function browsePair(group, card, anchor, dir) {
-        const loadedTitle = (group.loadedTitle || "").trim();
         const shelf = browseShelf(group);
         const notice = (message) =>
           openConfirmPopup({
@@ -906,20 +919,22 @@ app.registerExtension({
           notice("Name the group first.");
           return;
         }
-        const result = await listPresets({ category: shelf });
+        const nested = Boolean(getUiPref("pairBrowseNested"));
+        const result = await listPresets(browseListOpts(shelf));
         if (!result.ok) {
           notice(result.error || "Failed to load prompts");
           return;
         }
         const list = result.presets || [];
         if (!list.length) {
-          notice(`No saved pairs in ${shelf}.`);
+          notice(
+            nested
+              ? `No saved pairs in ${shelf} or its sub-folders.`
+              : `No saved pairs in ${shelf}.`,
+          );
           return;
         }
-        const key = loadedTitle.toLowerCase();
-        const current = key
-          ? list.findIndex((preset) => (preset.title || "").trim().toLowerCase() === key)
-          : -1;
+        const current = browseIndex(list, group);
         let nextIndex;
         if (current < 0) nextIndex = dir < 0 ? list.length - 1 : 0;
         else nextIndex = (current + dir + list.length) % list.length;

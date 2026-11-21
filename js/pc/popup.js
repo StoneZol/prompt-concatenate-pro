@@ -390,6 +390,18 @@ const CSS = `
   color: var(--input-text, #ddd);
 }
 
+.pc-settings-row-dual {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 0;
+}
+
+.pc-settings-row-dual > .pc-settings-row {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .pc-settings-row-disabled {
   opacity: 0.55;
 }
