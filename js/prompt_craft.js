@@ -36,7 +36,7 @@ import {
 import { craftOutput, isJoinDebugEnabled, joinFields } from "./pc/join.js";
 import { baseShelfName, nextDuplicateTitle } from "./pc/titles.js";
 import { attachPromptMaterializeHooks } from "./pc/metadata.js";
-import { ensureUiPrefs } from "./pc/prefs.js";
+import { UI_PREFS_EVENT, ensureUiPrefs, getUiPref } from "./pc/prefs.js";
 import { bindInfoTip, hidePromptTip } from "./pc/preview_tip.js";
 import {
   EXTERNAL_GROUP_ID,
@@ -56,6 +56,8 @@ const MIN_NODE_WIDTH = 400;
 const SOCKET_ROWS_HEIGHT = 56;
 const HEADER_HEIGHT = 156;
 const LOADED_CHIP_ROW_HEIGHT = 26;
+/** One Preset / Template section incl. the header gap above it. */
+const LIB_SECTION_HEIGHT = 44;
 const CONTAINER_PADDING_V = 10;
 const GAP_BETWEEN_SECTIONS = 8;
 const GROUP_HEIGHT = 266;
@@ -569,11 +571,20 @@ app.registerExtension({
         }
       }
 
+      function applyLibraryVisibility() {
+        presetBlock.section.hidden = !getUiPref("presetsEnabled");
+        templateBlock.section.hidden = !getUiPref("templatesEnabled");
+      }
+
       function fillDom() {
         syncWidth();
+        const presetsOn = !presetBlock.section.hidden;
+        const templatesOn = !templateBlock.section.hidden;
         const headerExtra =
-          (loadedStack?.title ? LOADED_CHIP_ROW_HEIGHT : 0) +
-          (loadedTemplate?.title ? LOADED_CHIP_ROW_HEIGHT : 0);
+          (presetsOn && loadedStack?.title ? LOADED_CHIP_ROW_HEIGHT : 0) +
+          (templatesOn && loadedTemplate?.title ? LOADED_CHIP_ROW_HEIGHT : 0) -
+          (presetsOn ? 0 : LIB_SECTION_HEIGHT) -
+          (templatesOn ? 0 : LIB_SECTION_HEIGHT);
         const chromeHeight =
           HEADER_HEIGHT + headerExtra + GAP_BETWEEN_SECTIONS + CONTAINER_PADDING_V + BOTTOM_SLACK;
         const bodyH = Math.max((node.size?.[1] || 0) - SOCKET_ROWS_HEIGHT, MIN_UI_HEIGHT);
@@ -1180,6 +1191,23 @@ app.registerExtension({
         }
       }
 
+      function onUiPrefsChanged() {
+        applyLibraryVisibility();
+        renderCards();
+        fillDom();
+      }
+      window.addEventListener(UI_PREFS_EVENT, onUiPrefsChanged);
+      const onRemoved = node.onRemoved;
+      node.onRemoved = function () {
+        window.removeEventListener(UI_PREFS_EVENT, onUiPrefsChanged);
+        return onRemoved?.apply(this, arguments);
+      };
+      ensureUiPrefs().then(() => {
+        applyLibraryVisibility();
+        fillDom();
+      });
+
+      applyLibraryVisibility();
       paintLoadedStack();
       paintLoadedTemplate();
       renderCards();

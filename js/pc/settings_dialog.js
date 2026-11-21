@@ -46,6 +46,22 @@ const SKIP_PAIR_REPLACE_HELP = {
     "Does not affect Delete group, preset/template replace, or Suggest rename.",
 };
 
+const PRESETS_ENABLED_HELP = {
+  title: "Presets",
+  text:
+    "On by default. Saved in SQLite (all nodes).\n\n" +
+    "Presets store slot names + order (empty structure). Off hides the Preset section on every node " +
+    "and the Presets tab in Library manager. Saved presets stay in the database.",
+};
+
+const TEMPLATES_ENABLED_HELP = {
+  title: "Templates",
+  text:
+    "On by default. Saved in SQLite (all nodes).\n\n" +
+    "Templates store full prompt packs. Off hides the Template section on every node " +
+    "and the Templates tab in Library manager. Saved templates stay in the database.",
+};
+
 const CIVITAI_TOOLKIT_HELP = {
   title: "Civitai Toolkit LoRA import",
   text:
@@ -216,6 +232,20 @@ export async function openSettingsPopup({ anchor, nodeSettings, onUiChange } = {
           label: "Skip pair overwrite confirms",
           prefKey: "skipPairReplaceConfirm",
           help: SKIP_PAIR_REPLACE_HELP,
+        }).el,
+      );
+      list.appendChild(
+        makeSettingRow({
+          label: "Presets",
+          prefKey: "presetsEnabled",
+          help: PRESETS_ENABLED_HELP,
+        }).el,
+      );
+      list.appendChild(
+        makeSettingRow({
+          label: "Templates",
+          prefKey: "templatesEnabled",
+          help: TEMPLATES_ENABLED_HELP,
         }).el,
       );
       list.appendChild(

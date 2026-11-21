@@ -35,6 +35,10 @@ const CSS = `
   background: rgba(0, 0, 0, 0.18);
 }
 
+.pc-lib-section[hidden] {
+  display: none !important;
+}
+
 .pc-lib-section-preset {
   border-color: #4a5568;
   background: rgba(55, 65, 81, 0.28);

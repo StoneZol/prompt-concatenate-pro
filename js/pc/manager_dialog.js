@@ -1805,7 +1805,11 @@ export async function openManagerPopup({ anchor }) {
       templatesTab.className = "pc-mgr-tab";
       templatesTab.textContent = "Templates";
 
-      tabs.append(presetsTab, promptsTab, templatesTab);
+      const presetsOn = Boolean(getUiPref("presetsEnabled"));
+      const templatesOn = Boolean(getUiPref("templatesEnabled"));
+      if (presetsOn) tabs.appendChild(presetsTab);
+      tabs.appendChild(promptsTab);
+      if (templatesOn) tabs.appendChild(templatesTab);
 
       let suggestTab = null;
       if (acEnabled) {
@@ -2050,9 +2054,12 @@ export async function openManagerPopup({ anchor }) {
         paint();
       });
 
-      let initialTab = String(getUiPref("managerTab") || "presets");
-      if (initialTab === "suggest" && !acEnabled) initialTab = "presets";
-      if (!titles[initialTab]) initialTab = "presets";
+      const fallbackTab = presetsOn ? "presets" : "prompts";
+      let initialTab = String(getUiPref("managerTab") || fallbackTab);
+      if (initialTab === "suggest" && !acEnabled) initialTab = fallbackTab;
+      if (initialTab === "presets" && !presetsOn) initialTab = fallbackTab;
+      if (initialTab === "templates" && !templatesOn) initialTab = fallbackTab;
+      if (!titles[initialTab]) initialTab = fallbackTab;
 
       setActiveTab(initialTab, { persist: false });
       if (initialTab === "presets") loadPresetsTab();

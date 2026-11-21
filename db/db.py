@@ -1146,6 +1146,8 @@ UI_PREF_KEYS = (
     "managerTab",
     "skipPairReplaceConfirm",
     "civitaiToolkitImport",
+    "presetsEnabled",
+    "templatesEnabled",
 )
 UI_PREF_DEFAULTS = {
     "otherCollections": False,
@@ -1155,6 +1157,8 @@ UI_PREF_DEFAULTS = {
     "managerTab": "presets",
     "skipPairReplaceConfirm": False,
     "civitaiToolkitImport": False,
+    "presetsEnabled": True,
+    "templatesEnabled": True,
 }
 _MANAGER_TAB_VALUES = frozenset({"presets", "prompts", "templates", "suggest"})
 
