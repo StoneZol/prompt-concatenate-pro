@@ -109,6 +109,7 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _migrate_category_paths(conn)
     _migrate_folder_paths(conn)
     _migrate_name_paths(conn)
+    _migrate_scoped_item_names(conn)
 
 
 SHELF_SEP = "/"
@@ -116,6 +117,7 @@ LEGACY_SHELF_SEP = "|"
 _CATEGORY_PATHS_FLAG = "migration_category_paths_v1"
 _FOLDER_PATHS_FLAG = "migration_folder_paths_v1"
 _NAME_PATHS_FLAG = "migration_name_paths_v1"
+_SCOPED_NAMES_FLAG = "migration_scoped_item_names_v1"
 
 
 def _escape_slash_names(conn: sqlite3.Connection, table: str) -> None:
@@ -292,6 +294,66 @@ def _migrate_name_paths(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_scoped_item_names(conn: sqlite3.Connection) -> None:
+    """Templates / presets: uniqueness is folder + name (like pairs), not global name."""
+    done = conn.execute(
+        "SELECT 1 FROM settings WHERE key = ?", (_SCOPED_NAMES_FLAG,)
+    ).fetchone()
+    if done:
+        return
+
+    def rebuild(table: str, folders_table: str) -> None:
+        conn.executescript(
+            f"""
+            CREATE TABLE {table}__scoped (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL COLLATE NOCASE,
+                description TEXT NOT NULL DEFAULT '',
+                slots TEXT NOT NULL,
+                folder_id INTEGER REFERENCES {folders_table}(id) ON DELETE SET NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            INSERT INTO {table}__scoped (id, name, description, slots, folder_id, created_at, updated_at)
+            SELECT id, name, description, slots, folder_id, created_at, updated_at FROM {table};
+            DROP TABLE {table};
+            ALTER TABLE {table}__scoped RENAME TO {table};
+            CREATE INDEX IF NOT EXISTS idx_{table}_folder_id ON {table}(folder_id);
+            CREATE INDEX IF NOT EXISTS idx_{table}_name ON {table}(name);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_{table}_name_uncat
+                ON {table}(name COLLATE NOCASE) WHERE folder_id IS NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_{table}_folder_name
+                ON {table}(folder_id, name COLLATE NOCASE) WHERE folder_id IS NOT NULL;
+            """
+        )
+
+    rebuild("templates", "template_folders")
+    rebuild("layouts", "layout_folders")
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        (_SCOPED_NAMES_FLAG, "1"),
+    )
+
+
+def _find_named_in_folder(
+    conn: sqlite3.Connection,
+    table: str,
+    name: str,
+    folder_id: Optional[int],
+    except_id: Optional[int] = None,
+) -> Optional[sqlite3.Row]:
+    if folder_id is None:
+        sql = f"SELECT id FROM {table} WHERE folder_id IS NULL AND name = ? COLLATE NOCASE"
+        params: List = [name]
+    else:
+        sql = f"SELECT id FROM {table} WHERE folder_id = ? AND name = ? COLLATE NOCASE"
+        params = [int(folder_id), name]
+    if except_id is not None:
+        sql += " AND id != ?"
+        params.append(int(except_id))
+    return conn.execute(sql, params).fetchone()
+
+
 def _normalize_shelf_path(name: str) -> str:
     parts = [part.strip() for part in (name or "").split(SHELF_SEP)]
     return SHELF_SEP.join(part for part in parts if part)
@@ -435,13 +497,13 @@ def save_layout(
                 ).fetchone()
                 folder_name = folder_row["name"] if folder_row else folder_path
 
-            existing = conn.execute(
-                "SELECT id FROM layouts WHERE name = ? COLLATE NOCASE",
-                (title,),
-            ).fetchone()
+            existing = _find_named_in_folder(conn, "layouts", title, folder_id)
             if existing and not overwrite:
                 conn.rollback()
-                return {"ok": False, "conflicts": [{"name": title}]}
+                return {
+                    "ok": False,
+                    "conflicts": [{"name": title, "folder": folder_name or UNCATEGORISED_NAME}],
+                }
 
             payload = json.dumps(slot_names, ensure_ascii=False)
             note = (description or "").strip()
@@ -731,19 +793,22 @@ def update_layout(
                 conn.rollback()
                 return {"ok": False, "error": "Add at least one slot"}
 
-            if next_name.casefold() != (row["name"] or "").casefold():
-                existing = conn.execute(
-                    "SELECT id FROM layouts WHERE name = ? COLLATE NOCASE AND id != ?",
-                    (next_name, int(layout_id)),
-                ).fetchone()
-                if existing and not overwrite:
-                    conn.rollback()
-                    return {"ok": False, "conflicts": [{"name": next_name}]}
-                if existing and overwrite:
-                    conn.execute("DELETE FROM layouts WHERE id = ?", (int(existing["id"]),))
-
             if name is not None or folder is not None:
                 next_folder_id = _get_or_create_folder(conn, next_folder)
+
+            existing = _find_named_in_folder(
+                conn, "layouts", next_name, next_folder_id, except_id=int(layout_id)
+            )
+            if existing and not overwrite:
+                conn.rollback()
+                return {
+                    "ok": False,
+                    "conflicts": [
+                        {"name": next_name, "folder": next_folder or UNCATEGORISED_NAME}
+                    ],
+                }
+            if existing and overwrite:
+                conn.execute("DELETE FROM layouts WHERE id = ?", (int(existing["id"]),))
 
             conn.execute(
                 """
@@ -832,6 +897,7 @@ def _rename_folder_tree(table: str, name: str, new_name: str) -> Dict:
 
 
 def _delete_folder_tree(table: str, item_table: str, name: str) -> Dict:
+    """Delete folder branch; items move to Uncategorised (folder_id NULL)."""
     title = _normalize_folder_name(name)
     if _is_uncategorised(title):
         return {"ok": False, "error": "Cannot delete Uncategorised"}
@@ -847,10 +913,28 @@ def _delete_folder_tree(table: str, item_table: str, name: str) -> Dict:
                 return {"ok": False, "error": "Not found"}
             count = 0
             for folder_id in ids:
-                count += conn.execute(
-                    f"SELECT COUNT(*) AS c FROM {item_table} WHERE folder_id = ?",
+                items = conn.execute(
+                    f"SELECT id, name FROM {item_table} WHERE folder_id = ?",
                     (folder_id,),
-                ).fetchone()["c"]
+                ).fetchall()
+                for item in items:
+                    leaf = item["name"] or ""
+                    # Avoid UNIQUE clash with an already-uncategorised item of the same name.
+                    if _find_named_in_folder(
+                        conn, item_table, leaf, None, except_id=int(item["id"])
+                    ):
+                        candidate = leaf
+                        suffix = 2
+                        while _find_named_in_folder(
+                            conn, item_table, candidate, None, except_id=int(item["id"])
+                        ):
+                            candidate = f"{leaf} ({suffix})"
+                            suffix += 1
+                        conn.execute(
+                            f"UPDATE {item_table} SET name = ? WHERE id = ?",
+                            (candidate, int(item["id"])),
+                        )
+                    count += 1
                 conn.execute(f"DELETE FROM {table} WHERE id = ?", (folder_id,))
             conn.commit()
             return {"ok": True, "moved": int(count)}
@@ -978,13 +1062,13 @@ def save_template(
                 ).fetchone()
                 folder_name = folder_row["name"] if folder_row else folder_path
 
-            existing = conn.execute(
-                "SELECT id FROM templates WHERE name = ? COLLATE NOCASE",
-                (title,),
-            ).fetchone()
+            existing = _find_named_in_folder(conn, "templates", title, folder_id)
             if existing and not overwrite:
                 conn.rollback()
-                return {"ok": False, "conflicts": [{"name": title}]}
+                return {
+                    "ok": False,
+                    "conflicts": [{"name": title, "folder": folder_name or UNCATEGORISED_NAME}],
+                }
 
             payload = json.dumps(slot_rows, ensure_ascii=False)
             note = (description or "").strip()
@@ -1120,19 +1204,22 @@ def update_template(
                 conn.rollback()
                 return {"ok": False, "error": "Add at least one slot"}
 
-            if next_name.casefold() != (row["name"] or "").casefold():
-                existing = conn.execute(
-                    "SELECT id FROM templates WHERE name = ? COLLATE NOCASE AND id != ?",
-                    (next_name, int(template_id)),
-                ).fetchone()
-                if existing and not overwrite:
-                    conn.rollback()
-                    return {"ok": False, "conflicts": [{"name": next_name}]}
-                if existing and overwrite:
-                    conn.execute("DELETE FROM templates WHERE id = ?", (int(existing["id"]),))
-
             if name is not None or folder is not None:
                 next_folder_id = _get_or_create_template_folder(conn, next_folder)
+
+            existing = _find_named_in_folder(
+                conn, "templates", next_name, next_folder_id, except_id=int(template_id)
+            )
+            if existing and not overwrite:
+                conn.rollback()
+                return {
+                    "ok": False,
+                    "conflicts": [
+                        {"name": next_name, "folder": next_folder or UNCATEGORISED_NAME}
+                    ],
+                }
+            if existing and overwrite:
+                conn.execute("DELETE FROM templates WHERE id = ?", (int(existing["id"]),))
 
             conn.execute(
                 """

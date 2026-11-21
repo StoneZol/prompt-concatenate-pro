@@ -504,7 +504,12 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
             overwrite,
           });
           if (result.conflicts?.length) {
-            armEditOverwrite(confirm, errorEl, `Already exists: ${nextName}`);
+            const hit = result.conflicts[0];
+            armEditOverwrite(
+              confirm,
+              errorEl,
+              `Already exists in ${hit.folder || split.folder || UNCATEGORISED}: ${hit.name || nextName}`,
+            );
             overwrite = true;
             return;
           }
@@ -548,7 +553,11 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
         },
         onArm: (item) => {
           overwrite = true;
-          armEditOverwrite(confirm, errorEl, `Will overwrite: ${item.name}`);
+          armEditOverwrite(
+            confirm,
+            errorEl,
+            `Will overwrite in ${item.group || UNCATEGORISED}: ${item.name}`,
+          );
         },
         onReset: () => {
           if (!overwrite) return;
@@ -1313,7 +1322,12 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             overwrite,
           });
           if (result.conflicts?.length) {
-            armEditOverwrite(confirm, errorEl, `Already exists: ${nextName}`);
+            const hit = result.conflicts[0];
+            armEditOverwrite(
+              confirm,
+              errorEl,
+              `Already exists in ${hit.folder || split.folder || UNCATEGORISED}: ${hit.name || nextName}`,
+            );
             overwrite = true;
             return;
           }
@@ -1357,7 +1371,11 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
         },
         onArm: (item) => {
           overwrite = true;
-          armEditOverwrite(confirm, errorEl, `Will overwrite: ${item.name}`);
+          armEditOverwrite(
+            confirm,
+            errorEl,
+            `Will overwrite in ${item.group || UNCATEGORISED}: ${item.name}`,
+          );
         },
         onReset: () => {
           if (!overwrite) return;
@@ -1494,7 +1512,10 @@ function paintTemplatesTab(listEl, { templates, folders, showEmpty, query, openM
             }),
           onDuplicate: (btn) => {
             const base = template.name || "Template";
-            const existing = templates.map((item) => item.name || "");
+            const folderKey = (template.folder || "").trim().toLowerCase();
+            const existing = templates
+              .filter((item) => (item.folder || "").trim().toLowerCase() === folderKey)
+              .map((item) => item.name || "");
             const nextName = nextDuplicateName(existing, base);
             mgrConfirm({
               anchor: btn,
@@ -1662,8 +1683,11 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
             });
           },
           onDuplicate: async (btn) => {
+            const folderKey = (layout.folder || "").trim().toLowerCase();
             const name = nextDuplicateName(
-              layouts.map((item) => item.name),
+              layouts
+                .filter((item) => (item.folder || "").trim().toLowerCase() === folderKey)
+                .map((item) => item.name),
               layout.name || "Untitled",
             );
             const result = await saveLayout({

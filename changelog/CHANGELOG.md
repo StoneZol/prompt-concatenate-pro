@@ -27,6 +27,7 @@ Format: newest first.
 - Manager · Prompts / Presets / Templates are trees; **Rename** takes a full path (move a branch), **Delete** removes the branch
 - **Add group** lists root collections only; Pair browse stays inside the current folder
 - Migration on first start: folder / collection names that already contained `/` become `|` (`A/B` → `A|B`); then names like `test/daki1` or `Универсальный/18+` are split into folder + leaf so existing libraries nest correctly
+- Templates and presets are unique per **folder + name** (same as pairs per collection) — `daki1` can live in `test` and in `Looks` at once
 
 ### Save over existing
 

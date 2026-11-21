@@ -175,7 +175,7 @@ Optional wired slot (Settings → **External prompt**). Fixed id, title `Externa
 
 Shelves are created when you **Save pair**. Those with at least one pair show under **Add group → Groups** (so you can reuse exact names like `Scene255`).
 
-Collections and preset/template folders nest via `/`: `Scene/Walk`, `Looks/Daki`. Type a path in Save (hints after `/`, **Tab** completes) or **Choose** a folder (crumbs, sub-folders, **+ New folder**). Writing `Универсальный/18+` in the name field under `Основа` saves as `Основа/Универсальный` · `18+`. A group named `Scene` opens `Scene` in Load pair with its sub-folders; Add group lists root collections only. Manager **Rename** accepts a full path, so it also moves a branch. Since 2.3.0 `/` is reserved — older folder names with `/` were migrated to `|`, then slash-in-names were split into nested folders.
+Collections and preset/template folders nest via `/`: `Scene/Walk`, `Looks/Daki`. Type a path in Save (hints after `/`, **Tab** completes) or **Choose** a folder (crumbs, sub-folders, **+ New folder**). Writing `Универсальный/18+` in the name field under `Основа` saves as `Основа/Универсальный` · `18+`. A group named `Scene` opens `Scene` in Load pair with its sub-folders; Add group lists root collections only. Manager **Rename** accepts a full path, so it also moves a branch. Since 2.3.0 `/` is reserved — older folder names with `/` were migrated to `|`, then slash-in-names were split into nested folders. Templates and presets are unique by **folder + name** (pairs by collection + name).
 
 ---
 

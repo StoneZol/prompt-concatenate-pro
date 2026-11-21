@@ -127,7 +127,7 @@ export function openSavePresetsPopup({ anchor, groups, loadedStack, onSaved }) {
             folder.value = item.group;
             if (!desc.value.trim()) desc.value = item.description || "";
             title.classList.remove("invalid");
-            armOverwrite(`Will overwrite: ${item.name}`);
+            armOverwrite(`Will overwrite in ${item.group || UNCATEGORISED}: ${item.name}`);
           },
           onClose: () => {
             existingPicker = null;
@@ -180,7 +180,8 @@ export function openSavePresetsPopup({ anchor, groups, loadedStack, onSaved }) {
             overwrite,
           });
           if (result.conflicts?.length) {
-            armOverwrite(`Already exists: ${name}`);
+            const hit = result.conflicts[0];
+            armOverwrite(`Already exists in ${hit.folder || split.folder || UNCATEGORISED}: ${hit.name || name}`);
             return;
           }
           if (!result.ok) {
