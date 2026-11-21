@@ -1563,14 +1563,49 @@ const CSS = `
 .pc-existing-list {
   gap: 6px;
   max-height: min(60vh, 420px);
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.pc-existing-list .pc-preset-folder {
+  min-width: 400px;
 }
 
 .pc-existing-list .pc-preset-folder-body {
   gap: 4px;
 }
 
+.pc-existing-list .pc-pick-item {
+  width: 100%;
+  min-width: 400px;
+  box-sizing: border-box;
+  height: auto;
+  min-height: 28px;
+  padding: 4px 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: left;
+  line-height: 1.35;
+}
+
 .pc-existing-list .pc-preset-folder-body > .pc-pick-item {
   margin-left: 2px;
+}
+
+.pc-existing-list .pc-preset-folder-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.pc-existing-list .pc-preset-folder-head {
+  height: auto;
+  align-items: flex-start;
+  padding: 4px;
 }
 
 .pc-add-group-error:empty {
