@@ -6,6 +6,45 @@ Format: newest first.
 
 ---
 
+## [2.3.0] — 2026-11-21
+
+### Pair browse (optional)
+
+- Settings · SQLite: **Pair browse** (off by default) — flip through saved pairs right on the node card
+- **‹ ›** in the Loaded row step to the previous / next pair of the loaded pair’s collection (same order as Load pair, wraps around)
+- Counter after the name: **Loaded · name · 38/45** (position / pairs in the collection)
+- Nothing loaded → compact **› Browse** starts from the first pair of the group’s default shelf
+- Replace confirm follows **Skip pair overwrite confirms** (asked only if the pair has text)
+
+![Pair browse — ‹ › + counter in the Loaded row](../docs/screenshots/2.3.0/0.png)
+
+### Save over existing
+
+- Save pair / Save preset / Save template: **Existing** next to the name — pick an already saved name (grouped by collection, filterable) to overwrite it; notes prefilled if empty
+- After a pick the button turns into **Overwrite** (danger); changing the name or collection resets it
+- Same picker in the manager’s **Edit** dialogs (pair / preset / template); manual rename is re-checked on save — if the name is taken you get a warning and an explicit **Overwrite**
+- Uniqueness: pairs by collection + name, presets and templates by name
+
+![Save pair — Existing name picker](../docs/screenshots/2.3.0/1.png)
+
+### Templates: replace or merge
+
+- Load template card has two actions: **Load** — full swap of the node’s pairs (confirm if any pairs exist; External stays in place), **+** — merge by slot name (previous behaviour)
+
+### Library toggles
+
+- Settings · SQLite: **Presets** and **Templates** — turn off to hide those sections on the node and their tabs in the manager (on by default)
+
+### Bulk actions
+
+- Add group row: **Clear all** (✕) empties every pair’s prompts + loaded names, **Remove all** (trash) deletes all groups (External kept); both confirm first
+
+![Add group row — Clear all / Remove all](../docs/screenshots/2.3.0/2.png)
+
+> New settings keys need a full ComfyUI restart after update (then Ctrl+F5).
+
+---
+
 ## [2.2.0] — 2026-11-08
 
 ### Civitai Toolkit LoRA import (experimental)
