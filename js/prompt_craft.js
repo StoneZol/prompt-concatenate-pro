@@ -15,8 +15,12 @@ import { openAddGroupPopup } from "./pc/add_group.js";
 import { openSavePresetsPopup } from "./pc/save_dialog.js";
 import { confirmReplaceGroups, openLoadPresetPopup } from "./pc/load_dialog.js";
 import { openSaveTemplatePopup } from "./pc/template_save.js";
-import { confirmReloadTemplate, openLoadTemplatePopup } from "./pc/template_load.js";
-import { mergeTemplateGroups } from "./pc/template_apply.js";
+import {
+  confirmReloadTemplate,
+  confirmReplaceTemplate,
+  openLoadTemplatePopup,
+} from "./pc/template_load.js";
+import { mergeTemplateGroups, replaceTemplateGroups } from "./pc/template_apply.js";
 import { openSavePairPopup } from "./pc/pair_save.js";
 import { confirmReplacePair, openLoadPairPopup } from "./pc/pair_load.js";
 import { openCivitaiLoadPopup } from "./pc/civitai_load.js";
@@ -847,12 +851,21 @@ app.registerExtension({
         hideDataWidget(dataWidget);
       }
 
-      function applyTemplate(template) {
+      function applyTemplate(template, mode = "merge") {
         collectFromShadows();
-        const next = mergeTemplateGroups(groups, template.slots || [], {
-          newGroupId,
-          stampLabels,
-        });
+        let next;
+        if (mode === "replace") {
+          next = replaceTemplateGroups(template.slots || [], { newGroupId, stampLabels });
+          const externalIndex = findExternalIndex(groups);
+          if (externalIndex >= 0) {
+            next.splice(Math.min(externalIndex, next.length), 0, groups[externalIndex]);
+          }
+        } else {
+          next = mergeTemplateGroups(groups, template.slots || [], {
+            newGroupId,
+            stampLabels,
+          });
+        }
         setLoadedTemplate({
           title: template.name,
           folder: template.folder,
@@ -1061,7 +1074,16 @@ app.registerExtension({
         e.stopPropagation();
         openLoadTemplatePopup({
           anchor: loadTemplateBtn,
-          onPick: (template) => applyTemplate(template),
+          onPick: (template, mode) => {
+            if (mode === "replace" && groups.some((group) => !isExternalGroup(group))) {
+              confirmReplaceTemplate({
+                anchor: loadTemplateBtn,
+                onConfirm: () => applyTemplate(template, "replace"),
+              });
+              return;
+            }
+            applyTemplate(template, mode);
+          },
         });
       });
 

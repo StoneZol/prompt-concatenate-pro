@@ -1,4 +1,4 @@
-import { CHEVRON_ICON_SVG, LOAD_ICON_SVG } from "./icons.js";
+import { CHEVRON_ICON_SVG, LOAD_ICON_SVG, PLUS_ICON_SVG } from "./icons.js";
 import { openConfirmPopup, openPopup } from "./popup.js";
 import { listTemplates } from "./api.js";
 import { matchesTemplatePreset } from "./search.js";
@@ -30,14 +30,24 @@ function makeTemplateCard(template, { onLoad }) {
   const loadBtn = document.createElement("button");
   loadBtn.type = "button";
   loadBtn.className = "pc-preset-load";
-  loadBtn.title = "Load onto current groups by slot name";
+  loadBtn.title = "Replace all pairs with this template";
   loadBtn.innerHTML = LOAD_ICON_SVG;
   loadBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    onLoad?.(template);
+    onLoad?.(template, "replace");
   });
 
-  head.append(name, loadBtn);
+  const mergeBtn = document.createElement("button");
+  mergeBtn.type = "button";
+  mergeBtn.className = "pc-preset-append";
+  mergeBtn.title = "Merge into current pairs by slot name";
+  mergeBtn.innerHTML = PLUS_ICON_SVG;
+  mergeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    onLoad?.(template, "merge");
+  });
+
+  head.append(name, loadBtn, mergeBtn);
 
   const slots = document.createElement("div");
   slots.className = "pc-preset-slots";
@@ -220,9 +230,9 @@ export function openLoadTemplatePopup({ anchor, onPick }) {
           const list = document.createElement("div");
           list.className = "pc-preset-list";
 
-          const onLoad = (picked) => {
+          const onLoad = (picked, mode) => {
             close();
-            onPick?.(picked);
+            onPick?.(picked, mode);
           };
 
           search.addEventListener("input", () => {
@@ -240,6 +250,18 @@ export function openLoadTemplatePopup({ anchor, onPick }) {
           reposition();
         });
     },
+  });
+}
+
+export function confirmReplaceTemplate({ anchor, onConfirm }) {
+  openConfirmPopup({
+    anchor,
+    title: "Load template",
+    message: "Replace all pairs on this node with this template?",
+    confirmLabel: "Replace",
+    cancelLabel: "Cancel",
+    danger: true,
+    onConfirm,
   });
 }
 

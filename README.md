@@ -44,7 +44,7 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 - **Pin to sidebar** — `Group \| positive` / `Group \| negative` in Inputs / Favorites
 - **Loaded tracking** — after Load, **Loaded ·** name (+ folder); notes / reload / detach; Save prefills from the chip
 - **Presets** — slot names + order; folders; edit as comma-separated text in the manager
-- **Templates** — full packs; load merges by slot name (insert missing, leave unrelated groups alone); empty pairs omitted on save
+- **Templates** — full packs; Load **replaces** all pairs, **+** merges by slot name (insert missing, leave unrelated groups alone); empty pairs omitted on save
 - **Prompt pairs** — save / load / append per group shelf; preview; **Search in prompts**
 - **Smart search** — AND tokens; `shelf\keyword` filters a collection first
 - **Library manager** — Presets / Prompts / Templates (+ **Suggest** when autocomplete is on); duplicate, rename, move, delete; last tab remembered
