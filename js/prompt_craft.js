@@ -8,6 +8,7 @@ import {
   RESET_ICON_SVG,
   SAVE_ICON_SVG,
   TEXT_ICON_SVG,
+  TRASH_ICON_SVG,
 } from "./pc/icons.js";
 import { makeGroupCard } from "./pc/group_card.js";
 import { openConfirmPopup } from "./pc/popup.js";
@@ -228,6 +229,22 @@ app.registerExtension({
       addBtn.className = "pc-add-btn";
       addBtn.innerHTML = `${PLUS_ICON_SVG}<span>Add group</span>`;
 
+      const clearAllBtn = document.createElement("button");
+      clearAllBtn.type = "button";
+      clearAllBtn.className = "pc-header-icon-btn";
+      clearAllBtn.title = "Clear prompts in all groups";
+      clearAllBtn.innerHTML = CLOSE_ICON_SVG;
+
+      const removeAllBtn = document.createElement("button");
+      removeAllBtn.type = "button";
+      removeAllBtn.className = "pc-header-icon-btn danger";
+      removeAllBtn.title = "Remove all groups";
+      removeAllBtn.innerHTML = TRASH_ICON_SVG;
+
+      const addRow = document.createElement("div");
+      addRow.className = "pc-header-row";
+      addRow.append(addBtn, clearAllBtn, removeAllBtn);
+
       function makeLibrarySection(kind, titleText) {
         const section = document.createElement("div");
         section.className = `pc-lib-section pc-lib-section-${kind}`;
@@ -363,7 +380,7 @@ app.registerExtension({
       toolsRow.className = "pc-header-row";
       toolsRow.append(managerBtn, settingsBtn);
 
-      header.append(addBtn, presetBlock.section, templateBlock.section, toolsRow);
+      header.append(addRow, presetBlock.section, templateBlock.section, toolsRow);
 
       const groupsWrap = document.createElement("div");
       groupsWrap.className = "pc-groups";
@@ -851,6 +868,31 @@ app.registerExtension({
         hideDataWidget(dataWidget);
       }
 
+      function clearAllGroups() {
+        collectFromShadows();
+        for (const group of groups) {
+          if (isExternalGroup(group)) continue;
+          group.positive = "";
+          group.negative = "";
+          group.loadedTitle = "";
+          group.loadedCategory = "";
+          group.loadedDescription = "";
+          writeShadow(group, "positive", "");
+          writeShadow(group, "negative", "");
+        }
+        clearLoadedTemplate();
+        persist();
+        renderCards();
+        fillDom();
+      }
+
+      function removeAllGroups() {
+        collectFromShadows();
+        clearLoadedStack();
+        clearLoadedTemplate();
+        rebuildFromGroups(groups.filter((group) => isExternalGroup(group)));
+      }
+
       function rebuildFromGroups(nextGroups) {
         const ids = groups.map((group) => group.id);
         groups = nextGroups;
@@ -994,6 +1036,39 @@ app.registerExtension({
           existingTitles: groups.map((g) => g.title),
           validate: (value) => groupTitleError(groups, value),
           onSubmit: (value) => addGroup(value),
+        });
+      });
+
+      clearAllBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        const hasText = groups.some(
+          (g) => !isExternalGroup(g) && ((g.positive || "").trim() || (g.negative || "").trim()),
+        );
+        if (!hasText) return;
+        openConfirmPopup({
+          anchor: clearAllBtn,
+          title: "Clear all groups",
+          message: "Clear positive / negative in every group? Groups stay, saved library is untouched.",
+          confirmLabel: "Clear all",
+          cancelLabel: "Cancel",
+          danger: true,
+          onConfirm: clearAllGroups,
+        });
+      });
+
+      removeAllBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        if (!groups.some((g) => !isExternalGroup(g))) return;
+        openConfirmPopup({
+          anchor: removeAllBtn,
+          title: "Remove all groups",
+          message: "Remove every group from this node? Saved library is untouched.",
+          confirmLabel: "Remove all",
+          cancelLabel: "Cancel",
+          danger: true,
+          onConfirm: removeAllGroups,
         });
       });
 

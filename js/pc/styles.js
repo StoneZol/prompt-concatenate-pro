@@ -161,6 +161,38 @@ const CSS = `
   color: #e8e4f5;
 }
 
+.pc-header-icon-btn {
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--comfy-input-bg, #2a2a2e);
+  color: var(--descrip-text, #999);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.pc-header-icon-btn:hover {
+  color: var(--input-text, #ddd);
+  filter: brightness(1.12);
+}
+
+.pc-header-icon-btn.danger:hover {
+  color: #ffb4ae;
+  border-color: #8a3a34;
+}
+
+.pc-header-icon-btn svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
 .pc-save-btn,
 .pc-load-btn,
 .pc-template-save-btn,
