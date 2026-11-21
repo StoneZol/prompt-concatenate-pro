@@ -1560,6 +1560,19 @@ const CSS = `
   overflow-y: auto;
 }
 
+.pc-existing-list {
+  gap: 6px;
+  max-height: min(60vh, 420px);
+}
+
+.pc-existing-list .pc-preset-folder-body {
+  gap: 4px;
+}
+
+.pc-existing-list .pc-preset-folder-body > .pc-pick-item {
+  margin-left: 2px;
+}
+
 .pc-add-group-error:empty {
   display: none;
   min-height: 0;
