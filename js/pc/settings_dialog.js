@@ -67,19 +67,11 @@ const PAIR_BROWSE_HELP = {
   text:
     "Off by default. Saved in SQLite (all nodes).\n\n" +
     "Adds ‹ › before the Loaded name on each pair: flip to the previous / next saved pair " +
-    "in the same collection (same order as Load pair, wraps around). Collection = the loaded one, " +
-    "or the group's default shelf when nothing is loaded — then a Browse button starts from the first pair.\n\n" +
-    "Arrows and the counter hide when the shelf has fewer than two pairs.\n\n" +
+    "under the browse folder, including sub-folders (e.g. Scene → Scene/Walk → …). " +
+    "Nothing loaded → Browse opens a folder picker (empty parents with pairs below are allowed), " +
+    "then starts from the first pair in that scope.\n\n" +
+    "Arrows and the counter hide when fewer than two pairs are in scope.\n\n" +
     "Replacing prompts asks for confirmation unless Skip pair overwrite confirms is on.",
-};
-
-const PAIR_BROWSE_NESTED_HELP = {
-  title: "Browse nested folders",
-  text:
-    "Off by default. Saved in SQLite (all nodes). Needs Pair browse on.\n\n" +
-    "When on, ‹ › walk the current collection and all of its sub-folders " +
-    "(e.g. Scene → Scene/Walk → Scene/Night/Closeup), same order as Load pair with a path filter. " +
-    "When off, only the exact folder of the loaded pair (or the group shelf) is browsed.",
 };
 
 const CIVITAI_TOOLKIT_HELP = {
@@ -268,25 +260,16 @@ export async function openSettingsPopup({ anchor, nodeSettings, onUiChange } = {
           help: TEMPLATES_ENABLED_HELP,
         }).el,
       );
-      const browseDual = document.createElement("div");
-      browseDual.className = "pc-settings-row-dual";
-      const nestedBrowse = makeSettingRow({
-        label: "Nested folders",
-        prefKey: "pairBrowseNested",
-        help: PAIR_BROWSE_NESTED_HELP,
-        disabled: !getUiPref("pairBrowse"),
-      });
-      const pairBrowse = makeSettingRow({
-        label: "Pair browse",
-        prefKey: "pairBrowse",
-        help: PAIR_BROWSE_HELP,
-        onToggle(enabled) {
-          nestedBrowse.setDisabled(!enabled);
-          onUiChange?.();
-        },
-      });
-      browseDual.append(pairBrowse.el, nestedBrowse.el);
-      list.appendChild(browseDual);
+      list.appendChild(
+        makeSettingRow({
+          label: "Pair browse",
+          prefKey: "pairBrowse",
+          help: PAIR_BROWSE_HELP,
+          onToggle() {
+            onUiChange?.();
+          },
+        }).el,
+      );
       list.appendChild(
         makeSettingRow({
           label: "Civitai Toolkit LoRA import",

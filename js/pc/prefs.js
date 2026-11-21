@@ -21,9 +21,8 @@ const DEFAULTS = {
   presetsEnabled: true,
   /** Template section on nodes + Templates tab in the manager. */
   templatesEnabled: true,
-  /** Prev / next arrows on pairs — flip through saved pairs of a collection. */
+  /** Prev / next arrows on pairs — flip through saved pairs under the browse folder (incl. sub-folders). */
   pairBrowse: false,
-  pairBrowseNested: false,
   /** Last changelog version the user dismissed (What's new). */
   lastSeenChangelog: "",
 };

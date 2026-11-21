@@ -1473,7 +1473,6 @@ UI_PREF_KEYS = (
     "presetsEnabled",
     "templatesEnabled",
     "pairBrowse",
-    "pairBrowseNested",
     "lastSeenChangelog",
 )
 UI_PREF_DEFAULTS = {
@@ -1487,7 +1486,6 @@ UI_PREF_DEFAULTS = {
     "presetsEnabled": True,
     "templatesEnabled": True,
     "pairBrowse": False,
-    "pairBrowseNested": False,
     "lastSeenChangelog": "",
 }
 _MANAGER_TAB_VALUES = frozenset({"presets", "prompts", "templates", "suggest"})

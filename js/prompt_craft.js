@@ -903,7 +903,7 @@ app.registerExtension({
       function browseListOpts(shelf) {
         return {
           category: shelf,
-          recursive: Boolean(getUiPref("pairBrowseNested")),
+          recursive: true,
         };
       }
 
@@ -939,7 +939,6 @@ app.registerExtension({
       }
 
       async function browseFlip(group, card, anchor, dir, shelf) {
-        const nested = Boolean(getUiPref("pairBrowseNested"));
         const result = await listPresets(browseListOpts(shelf));
         if (!result.ok) {
           browseNotice(anchor, result.error || "Failed to load prompts");
@@ -947,12 +946,7 @@ app.registerExtension({
         }
         const list = result.presets || [];
         if (!list.length) {
-          browseNotice(
-            anchor,
-            nested
-              ? `No saved pairs in ${shelf} or its sub-folders.`
-              : `No saved pairs in ${shelf}. Turn on Browse nested folders to include sub-folders.`,
-          );
+          browseNotice(anchor, `No saved pairs in ${shelf} or its sub-folders.`);
           return;
         }
         const current = browseIndex(list, group);
@@ -980,15 +974,13 @@ app.registerExtension({
             browseNotice(anchor, cats.error || "Failed to load collections");
             return;
           }
-          const nestedBrowse = Boolean(getUiPref("pairBrowseNested"));
           openShelfPicker({
             anchor,
             title: "Browse folder",
             categories: cats.categories || [],
             current: normalizeShelfPath(group.browseShelf) || baseShelfName(group.title),
             onlyWithPairs: true,
-            // Empty parents (pairs only in sub-folders) only when Nested is on.
-            pairScope: nestedBrowse ? "tree" : "exact",
+            pairScope: "tree",
             onPick: (path) => {
               group.browseShelf = normalizeShelfPath(path);
               persist();

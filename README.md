@@ -44,7 +44,7 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 - **Join engine** — merges enabled groups with `, `, skips empty, normalizes commas and spacing
 - **Pin to sidebar** — `Group \| positive` / `Group \| negative` in Inputs / Favorites
 - **Loaded tracking** — after Load, **Loaded ·** name (+ folder); notes / reload / detach; Save prefills from the chip
-- **Pair browse** (Settings, optional) — **‹ ›** in the Loaded row flip through the collection with a **38/45** counter; **› Browse** when nothing is loaded
+- **Pair browse** (Settings, optional) — **‹ ›** flip through the browse folder **and sub-folders** with a **38/45** counter; **› Browse** picks a folder when nothing is loaded
 - **Save over existing** — **Existing** in Save / Edit dialogs picks a saved name (grouped by collection) to overwrite; taken names warn with an explicit **Overwrite**
 - **Presets** — slot names + order; folders; edit as comma-separated text in the manager
 - **Templates** — full packs; Load **replaces** all pairs, **+** merges by slot name (insert missing, leave unrelated groups alone); empty pairs omitted on save
@@ -112,7 +112,7 @@ After load: **Loaded ·** chip — Save prefills; **×** detaches; reload pulls 
 
 ![Pair toolbar: Save / Load / Clear](docs/screenshots/2.0.0/0.png)
 
-With **Settings → Pair browse** on, **‹ ›** step through the loaded pair’s collection (Load pair order, wraps); the counter shows position / total. Nothing loaded → **› Browse** starts from the group’s default shelf. Replace confirms follow **Skip pair overwrite confirms**.
+With **Settings → Pair browse** on, **‹ ›** step through the browse folder including sub-folders (Load pair order, wraps); the counter shows position / total. Nothing loaded → **› Browse** opens a folder picker (empty parents with pairs below are fine), then starts from the first pair. Replace confirms follow **Skip pair overwrite confirms**.
 
 ![Pair browse — ‹ › + counter](docs/screenshots/2.3.0/0.png)
 
@@ -224,7 +224,7 @@ Pin from the node **Inputs** panel or **Favorites**. Edits sync both ways with t
 **Saved · SQLite** (all Prompt Concatenate Pro nodes):
 
 - **Presets** / **Templates** — show those sections on the node and tabs in the manager (on by default)
-- **Pair browse** — **‹ ›** + counter in the Loaded row, **› Browse** when empty (off by default)
+- **Pair browse** — **‹ ›** + counter (folder + sub-folders), **› Browse** folder picker when empty (off by default)
 - **Skip pair overwrite confirms** — Load pair replace / Pair browse + Clear without asking (off by default; Delete / presets untouched)
 - **Civitai Toolkit LoRA import** (experimental) — **Civitai** on pairs (node + Edit prompt / template); folder browse + search; title → Info (triggers + Append / Replace + notes); soft dep [ComfyUI-Civitai-Toolkit](https://github.com/BAIKEMARK/ComfyUI-Civitai-Toolkit)
 - **Prompt autocomplete** — caret suggestions + Suggest tab from your library

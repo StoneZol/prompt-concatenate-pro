@@ -404,8 +404,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
           // Nothing to flip through: empty / deleted shelf, or a single pair (1/1).
           if (!info || info.total < 2) return;
           countEl.textContent = info.index >= 0 ? `${info.index + 1}/${info.total}` : `${info.total}`;
-          const nested = Boolean(getUiPref("pairBrowseNested"));
-          const scope = nested ? `${info.shelf} (+ sub-folders)` : info.shelf;
+          const scope = `${info.shelf} (+ sub-folders)`;
           countEl.title = info.index >= 0
             ? `Pair ${info.index + 1} of ${info.total} in ${scope}`
             : `${info.total} pairs in ${scope}`;

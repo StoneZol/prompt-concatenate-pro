@@ -11,9 +11,8 @@ Format: newest first.
 ### Pair browse (optional)
 
 - Settings · SQLite: **Pair browse** (off by default) — flip through saved pairs right on the node card
-- **‹ ›** in the Loaded row step to the previous / next pair of the loaded pair’s collection (same order as Load pair, wraps around); hidden when the shelf has fewer than two pairs
-- Counter after the name: **Loaded · name · 38/45** (position / pairs in the collection)
-- **Browse nested folders** (off by default) — ‹ › also walk sub-folders under the current shelf (e.g. `Scene` → `Scene/Walk` → …)
+- **‹ ›** in the Loaded row step to the previous / next pair under the browse folder, **including sub-folders** (e.g. `Scene` → `Scene/Walk` → …; same order as Load pair); hidden when fewer than two pairs are in scope
+- Counter after the name: **Loaded · name · 38/45** (position / pairs in the folder tree)
 - Nothing loaded → **› Browse** opens a folder picker (incl. empty parents that only have pairs in sub-folders), then starts from the first pair in that scope
 - Browse root is remembered on the group: Load a pair inside the scope keeps it; a pair outside raises the root to that pair’s folder
 - Replace confirm follows **Skip pair overwrite confirms** (asked only if the pair has text)
@@ -35,7 +34,7 @@ Format: newest first.
 
 ![Manager · path search in the tree](../docs/screenshots/2.3.0/1.2.png)
 
-- **Add group** lists root collections only; Pair browse stays in the current folder unless **Browse nested folders** is on
+- **Add group** lists root collections only
 - Migration on first start: folder / collection names that already contained `/` become `|` (`A/B` → `A|B`); then names like `Studio/Soft` are split into folder + leaf so existing libraries nest correctly
 - Templates and presets are unique per **folder + name** (same as pairs per collection) — `soft-light` can live in `Studio` and in `Looks` at once
 
