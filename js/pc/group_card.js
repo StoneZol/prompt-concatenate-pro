@@ -429,7 +429,8 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
       }
       loadedRow.hidden = false;
       loadedLabel.textContent = name;
-      loadedLabel.title = `Loaded: ${name}`;
+      const shelf = (group.loadedCategory || "").trim();
+      loadedLabel.title = shelf ? `Loaded: ${shelf} / ${name}` : `Loaded: ${name}`;
       notesBtn.hidden = !notes;
       refreshCount(name);
     };

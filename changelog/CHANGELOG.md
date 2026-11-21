@@ -18,6 +18,16 @@ Format: newest first.
 
 ![Pair browse — ‹ › + counter in the Loaded row](../docs/screenshots/2.3.0/0.png)
 
+### Nested collections / folders
+
+- Paths with `/` for pair collections **and** preset / template folders: `Scene/Walk`, `Looks/Daki` — as deep as you like; folders appear on first save
+- A name with `/` is also a path: `Основа` + `Универсальный/18+` saves as collection `Основа/Универсальный`, name `18+` (same for presets / templates)
+- Type the path by hand (sub-folder hints after `/`, **Tab** completes) or **Choose** → folder browser: crumbs, sub-folders with counts, filter, **+ New folder**
+- **Load pair** opens the group’s root collection (or the loaded pair’s folder) with crumbs + sub-folders; search covers the subtree; `Scene/Walk\rain` filters by path
+- Manager · Prompts / Presets / Templates are trees; **Rename** takes a full path (move a branch), **Delete** removes the branch
+- **Add group** lists root collections only; Pair browse stays inside the current folder
+- Migration on first start: folder / collection names that already contained `/` become `|` (`A/B` → `A|B`); then names like `test/daki1` or `Универсальный/18+` are split into folder + leaf so existing libraries nest correctly
+
 ### Save over existing
 
 - Save pair / Save preset / Save template: **Existing** next to the name — pick an already saved name (grouped by collection, filterable) to overwrite it; notes prefilled if empty

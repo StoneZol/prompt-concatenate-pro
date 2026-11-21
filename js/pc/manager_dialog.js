@@ -53,6 +53,15 @@ import { bindPromptAutocomplete } from "./autocomplete.js";
 import { mountAutocompletePanel } from "./autocomplete_manager.js";
 import { openCivitaiLoadPopup } from "./civitai_load.js";
 import { baseShelfName, nextDuplicateName } from "./titles.js";
+import {
+  isInShelfTree,
+  normalizeShelfPath,
+  openShelfPicker,
+  shelfLeaf,
+  shelfSegments,
+  splitShelfName,
+  wrapShelfInput,
+} from "./shelf_paths.js";
 
 function slotHasPrompt(slot) {
   return Boolean(String(slot?.positive || "").trim() || String(slot?.negative || "").trim());
@@ -82,6 +91,72 @@ function groupByFolder(items, folderKey) {
     folders.set(name, list);
   }
   return folders;
+}
+
+function buildPathTree(items, folderKey, { emptyLabel = UNCATEGORISED } = {}) {
+  const root = { path: "", items: [], children: new Map() };
+  const ensureNode = (path) => {
+    const normalized = normalizeShelfPath(path);
+    if (!normalized) {
+      const key = emptyLabel.toLowerCase();
+      if (!root.children.has(key)) {
+        root.children.set(key, { path: emptyLabel, items: [], children: new Map() });
+      }
+      return root.children.get(key);
+    }
+    let node = root;
+    for (const segment of shelfSegments(normalized)) {
+      const key = segment.toLowerCase();
+      if (!node.children.has(key)) {
+        node.children.set(key, {
+          path: node.path && node.path !== emptyLabel ? `${node.path}/${segment}` : segment,
+          items: [],
+          children: new Map(),
+        });
+      }
+      node = node.children.get(key);
+    }
+    return node;
+  };
+  for (const item of items) {
+    ensureNode(item[folderKey] || "").items.push(item);
+  }
+  return root;
+}
+
+function sortedTreeChildren(node) {
+  return [...node.children.values()].sort((a, b) => {
+    const aUncat = a.path.toLowerCase() === UNCATEGORISED.toLowerCase();
+    const bUncat = b.path.toLowerCase() === UNCATEGORISED.toLowerCase();
+    if (aUncat !== bUncat) return aUncat ? -1 : 1;
+    return shelfLeaf(a.path).localeCompare(shelfLeaf(b.path), undefined, {
+      sensitivity: "base",
+    });
+  });
+}
+
+function treeNodeTotal(node) {
+  return (
+    node.items.length +
+    [...node.children.values()].reduce((sum, child) => sum + treeNodeTotal(child), 0)
+  );
+}
+
+function mergePathTree(dst, src) {
+  for (const child of src.children.values()) {
+    const key = child.path.toLowerCase();
+    if (!dst.children.has(key)) {
+      dst.children.set(key, child);
+      continue;
+    }
+    const existing = dst.children.get(key);
+    existing.items.push(...child.items);
+    mergePathTree(existing, child);
+  }
+}
+
+function ensureEmptyFolder(root, path) {
+  mergePathTree(root, buildPathTree([{ folder: path }], "folder"));
 }
 
 function makeIconBtn(className, title, svg, onClick) {
@@ -195,6 +270,9 @@ function makeFolderSection({
   onDeleteFolder,
   onToggleExpand,
   renderItem,
+  count: totalCount,
+  tooltip,
+  children = [],
 }) {
   const folder = document.createElement("div");
   folder.className = "pc-preset-folder";
@@ -217,9 +295,10 @@ function makeFolderSection({
 
   const count = document.createElement("span");
   count.className = "pc-preset-folder-count";
-  count.textContent = String(items.length);
+  count.textContent = String(totalCount ?? items.length);
 
   toggle.append(chevron, label, count);
+  if (tooltip) label.title = tooltip;
   toggle.title = expanded ? "Collapse" : "Expand";
   toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
 
@@ -237,6 +316,9 @@ function makeFolderSection({
 
   const body = document.createElement("div");
   body.className = "pc-preset-folder-body";
+  for (const child of children) {
+    body.appendChild(child);
+  }
   for (const item of items) {
     body.appendChild(renderItem(item));
   }
@@ -313,7 +395,7 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
       const title = document.createElement("input");
       title.className = "pc-popup-input";
       title.type = "text";
-      title.placeholder = "preset name";
+      title.placeholder = "preset name or path/name";
       title.value = layout.name || "";
 
       const folderRow = document.createElement("div");
@@ -322,7 +404,7 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
       const folder = document.createElement("input");
       folder.className = "pc-popup-input";
       folder.type = "text";
-      folder.placeholder = UNCATEGORISED;
+      folder.placeholder = "Uncategorised or path/sub";
       folder.value = layout.folder || "";
 
       const pickBtn = document.createElement("button");
@@ -330,7 +412,7 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
       pickBtn.className = "pc-popup-btn";
       pickBtn.textContent = "Choose";
 
-      folderRow.append(folder, pickBtn);
+      folderRow.append(wrapShelfInput(folder, () => folders), pickBtn);
 
       const slots = document.createElement("textarea");
       slots.className = "pc-popup-textarea";
@@ -368,13 +450,13 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
           picker = null;
           return;
         }
-        picker = openNamePicker({
+        picker = openShelfPicker({
           anchor: pickBtn,
           title: "Folder",
-          items: folders,
+          categories: folders,
           current: folder.value.trim(),
-          includeUncategorised: true,
-          emptyUncategorised: true,
+          allowEmpty: true,
+          emptyLabel: UNCATEGORISED,
           onPick: (name) => {
             folder.value = name || "";
           },
@@ -396,7 +478,10 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
       }
 
       async function submit() {
-        const nextName = title.value.trim();
+        const split = splitShelfName(folder.value, title.value);
+        const nextName = split.name;
+        title.value = nextName;
+        folder.value = split.folder;
         const nextSlots = parseSlotsText(slots.value);
         if (!nextName) {
           errorEl.textContent = "Name is required";
@@ -414,7 +499,7 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
             id: layout.id,
             name: nextName,
             description: desc.value.trim(),
-            folder: folder.value.trim(),
+            folder: split.folder,
             slots: nextSlots,
             overwrite,
           });
@@ -604,7 +689,7 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
       const category = document.createElement("input");
       category.className = "pc-popup-input";
       category.type = "text";
-      category.placeholder = "collection";
+      category.placeholder = "collection or path/sub";
       category.value = preset.category || "";
 
       const pickBtn = document.createElement("button");
@@ -612,7 +697,7 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
       pickBtn.className = "pc-popup-btn";
       pickBtn.textContent = "Choose";
 
-      categoryRow.append(category, pickBtn);
+      categoryRow.append(wrapShelfInput(category, () => categories), pickBtn);
 
       const desc = document.createElement("textarea");
       desc.className = "pc-popup-textarea";
@@ -658,10 +743,9 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
           picker = null;
           return;
         }
-        picker = openNamePicker({
+        picker = openShelfPicker({
           anchor: pickBtn,
-          title: "Collection",
-          items: categories,
+          categories,
           current: category.value.trim(),
           onPick: (name) => {
             category.value = name || "";
@@ -674,8 +758,11 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
       });
 
       async function submit() {
-        const nextTitle = title.value.trim();
-        const shelf = category.value.trim();
+        const split = splitShelfName(category.value, title.value);
+        const nextTitle = split.name;
+        const shelf = split.folder;
+        title.value = nextTitle;
+        category.value = shelf;
         if (!nextTitle) {
           errorEl.textContent = "Name is required";
           title.focus();
@@ -785,7 +872,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
       const title = document.createElement("input");
       title.className = "pc-popup-input";
       title.type = "text";
-      title.placeholder = "template name";
+      title.placeholder = "template name or path/name";
       title.value = template.name || "";
 
       const folderRow = document.createElement("div");
@@ -794,7 +881,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
       const folder = document.createElement("input");
       folder.className = "pc-popup-input";
       folder.type = "text";
-      folder.placeholder = UNCATEGORISED;
+      folder.placeholder = "Uncategorised or path/sub";
       folder.value = template.folder || "";
 
       const pickBtn = document.createElement("button");
@@ -802,7 +889,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
       pickBtn.className = "pc-popup-btn";
       pickBtn.textContent = "Choose";
 
-      folderRow.append(folder, pickBtn);
+      folderRow.append(wrapShelfInput(folder, () => folders), pickBtn);
 
       const desc = document.createElement("textarea");
       desc.className = "pc-popup-textarea";
@@ -1174,13 +1261,13 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
           picker = null;
           return;
         }
-        picker = openNamePicker({
+        picker = openShelfPicker({
           anchor: pickBtn,
           title: "Folder",
-          items: folders,
+          categories: folders,
           current: folder.value.trim(),
-          includeUncategorised: true,
-          emptyUncategorised: true,
+          allowEmpty: true,
+          emptyLabel: UNCATEGORISED,
           onPick: (name) => {
             folder.value = name || "";
           },
@@ -1191,7 +1278,10 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
       });
 
       async function submit() {
-        const nextName = title.value.trim();
+        const split = splitShelfName(folder.value, title.value);
+        const nextName = split.name;
+        title.value = nextName;
+        folder.value = split.folder;
         const nextSlots = slotState
           .map((slot) => ({
             title: (slot.title || "").trim(),
@@ -1218,7 +1308,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             id: template.id,
             name: nextName,
             description: desc.value.trim(),
-            folder: folder.value.trim(),
+            folder: split.folder,
             slots: nextSlots,
             overwrite,
           });
@@ -1300,31 +1390,16 @@ function paintTemplatesTab(listEl, { templates, folders, showEmpty, query, openM
     matchesTemplatePreset(template, query, { emptyFolder: UNCATEGORISED }),
   );
 
-  const grouped = groupByFolder(filtered, "folder");
+  const root = buildPathTree(filtered, "folder");
   if (showEmpty) {
     for (const folder of folders) {
-      if ((folder.count || 0) === 0 && !grouped.has(folder.name)) {
-        grouped.set(folder.name, []);
+      if ((folder.count || 0) === 0 && emptyShelfMatchesSearch(folder.name, query)) {
+        ensureEmptyFolder(root, folder.name);
       }
     }
   }
 
-  const names = [...grouped.keys()]
-    .filter((name) => {
-      const items = grouped.get(name) || [];
-      if (items.length) return true;
-      if (!showEmpty) return false;
-      if (name.toLowerCase() === UNCATEGORISED.toLowerCase()) return false;
-      return emptyShelfMatchesSearch(name, query);
-    })
-    .sort((a, b) => {
-      const aEmpty = a.toLowerCase() === UNCATEGORISED.toLowerCase();
-      const bEmpty = b.toLowerCase() === UNCATEGORISED.toLowerCase();
-      if (aEmpty !== bEmpty) return aEmpty ? -1 : 1;
-      return a.localeCompare(b, undefined, { sensitivity: "base" });
-    });
-
-  if (!names.length) {
+  if (!root.children.size) {
     const empty = document.createElement("div");
     empty.className = "pc-popup-message";
     empty.textContent = q ? "No templates" : "No saved templates yet.";
@@ -1332,126 +1407,139 @@ function paintTemplatesTab(listEl, { templates, folders, showEmpty, query, openM
     return;
   }
 
-  const folderNames = shelfNames(folders);
+  const renderNode = (node) => {
+    const folderName = node.path;
+    const items = node.items;
+    const total = treeNodeTotal(node);
+    const isUncat = folderName.toLowerCase() === UNCATEGORISED.toLowerCase();
+    const hasChildren = node.children.size > 0;
+    return makeFolderSection({
+      title: isUncat ? folderName : shelfLeaf(folderName),
+      tooltip: isUncat ? undefined : folderName,
+      items,
+      count: total,
+      children: sortedTreeChildren(node).map(renderNode),
+      expanded: folderExpanded(folderName, { query: q, openMap }),
+      canManageFolder: !isUncat,
+      onToggleExpand: (open) => openMap?.set(folderName, open),
+      onRenameFolder: (btn) => {
+        mgrInput({
+          anchor: btn,
+          title: "Rename / move folder",
+          placeholder: "path/to/folder",
+          initialValue: folderName,
+          confirmLabel: "Rename",
+          validate: (value) => {
+            if (!normalizeShelfPath(value)) return "Name is required";
+            return "";
+          },
+          onSubmit: async (value) => {
+            const next = normalizeShelfPath(value);
+            const result = await renameTemplateFolder({ name: folderName, newName: next });
+            if (!result.ok) {
+              const taken = (result.conflicts || []).map((c) => c.name).join(", ");
+              showMgrError(btn, "Rename folder", taken ? `Already exists: ${taken}` : result.error);
+              return;
+            }
+            if (openMap) {
+              for (const [key, open] of [...openMap.entries()]) {
+                if (!isInShelfTree(key, folderName)) continue;
+                openMap.delete(key);
+                openMap.set(next + key.slice(folderName.length), open);
+              }
+            }
+            reload?.();
+          },
+        });
+      },
+      onDeleteFolder: (btn) => {
+        mgrConfirm({
+          anchor: btn,
+          title: "Delete folder",
+          message:
+            `Delete folder “${folderName}”${hasChildren ? " with its sub-folders" : ""}?\n` +
+            `${total} template(s) will move to ${UNCATEGORISED}.`,
+          confirmLabel: "Delete",
+          danger: true,
+          onConfirm: async () => {
+            const result = await deleteTemplateFolder(folderName);
+            if (!result.ok) {
+              showMgrError(btn, "Delete folder", result.error);
+              return;
+            }
+            openMap?.delete(folderName);
+            reload?.();
+          },
+        });
+      },
+      renderItem: (template) => {
+        const slots = template.slots || [];
+        const on = slots.filter((slot) => slot?.enabled !== false).length;
+        const titles = slots
+          .map((slot) => (slot?.title || "").trim())
+          .filter(Boolean)
+          .join(" · ");
+        const meta = titles
+          ? `${titles} · ${on}/${slots.length} on`
+          : `${on}/${slots.length} slots on`;
+        return makeItemRow(template, {
+          name: template.name || "Untitled",
+          meta,
+          onEdit: (btn) =>
+            openEditTemplatePopup({
+              anchor: btn,
+              template,
+              folders,
+              onSaved: () => reload?.(),
+            }),
+          onDuplicate: (btn) => {
+            const base = template.name || "Template";
+            const existing = templates.map((item) => item.name || "");
+            const nextName = nextDuplicateName(existing, base);
+            mgrConfirm({
+              anchor: btn,
+              title: "Duplicate template",
+              message: `Save a copy as “${nextName}”?`,
+              confirmLabel: "Duplicate",
+              onConfirm: async () => {
+                const result = await saveTemplate({
+                  name: nextName,
+                  description: template.description || "",
+                  folder: template.folder || "",
+                  slots: template.slots || [],
+                });
+                if (!result.ok) {
+                  showMgrError(btn, "Duplicate", result.error);
+                  return;
+                }
+                reload?.();
+              },
+            });
+          },
+          onDelete: (btn) => {
+            mgrConfirm({
+              anchor: btn,
+              title: "Delete template",
+              message: `Delete “${template.name}”?`,
+              confirmLabel: "Delete",
+              danger: true,
+              onConfirm: async () => {
+                const result = await deleteTemplate(template.id);
+                if (!result.ok) {
+                  showMgrError(btn, "Delete", result.error);
+                  return;
+                }
+                reload?.();
+              },
+            });
+          },
+        });
+      },
+    });
+  };
 
-  for (const folderName of names) {
-    const items = grouped.get(folderName) || [];
-    listEl.appendChild(
-      makeFolderSection({
-        title: folderName,
-        items,
-        expanded: folderExpanded(folderName, { query: q, openMap }),
-        canManageFolder: folderName.toLowerCase() !== UNCATEGORISED.toLowerCase(),
-        onToggleExpand: (open) => openMap?.set(folderName, open),
-        onRenameFolder: (btn) => {
-          mgrInput({
-            anchor: btn,
-            title: "Rename folder",
-            placeholder: "folder name",
-            initialValue: folderName,
-            confirmLabel: "Rename",
-            validate: (value) => {
-              if (!value.trim()) return "Name is required";
-              return "";
-            },
-            onSubmit: async (value) => {
-              const next = value.trim();
-              const result = await renameTemplateFolder({ name: folderName, newName: next });
-              if (!result.ok) {
-                showMgrError(btn, "Rename folder", result.error);
-                return;
-              }
-              if (openMap?.has(folderName)) {
-                openMap.set(next, openMap.get(folderName));
-                openMap.delete(folderName);
-              }
-              reload?.();
-            },
-          });
-        },
-        onDeleteFolder: (btn) => {
-          mgrConfirm({
-            anchor: btn,
-            title: "Delete folder",
-            message: `Delete folder “${folderName}”?\n${items.length} template(s) will move to ${UNCATEGORISED}.`,
-            confirmLabel: "Delete",
-            danger: true,
-            onConfirm: async () => {
-              const result = await deleteTemplateFolder(folderName);
-              if (!result.ok) {
-                showMgrError(btn, "Delete folder", result.error);
-                return;
-              }
-              openMap?.delete(folderName);
-              reload?.();
-            },
-          });
-        },
-        renderItem: (template) => {
-          const slots = template.slots || [];
-          const on = slots.filter((slot) => slot?.enabled !== false).length;
-          const titles = slots
-            .map((slot) => (slot?.title || "").trim())
-            .filter(Boolean)
-            .join(" · ");
-          const meta = titles
-            ? `${titles} · ${on}/${slots.length} on`
-            : `${on}/${slots.length} slots on`;
-          return makeItemRow(template, {
-            name: template.name || "Untitled",
-            meta,
-            onEdit: (btn) =>
-              openEditTemplatePopup({
-                anchor: btn,
-                template,
-                folders: folderNames,
-                onSaved: () => reload?.(),
-              }),
-            onDuplicate: (btn) => {
-              const base = template.name || "Template";
-              const existing = templates.map((item) => item.name || "");
-              const nextName = nextDuplicateName(existing, base);
-              mgrConfirm({
-                anchor: btn,
-                title: "Duplicate template",
-                message: `Save a copy as “${nextName}”?`,
-                confirmLabel: "Duplicate",
-                onConfirm: async () => {
-                  const result = await saveTemplate({
-                    name: nextName,
-                    description: template.description || "",
-                    folder: template.folder || "",
-                    slots: template.slots || [],
-                  });
-                  if (!result.ok) {
-                    showMgrError(btn, "Duplicate", result.error);
-                    return;
-                  }
-                  reload?.();
-                },
-              });
-            },
-            onDelete: (btn) => {
-              mgrConfirm({
-                anchor: btn,
-                title: "Delete template",
-                message: `Delete “${template.name}”?`,
-                confirmLabel: "Delete",
-                danger: true,
-                onConfirm: async () => {
-                  const result = await deleteTemplate(template.id);
-                  if (!result.ok) {
-                    showMgrError(btn, "Delete", result.error);
-                    return;
-                  }
-                  reload?.();
-                },
-              });
-            },
-          });
-        },
-      }),
-    );
+  for (const node of sortedTreeChildren(root)) {
+    listEl.appendChild(renderNode(node));
   }
 }
 
@@ -1463,31 +1551,16 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
     matchesLayoutPreset(layout, query, { emptyFolder: UNCATEGORISED }),
   );
 
-  const grouped = groupByFolder(filtered, "folder");
+  const root = buildPathTree(filtered, "folder");
   if (showEmpty) {
     for (const folder of folders) {
-      if ((folder.count || 0) === 0 && !grouped.has(folder.name)) {
-        grouped.set(folder.name, []);
+      if ((folder.count || 0) === 0 && emptyShelfMatchesSearch(folder.name, query)) {
+        ensureEmptyFolder(root, folder.name);
       }
     }
   }
 
-  const names = [...grouped.keys()]
-    .filter((name) => {
-      const items = grouped.get(name) || [];
-      if (items.length) return true;
-      if (!showEmpty) return false;
-      if (name.toLowerCase() === UNCATEGORISED.toLowerCase()) return false;
-      return emptyShelfMatchesSearch(name, query);
-    })
-    .sort((a, b) => {
-      const aUncat = a.toLowerCase() === UNCATEGORISED.toLowerCase();
-      const bUncat = b.toLowerCase() === UNCATEGORISED.toLowerCase();
-      if (aUncat !== bUncat) return aUncat ? -1 : 1;
-      return a.localeCompare(b, undefined, { sensitivity: "base" });
-    });
-
-  if (!names.length) {
+  if (!root.children.size) {
     const empty = document.createElement("div");
     empty.className = "pc-popup-message";
     empty.textContent = q ? "No presets" : "No saved presets yet.";
@@ -1495,127 +1568,140 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
     return;
   }
 
-  const folderNames = shelfNames(folders);
-
-  for (const folderName of names) {
-    const items = grouped.get(folderName) || [];
-    listEl.appendChild(
-      makeFolderSection({
-        title: folderName,
-        items,
-        expanded: folderExpanded(folderName, { query: q, openMap }),
-        canManageFolder: folderName.toLowerCase() !== UNCATEGORISED.toLowerCase(),
-        onToggleExpand: (open) => openMap?.set(folderName, open),
-        onRenameFolder: (btn) => {
-          mgrInput({
-            anchor: btn,
-            title: "Rename folder",
-            placeholder: "folder name",
-            initialValue: folderName,
-            confirmLabel: "Rename",
-            validate: (value) => {
-              if (!value.trim()) return "Name is required";
-              return "";
-            },
-            onSubmit: async (value) => {
-              const next = value.trim();
-              const result = await renameLayoutFolder({ name: folderName, newName: next });
-              if (!result.ok) {
-                mgrConfirm({
-                  anchor: btn,
-                  title: "Rename folder",
-                  message: result.error || "Rename failed",
-                  confirmLabel: "OK",
-                  showCancel: false,
-                  danger: false,
-                });
-                return;
-              }
-              if (openMap?.has(folderName)) {
-                openMap.set(next, openMap.get(folderName));
-                openMap.delete(folderName);
-              }
-              reload();
-            },
-          });
-        },
-        onDeleteFolder: (btn) => {
-          mgrConfirm({
-            anchor: btn,
-            title: "Delete folder",
-            message: `Delete folder “${folderName}”?\n${items.length} preset(s) will move to ${UNCATEGORISED}.`,
-            confirmLabel: "Delete",
-            danger: true,
-            onConfirm: async () => {
-              const result = await deleteLayoutFolder(folderName);
-              if (!result.ok) {
-                mgrConfirm({
-                  anchor: btn,
-                  title: "Delete folder",
-                  message: result.error || "Delete failed",
-                  confirmLabel: "OK",
-                  showCancel: false,
-                  danger: false,
-                });
-                return;
-              }
-              reload();
-            },
-          });
-        },
-        renderItem: (layout) => {
-          const slotNames = (layout.slots || [])
-            .map((slot) => displaySlotName(slot))
-            .filter(Boolean);
-          return makeItemRow(layout, {
-            name: layout.name || "Untitled",
-            meta: slotNames.join(" · ") || "No fields",
-            onEdit: (btn) => {
-              openEditLayoutPopup({
-                anchor: btn,
-                layout,
-                folders: folderNames,
-                onSaved: reload,
-              });
-            },
-            onDuplicate: async (btn) => {
-              const name = nextDuplicateName(
-                layouts.map((item) => item.name),
-                layout.name || "Untitled",
-              );
-              const result = await saveLayout({
-                name,
-                description: layout.description || "",
-                slots: layout.slots || [],
-                folder: layout.folder || "",
-              });
-              if (!result.ok) {
-                showMgrError(btn, "Duplicate preset", result.error);
-                return;
-              }
-              reload();
-            },
-            onDelete: (btn) => {
+  const renderNode = (node) => {
+    const folderName = node.path;
+    const items = node.items;
+    const total = treeNodeTotal(node);
+    const isUncat = folderName.toLowerCase() === UNCATEGORISED.toLowerCase();
+    const hasChildren = node.children.size > 0;
+    return makeFolderSection({
+      title: isUncat ? folderName : shelfLeaf(folderName),
+      tooltip: isUncat ? undefined : folderName,
+      items,
+      count: total,
+      children: sortedTreeChildren(node).map(renderNode),
+      expanded: folderExpanded(folderName, { query: q, openMap }),
+      canManageFolder: !isUncat,
+      onToggleExpand: (open) => openMap?.set(folderName, open),
+      onRenameFolder: (btn) => {
+        mgrInput({
+          anchor: btn,
+          title: "Rename / move folder",
+          placeholder: "path/to/folder",
+          initialValue: folderName,
+          confirmLabel: "Rename",
+          validate: (value) => {
+            if (!normalizeShelfPath(value)) return "Name is required";
+            return "";
+          },
+          onSubmit: async (value) => {
+            const next = normalizeShelfPath(value);
+            const result = await renameLayoutFolder({ name: folderName, newName: next });
+            if (!result.ok) {
+              const taken = (result.conflicts || []).map((c) => c.name).join(", ");
               mgrConfirm({
                 anchor: btn,
-                title: "Delete preset",
-                message: `Delete “${layout.name}”?`,
-                confirmLabel: "Delete",
-                danger: true,
-                onConfirm: async () => {
-                  const result = await deleteLayout(layout.id);
-                  if (!result.ok) {
-                    showMgrError(btn, "Delete preset", result.error);
-                    return;
-                  }
-                  reload();
-                },
+                title: "Rename folder",
+                message: taken ? `Already exists: ${taken}` : result.error || "Rename failed",
+                confirmLabel: "OK",
+                showCancel: false,
+                danger: false,
               });
-            },
-          });
-        },
-      }),
-    );
+              return;
+            }
+            if (openMap) {
+              for (const [key, open] of [...openMap.entries()]) {
+                if (!isInShelfTree(key, folderName)) continue;
+                openMap.delete(key);
+                openMap.set(next + key.slice(folderName.length), open);
+              }
+            }
+            reload();
+          },
+        });
+      },
+      onDeleteFolder: (btn) => {
+        mgrConfirm({
+          anchor: btn,
+          title: "Delete folder",
+          message:
+            `Delete folder “${folderName}”${hasChildren ? " with its sub-folders" : ""}?\n` +
+            `${total} preset(s) will move to ${UNCATEGORISED}.`,
+          confirmLabel: "Delete",
+          danger: true,
+          onConfirm: async () => {
+            const result = await deleteLayoutFolder(folderName);
+            if (!result.ok) {
+              mgrConfirm({
+                anchor: btn,
+                title: "Delete folder",
+                message: result.error || "Delete failed",
+                confirmLabel: "OK",
+                showCancel: false,
+                danger: false,
+              });
+              return;
+            }
+            reload();
+          },
+        });
+      },
+      renderItem: (layout) => {
+        const slotNames = (layout.slots || [])
+          .map((slot) => displaySlotName(slot))
+          .filter(Boolean);
+        return makeItemRow(layout, {
+          name: layout.name || "Untitled",
+          meta: slotNames.join(" · ") || "No fields",
+          onEdit: (btn) => {
+            openEditLayoutPopup({
+              anchor: btn,
+              layout,
+              folders,
+              onSaved: reload,
+            });
+          },
+          onDuplicate: async (btn) => {
+            const name = nextDuplicateName(
+              layouts.map((item) => item.name),
+              layout.name || "Untitled",
+            );
+            const result = await saveLayout({
+              name,
+              description: layout.description || "",
+              slots: layout.slots || [],
+              folder: layout.folder || "",
+            });
+            if (!result.ok) {
+              showMgrError(btn, "Duplicate preset", result.error);
+              return;
+            }
+            reload();
+          },
+          onDelete: (btn) => {
+            mgrConfirm({
+              anchor: btn,
+              title: "Delete preset",
+              message: `Delete “${layout.name}”?`,
+              confirmLabel: "Delete",
+              danger: true,
+              onConfirm: async () => {
+                const result = await deleteLayout(layout.id);
+                if (!result.ok) {
+                  showMgrError(btn, "Delete preset", result.error);
+                  return;
+                }
+                reload();
+              },
+            });
+          },
+        });
+      },
+    });
+  };
+
+  for (const node of sortedTreeChildren(root)) {
+    listEl.appendChild(renderNode(node));
   }
 }
 
@@ -1627,25 +1713,35 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
     matchesPromptPreset(preset, query, { includeBody }),
   );
 
-  const grouped = groupByFolder(filtered, "category");
+  const root = { path: "", items: [], children: new Map() };
+  const ensureNode = (path) => {
+    let node = root;
+    for (const segment of shelfSegments(path)) {
+      const key = segment.toLowerCase();
+      if (!node.children.has(key)) {
+        node.children.set(key, {
+          path: node.path ? `${node.path}/${segment}` : segment,
+          items: [],
+          children: new Map(),
+        });
+      }
+      node = node.children.get(key);
+    }
+    return node;
+  };
+
+  for (const preset of filtered) {
+    ensureNode(preset.category || UNCATEGORISED).items.push(preset);
+  }
   if (showEmpty) {
     for (const category of categories) {
-      if ((category.count || 0) === 0 && !grouped.has(category.name)) {
-        grouped.set(category.name, []);
+      if ((category.count || 0) === 0 && emptyShelfMatchesSearch(category.name, query)) {
+        ensureNode(category.name);
       }
     }
   }
 
-  const names = [...grouped.keys()]
-    .filter((name) => {
-      const items = grouped.get(name) || [];
-      if (items.length) return true;
-      if (!showEmpty) return false;
-      return emptyShelfMatchesSearch(name, query);
-    })
-    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-
-  if (!names.length) {
+  if (!root.children.size) {
     const empty = document.createElement("div");
     empty.className = "pc-popup-message";
     empty.textContent = q ? "No prompts" : "No saved prompts yet.";
@@ -1653,45 +1749,59 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
     return;
   }
 
-  const categoryNames = shelfNames(categories);
+  const sortedChildren = (node) =>
+    [...node.children.values()].sort((a, b) =>
+      shelfLeaf(a.path).localeCompare(shelfLeaf(b.path), undefined, { sensitivity: "base" }),
+    );
+  const nodeTotal = (node) =>
+    node.items.length + [...node.children.values()].reduce((sum, child) => sum + nodeTotal(child), 0);
 
-  for (const categoryName of names) {
-    const items = grouped.get(categoryName) || [];
-    listEl.appendChild(
-      makeFolderSection({
-        title: categoryName,
+  const renderNode = (node) => {
+    const categoryName = node.path;
+    const items = node.items;
+    const total = nodeTotal(node);
+    const hasChildren = node.children.size > 0;
+    return makeFolderSection({
+        title: shelfLeaf(categoryName),
+        tooltip: categoryName,
         items,
+        count: total,
+        children: sortedChildren(node).map(renderNode),
         expanded: folderExpanded(categoryName, { query: q, openMap }),
         canManageFolder: true,
         onToggleExpand: (open) => openMap?.set(categoryName, open),
         onRenameFolder: (btn) => {
           mgrInput({
             anchor: btn,
-            title: "Rename collection",
-            placeholder: "collection name",
+            title: "Rename / move collection",
+            placeholder: "path/to/collection",
             initialValue: categoryName,
             confirmLabel: "Rename",
             validate: (value) => {
-              if (!value.trim()) return "Name is required";
+              if (!normalizeShelfPath(value)) return "Name is required";
               return "";
             },
             onSubmit: async (value) => {
-              const next = value.trim();
+              const next = normalizeShelfPath(value);
               const result = await renameCategory({ name: categoryName, newName: next });
               if (!result.ok) {
+                const taken = (result.conflicts || []).map((c) => c.name).join(", ");
                 mgrConfirm({
                   anchor: btn,
                   title: "Rename collection",
-                  message: result.error || "Rename failed",
+                  message: taken ? `Already exists: ${taken}` : result.error || "Rename failed",
                   confirmLabel: "OK",
                   showCancel: false,
                   danger: false,
                 });
                 return;
               }
-              if (openMap?.has(categoryName)) {
-                openMap.set(next, openMap.get(categoryName));
-                openMap.delete(categoryName);
+              if (openMap) {
+                for (const [key, open] of [...openMap.entries()]) {
+                  if (!isInShelfTree(key, categoryName)) continue;
+                  openMap.delete(key);
+                  openMap.set(next + key.slice(categoryName.length), open);
+                }
               }
               reload();
             },
@@ -1701,7 +1811,9 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
           mgrConfirm({
             anchor: btn,
             title: "Delete collection",
-            message: `Delete collection “${categoryName}” and ${items.length} prompt(s)?\nGroups on the node are not renamed.`,
+            message:
+              `Delete collection “${categoryName}”${hasChildren ? " with its sub-collections" : ""} ` +
+              `and ${total} prompt(s)?\nGroups on the node are not renamed.`,
             confirmLabel: "Delete",
             danger: true,
             onConfirm: async () => {
@@ -1728,7 +1840,7 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
             onEdit: () => {
               openEditPromptPopup({
                 preset,
-                categories: categoryNames,
+                categories,
                 onSaved: reload,
               });
             },
@@ -1773,8 +1885,11 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
               });
             },
           }),
-      }),
-    );
+    });
+  };
+
+  for (const node of sortedChildren(root)) {
+    listEl.appendChild(renderNode(node));
   }
 }
 

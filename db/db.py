@@ -106,6 +106,235 @@ def _migrate(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_presets_category_id ON presets(category_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_templates_folder_id ON templates(folder_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_templates_name ON templates(name)")
+    _migrate_category_paths(conn)
+    _migrate_folder_paths(conn)
+    _migrate_name_paths(conn)
+
+
+SHELF_SEP = "/"
+LEGACY_SHELF_SEP = "|"
+_CATEGORY_PATHS_FLAG = "migration_category_paths_v1"
+_FOLDER_PATHS_FLAG = "migration_folder_paths_v1"
+_NAME_PATHS_FLAG = "migration_name_paths_v1"
+
+
+def _escape_slash_names(conn: sqlite3.Connection, table: str) -> None:
+    rows = conn.execute(
+        f"SELECT id, name FROM {table} WHERE instr(name, ?) > 0", (SHELF_SEP,)
+    ).fetchall()
+    for row in rows:
+        base = (row["name"] or "").replace(SHELF_SEP, LEGACY_SHELF_SEP)
+        candidate = base
+        suffix = 2
+        while conn.execute(
+            f"SELECT 1 FROM {table} WHERE name = ? COLLATE NOCASE AND id != ?",
+            (candidate, int(row["id"])),
+        ).fetchone():
+            candidate = f"{base} ({suffix})"
+            suffix += 1
+        conn.execute(
+            f"UPDATE {table} SET name = ? WHERE id = ?",
+            (candidate, int(row["id"])),
+        )
+
+
+def _migrate_category_paths(conn: sqlite3.Connection) -> None:
+    """One-time: `/` becomes the path separator, so legacy names with `/` turn into `|`."""
+    done = conn.execute(
+        "SELECT 1 FROM settings WHERE key = ?", (_CATEGORY_PATHS_FLAG,)
+    ).fetchone()
+    if done:
+        return
+
+    _escape_slash_names(conn, "categories")
+
+    for row in conn.execute("SELECT id, slots FROM templates").fetchall():
+        try:
+            slots = json.loads(row["slots"] or "[]")
+        except Exception:
+            continue
+        if not isinstance(slots, list):
+            continue
+        changed = False
+        for slot in slots:
+            if not isinstance(slot, dict):
+                continue
+            loaded = slot.get("loadedCategory")
+            if isinstance(loaded, str) and SHELF_SEP in loaded:
+                slot["loadedCategory"] = loaded.replace(SHELF_SEP, LEGACY_SHELF_SEP)
+                changed = True
+        if changed:
+            conn.execute(
+                "UPDATE templates SET slots = ? WHERE id = ?",
+                (json.dumps(slots, ensure_ascii=False), int(row["id"])),
+            )
+
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        (_CATEGORY_PATHS_FLAG, "1"),
+    )
+
+
+def _migrate_folder_paths(conn: sqlite3.Connection) -> None:
+    """One-time: escape `/` in preset/template folder names before nested paths land."""
+    done = conn.execute(
+        "SELECT 1 FROM settings WHERE key = ?", (_FOLDER_PATHS_FLAG,)
+    ).fetchone()
+    if done:
+        return
+    _escape_slash_names(conn, "layout_folders")
+    _escape_slash_names(conn, "template_folders")
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        (_FOLDER_PATHS_FLAG, "1"),
+    )
+
+
+def _unique_title_in_category(
+    conn: sqlite3.Connection, category_id: int, title: str, except_id: int
+) -> str:
+    candidate = title
+    suffix = 2
+    while conn.execute(
+        """
+        SELECT 1 FROM presets
+        WHERE category_id = ? AND title = ? COLLATE NOCASE AND id != ?
+        """,
+        (category_id, candidate, except_id),
+    ).fetchone():
+        candidate = f"{title} ({suffix})"
+        suffix += 1
+    return candidate
+
+
+def _unique_global_name(
+    conn: sqlite3.Connection, table: str, title: str, except_id: int
+) -> str:
+    candidate = title
+    suffix = 2
+    while conn.execute(
+        f"SELECT 1 FROM {table} WHERE name = ? COLLATE NOCASE AND id != ?",
+        (candidate, except_id),
+    ).fetchone():
+        candidate = f"{title} ({suffix})"
+        suffix += 1
+    return candidate
+
+
+def _migrate_name_paths(conn: sqlite3.Connection) -> None:
+    """One-time: `folder + name/with/slash` → nested folder path + leaf name."""
+    done = conn.execute(
+        "SELECT 1 FROM settings WHERE key = ?", (_NAME_PATHS_FLAG,)
+    ).fetchone()
+    if done:
+        return
+
+    for row in conn.execute(
+        """
+        SELECT presets.id, presets.title, presets.category_id, categories.name AS category
+        FROM presets
+        JOIN categories ON categories.id = presets.category_id
+        WHERE instr(presets.title, ?) > 0
+        """,
+        (SHELF_SEP,),
+    ).fetchall():
+        shelf, leaf = _split_path_name(row["category"] or "", row["title"] or "")
+        if not leaf or leaf == (row["title"] or ""):
+            continue
+        category_id, _created = _get_or_create_category(conn, shelf)
+        leaf = _unique_title_in_category(conn, category_id, leaf, int(row["id"]))
+        conn.execute(
+            "UPDATE presets SET category_id = ?, title = ? WHERE id = ?",
+            (category_id, leaf, int(row["id"])),
+        )
+
+    for row in conn.execute(
+        """
+        SELECT layouts.id, layouts.name, layout_folders.name AS folder
+        FROM layouts
+        LEFT JOIN layout_folders ON layout_folders.id = layouts.folder_id
+        WHERE instr(layouts.name, ?) > 0
+        """,
+        (SHELF_SEP,),
+    ).fetchall():
+        folder, leaf = _split_path_name(row["folder"] or "", row["name"] or "")
+        if not leaf or leaf == (row["name"] or ""):
+            continue
+        folder_id = _get_or_create_folder(conn, folder)
+        leaf = _unique_global_name(conn, "layouts", leaf, int(row["id"]))
+        conn.execute(
+            "UPDATE layouts SET folder_id = ?, name = ? WHERE id = ?",
+            (folder_id, leaf, int(row["id"])),
+        )
+
+    for row in conn.execute(
+        """
+        SELECT templates.id, templates.name, template_folders.name AS folder
+        FROM templates
+        LEFT JOIN template_folders ON template_folders.id = templates.folder_id
+        WHERE instr(templates.name, ?) > 0
+        """,
+        (SHELF_SEP,),
+    ).fetchall():
+        folder, leaf = _split_path_name(row["folder"] or "", row["name"] or "")
+        if not leaf or leaf == (row["name"] or ""):
+            continue
+        folder_id = _get_or_create_template_folder(conn, folder)
+        leaf = _unique_global_name(conn, "templates", leaf, int(row["id"]))
+        conn.execute(
+            "UPDATE templates SET folder_id = ?, name = ? WHERE id = ?",
+            (folder_id, leaf, int(row["id"])),
+        )
+
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+        (_NAME_PATHS_FLAG, "1"),
+    )
+
+
+def _normalize_shelf_path(name: str) -> str:
+    parts = [part.strip() for part in (name or "").split(SHELF_SEP)]
+    return SHELF_SEP.join(part for part in parts if part)
+
+
+def _split_path_name(folder: str, name: str) -> Tuple[str, str]:
+    """`Scene` + `Walk/Night` → (`Scene/Walk`, `Night`). Leaves spaces inside segments alone."""
+    shelf = _normalize_shelf_path(folder)
+    raw = (name or "").strip()
+    if SHELF_SEP not in raw:
+        return shelf, raw
+    parts = [part.strip() for part in raw.split(SHELF_SEP) if part.strip()]
+    if not parts:
+        return shelf, ""
+    if len(parts) == 1:
+        return shelf, parts[0]
+    prefix = SHELF_SEP.join(parts[:-1])
+    leaf = parts[-1]
+    combined = _normalize_shelf_path(f"{shelf}{SHELF_SEP}{prefix}" if shelf else prefix)
+    return combined, leaf
+
+
+def _in_shelf_tree(name: str, root: str) -> bool:
+    key = (name or "").casefold()
+    base = (root or "").casefold()
+    return key == base or key.startswith(base + SHELF_SEP)
+
+
+def _resolve_category_name(conn: sqlite3.Connection, name: str) -> str:
+    """Exact collection name; falls back to the pre-path `|` spelling for old workflows."""
+    row = conn.execute(
+        "SELECT name FROM categories WHERE name = ? COLLATE NOCASE", (name,)
+    ).fetchone()
+    if row:
+        return row["name"]
+    if SHELF_SEP in name:
+        legacy = name.replace(SHELF_SEP, LEGACY_SHELF_SEP)
+        row = conn.execute(
+            "SELECT name FROM categories WHERE name = ? COLLATE NOCASE", (legacy,)
+        ).fetchone()
+        if row:
+            return row["name"]
+    return name
 
 
 def init_db() -> None:
@@ -115,18 +344,19 @@ def init_db() -> None:
 
 
 def _get_or_create_category(conn: sqlite3.Connection, name: str) -> Tuple[int, bool]:
+    shelf = _normalize_shelf_path(name)
     row = conn.execute(
         "SELECT id FROM categories WHERE name = ? COLLATE NOCASE",
-        (name,),
+        (shelf,),
     ).fetchone()
     if row:
         return int(row["id"]), False
-    cur = conn.execute("INSERT INTO categories (name) VALUES (?)", (name,))
+    cur = conn.execute("INSERT INTO categories (name) VALUES (?)", (shelf,))
     return int(cur.lastrowid), True
 
 
 def _normalize_folder_name(name: str) -> str:
-    return (name or "").strip()
+    return _normalize_shelf_path(name)
 
 
 def _is_uncategorised(name: str) -> bool:
@@ -185,7 +415,7 @@ def save_layout(
     overwrite: bool = False,
     folder: str = "",
 ) -> Dict:
-    title = (name or "").strip()
+    folder_path, title = _split_path_name(folder, name)
     slot_names = _parse_slots(slots)
     if not title:
         return {"ok": False, "error": "Name is required"}
@@ -196,14 +426,14 @@ def save_layout(
         conn = _connect()
         try:
             conn.execute("BEGIN")
-            folder_id = _get_or_create_folder(conn, folder)
+            folder_id = _get_or_create_folder(conn, folder_path)
             folder_name = ""
             if folder_id:
                 folder_row = conn.execute(
                     "SELECT name FROM layout_folders WHERE id = ?",
                     (folder_id,),
                 ).fetchone()
-                folder_name = folder_row["name"] if folder_row else _normalize_folder_name(folder)
+                folder_name = folder_row["name"] if folder_row else folder_path
 
             existing = conn.execute(
                 "SELECT id FROM layouts WHERE name = ? COLLATE NOCASE",
@@ -290,8 +520,7 @@ def save_preset(
     negative: str = "",
     overwrite: bool = False,
 ) -> Dict:
-    shelf = (category or "").strip()
-    name = (title or "").strip()
+    shelf, name = _split_path_name(category, title)
     pos = positive or ""
     neg = negative or ""
     if not shelf:
@@ -351,12 +580,30 @@ def save_preset(
     return result
 
 
-def list_presets(category: str = "") -> Dict:
-    shelf = (category or "").strip()
+def list_presets(category: str = "", recursive: bool = False) -> Dict:
+    shelf = _normalize_shelf_path(category)
     with _lock:
         conn = _connect()
         try:
             if shelf:
+                shelf = _resolve_category_name(conn, shelf)
+            if shelf and recursive:
+                rows = conn.execute(
+                    """
+                    SELECT
+                        presets.id,
+                        presets.title,
+                        presets.description,
+                        presets.positive,
+                        presets.negative,
+                        categories.name AS category
+                    FROM presets
+                    JOIN categories ON categories.id = presets.category_id
+                    ORDER BY categories.name COLLATE NOCASE, presets.title COLLATE NOCASE
+                    """
+                ).fetchall()
+                rows = [row for row in rows if _in_shelf_tree(row["category"], shelf)]
+            elif shelf:
                 rows = conn.execute(
                     """
                     SELECT
@@ -461,7 +708,19 @@ def update_layout(
                 conn.rollback()
                 return {"ok": False, "error": "Not found"}
 
-            next_name = row["name"] if name is None else (name or "").strip()
+            current_folder = ""
+            if row["folder_id"]:
+                folder_row = conn.execute(
+                    "SELECT name FROM layout_folders WHERE id = ?",
+                    (int(row["folder_id"]),),
+                ).fetchone()
+                current_folder = folder_row["name"] if folder_row else ""
+            base_folder = current_folder if folder is None else folder
+            base_name = row["name"] if name is None else (name or "").strip()
+            if name is not None or folder is not None:
+                next_folder, next_name = _split_path_name(base_folder, base_name)
+            else:
+                next_folder, next_name = current_folder, row["name"]
             next_desc = row["description"] if description is None else (description or "").strip()
             next_folder_id = row["folder_id"]
             next_slots = _parse_slots(row["slots"]) if slots is None else _parse_slots(slots)
@@ -472,7 +731,7 @@ def update_layout(
                 conn.rollback()
                 return {"ok": False, "error": "Add at least one slot"}
 
-            if name is not None and next_name.casefold() != (row["name"] or "").casefold():
+            if next_name.casefold() != (row["name"] or "").casefold():
                 existing = conn.execute(
                     "SELECT id FROM layouts WHERE name = ? COLLATE NOCASE AND id != ?",
                     (next_name, int(layout_id)),
@@ -483,8 +742,8 @@ def update_layout(
                 if existing and overwrite:
                     conn.execute("DELETE FROM layouts WHERE id = ?", (int(existing["id"]),))
 
-            if folder is not None:
-                next_folder_id = _get_or_create_folder(conn, folder)
+            if name is not None or folder is not None:
+                next_folder_id = _get_or_create_folder(conn, next_folder)
 
             conn.execute(
                 """
@@ -499,6 +758,7 @@ def update_layout(
                 "ok": True,
                 "id": int(layout_id),
                 "name": next_name,
+                "folder": next_folder,
                 "slots": next_slots,
             }
         except Exception:
@@ -521,38 +781,47 @@ def delete_layout(layout_id: int) -> Dict:
             conn.close()
 
 
-def rename_layout_folder(name: str, new_name: str) -> Dict:
+def _rename_folder_tree(table: str, name: str, new_name: str) -> Dict:
     old = _normalize_folder_name(name)
     new = _normalize_folder_name(new_name)
     if _is_uncategorised(old):
         return {"ok": False, "error": "Cannot rename Uncategorised"}
     if not new or _is_uncategorised(new):
         return {"ok": False, "error": "Invalid name"}
-    if old.casefold() == new.casefold():
+    if old == new:
         return {"ok": True, "name": new}
+    if old.casefold() != new.casefold() and _in_shelf_tree(new, old):
+        return {"ok": False, "error": "Cannot move a folder into itself"}
 
     with _lock:
         conn = _connect()
         try:
             conn.execute("BEGIN")
-            row = conn.execute(
-                "SELECT id FROM layout_folders WHERE name = ? COLLATE NOCASE",
-                (old,),
-            ).fetchone()
-            if not row:
+            rows = conn.execute(f"SELECT id, name FROM {table}").fetchall()
+            moving = [row for row in rows if _in_shelf_tree(row["name"], old)]
+            if not moving:
                 conn.rollback()
                 return {"ok": False, "error": "Not found"}
-            existing = conn.execute(
-                "SELECT id FROM layout_folders WHERE name = ? COLLATE NOCASE",
-                (new,),
-            ).fetchone()
-            if existing:
+            moving_ids = {int(row["id"]) for row in moving}
+            others = {
+                (row["name"] or "").casefold()
+                for row in rows
+                if int(row["id"]) not in moving_ids
+            }
+            renames = [
+                (int(row["id"]), new + (row["name"] or "")[len(old):]) for row in moving
+            ]
+            conflicts = [
+                {"name": target} for _id, target in renames if target.casefold() in others
+            ]
+            if conflicts:
                 conn.rollback()
-                return {"ok": False, "conflicts": [{"name": new}]}
-            conn.execute(
-                "UPDATE layout_folders SET name = ? WHERE id = ?",
-                (new, int(row["id"])),
-            )
+                return {"ok": False, "conflicts": conflicts}
+            for folder_id, target in renames:
+                conn.execute(
+                    f"UPDATE {table} SET name = ? WHERE id = ?",
+                    (target, folder_id),
+                )
             conn.commit()
             return {"ok": True, "name": new}
         except Exception:
@@ -562,7 +831,7 @@ def rename_layout_folder(name: str, new_name: str) -> Dict:
             conn.close()
 
 
-def delete_layout_folder(name: str) -> Dict:
+def _delete_folder_tree(table: str, item_table: str, name: str) -> Dict:
     title = _normalize_folder_name(name)
     if _is_uncategorised(title):
         return {"ok": False, "error": "Cannot delete Uncategorised"}
@@ -571,18 +840,18 @@ def delete_layout_folder(name: str) -> Dict:
         conn = _connect()
         try:
             conn.execute("BEGIN")
-            row = conn.execute(
-                "SELECT id FROM layout_folders WHERE name = ? COLLATE NOCASE",
-                (title,),
-            ).fetchone()
-            if not row:
+            rows = conn.execute(f"SELECT id, name FROM {table}").fetchall()
+            ids = [int(row["id"]) for row in rows if _in_shelf_tree(row["name"], title)]
+            if not ids:
                 conn.rollback()
                 return {"ok": False, "error": "Not found"}
-            count = conn.execute(
-                "SELECT COUNT(*) AS c FROM layouts WHERE folder_id = ?",
-                (int(row["id"]),),
-            ).fetchone()["c"]
-            conn.execute("DELETE FROM layout_folders WHERE id = ?", (int(row["id"]),))
+            count = 0
+            for folder_id in ids:
+                count += conn.execute(
+                    f"SELECT COUNT(*) AS c FROM {item_table} WHERE folder_id = ?",
+                    (folder_id,),
+                ).fetchone()["c"]
+                conn.execute(f"DELETE FROM {table} WHERE id = ?", (folder_id,))
             conn.commit()
             return {"ok": True, "moved": int(count)}
         except Exception:
@@ -590,6 +859,14 @@ def delete_layout_folder(name: str) -> Dict:
             raise
         finally:
             conn.close()
+
+
+def rename_layout_folder(name: str, new_name: str) -> Dict:
+    return _rename_folder_tree("layout_folders", name, new_name)
+
+
+def delete_layout_folder(name: str) -> Dict:
+    return _delete_folder_tree("layout_folders", "layouts", name)
 
 
 def _get_or_create_template_folder(conn: sqlite3.Connection, name: str) -> Optional[int]:
@@ -681,7 +958,7 @@ def save_template(
     overwrite: bool = False,
     folder: str = "",
 ) -> Dict:
-    title = (name or "").strip()
+    folder_path, title = _split_path_name(folder, name)
     slot_rows = _parse_template_slots(slots)
     if not title:
         return {"ok": False, "error": "Name is required"}
@@ -692,16 +969,14 @@ def save_template(
         conn = _connect()
         try:
             conn.execute("BEGIN")
-            folder_id = _get_or_create_template_folder(conn, folder)
+            folder_id = _get_or_create_template_folder(conn, folder_path)
             folder_name = ""
             if folder_id:
                 folder_row = conn.execute(
                     "SELECT name FROM template_folders WHERE id = ?",
                     (folder_id,),
                 ).fetchone()
-                folder_name = (
-                    folder_row["name"] if folder_row else _normalize_folder_name(folder)
-                )
+                folder_name = folder_row["name"] if folder_row else folder_path
 
             existing = conn.execute(
                 "SELECT id FROM templates WHERE name = ? COLLATE NOCASE",
@@ -818,7 +1093,19 @@ def update_template(
                 conn.rollback()
                 return {"ok": False, "error": "Not found"}
 
-            next_name = row["name"] if name is None else (name or "").strip()
+            current_folder = ""
+            if row["folder_id"]:
+                folder_row = conn.execute(
+                    "SELECT name FROM template_folders WHERE id = ?",
+                    (int(row["folder_id"]),),
+                ).fetchone()
+                current_folder = folder_row["name"] if folder_row else ""
+            base_folder = current_folder if folder is None else folder
+            base_name = row["name"] if name is None else (name or "").strip()
+            if name is not None or folder is not None:
+                next_folder, next_name = _split_path_name(base_folder, base_name)
+            else:
+                next_folder, next_name = current_folder, row["name"]
             next_desc = row["description"] if description is None else (description or "").strip()
             next_folder_id = row["folder_id"]
             next_slots = (
@@ -833,7 +1120,7 @@ def update_template(
                 conn.rollback()
                 return {"ok": False, "error": "Add at least one slot"}
 
-            if name is not None and next_name.casefold() != (row["name"] or "").casefold():
+            if next_name.casefold() != (row["name"] or "").casefold():
                 existing = conn.execute(
                     "SELECT id FROM templates WHERE name = ? COLLATE NOCASE AND id != ?",
                     (next_name, int(template_id)),
@@ -844,8 +1131,8 @@ def update_template(
                 if existing and overwrite:
                     conn.execute("DELETE FROM templates WHERE id = ?", (int(existing["id"]),))
 
-            if folder is not None:
-                next_folder_id = _get_or_create_template_folder(conn, folder)
+            if name is not None or folder is not None:
+                next_folder_id = _get_or_create_template_folder(conn, next_folder)
 
             conn.execute(
                 """
@@ -874,6 +1161,7 @@ def update_template(
         "ok": True,
         "id": int(template_id),
         "name": next_name,
+        "folder": next_folder,
         "slots": next_slots,
         "description": next_desc,
     }
@@ -893,74 +1181,11 @@ def delete_template(template_id: int) -> Dict:
 
 
 def rename_template_folder(name: str, new_name: str) -> Dict:
-    old = _normalize_folder_name(name)
-    new = _normalize_folder_name(new_name)
-    if _is_uncategorised(old):
-        return {"ok": False, "error": "Cannot rename Uncategorised"}
-    if not new or _is_uncategorised(new):
-        return {"ok": False, "error": "Invalid name"}
-    if old.casefold() == new.casefold():
-        return {"ok": True, "name": new}
-
-    with _lock:
-        conn = _connect()
-        try:
-            conn.execute("BEGIN")
-            row = conn.execute(
-                "SELECT id FROM template_folders WHERE name = ? COLLATE NOCASE",
-                (old,),
-            ).fetchone()
-            if not row:
-                conn.rollback()
-                return {"ok": False, "error": "Not found"}
-            existing = conn.execute(
-                "SELECT id FROM template_folders WHERE name = ? COLLATE NOCASE",
-                (new,),
-            ).fetchone()
-            if existing:
-                conn.rollback()
-                return {"ok": False, "conflicts": [{"name": new}]}
-            conn.execute(
-                "UPDATE template_folders SET name = ? WHERE id = ?",
-                (new, int(row["id"])),
-            )
-            conn.commit()
-            return {"ok": True, "name": new}
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+    return _rename_folder_tree("template_folders", name, new_name)
 
 
 def delete_template_folder(name: str) -> Dict:
-    title = _normalize_folder_name(name)
-    if _is_uncategorised(title):
-        return {"ok": False, "error": "Cannot delete Uncategorised"}
-
-    with _lock:
-        conn = _connect()
-        try:
-            conn.execute("BEGIN")
-            row = conn.execute(
-                "SELECT id FROM template_folders WHERE name = ? COLLATE NOCASE",
-                (title,),
-            ).fetchone()
-            if not row:
-                conn.rollback()
-                return {"ok": False, "error": "Not found"}
-            count = conn.execute(
-                "SELECT COUNT(*) AS c FROM templates WHERE folder_id = ?",
-                (int(row["id"]),),
-            ).fetchone()["c"]
-            conn.execute("DELETE FROM template_folders WHERE id = ?", (int(row["id"]),))
-            conn.commit()
-            return {"ok": True, "moved": int(count)}
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+    return _delete_folder_tree("template_folders", "templates", name)
 
 
 def update_preset(
@@ -989,12 +1214,17 @@ def update_preset(
                 conn.rollback()
                 return {"ok": False, "error": "Not found"}
 
-            next_title = row["title"] if title is None else (title or "").strip()
             next_desc = row["description"] if description is None else (description or "").strip()
             next_pos = row["positive"] if positive is None else (positive or "")
             next_neg = row["negative"] if negative is None else (negative or "")
             category_id = int(row["category_id"])
             shelf = row["category"]
+            base_shelf = shelf if category is None else category
+            base_title = row["title"] if title is None else (title or "").strip()
+            if title is not None or category is not None:
+                shelf, next_title = _split_path_name(base_shelf, base_title)
+            else:
+                next_title = row["title"]
             if not next_title:
                 conn.rollback()
                 return {"ok": False, "error": "Name is required"}
@@ -1002,17 +1232,15 @@ def update_preset(
                 conn.rollback()
                 return {"ok": False, "error": "Write a prompt first"}
 
-            if category is not None:
-                shelf = (category or "").strip()
+            if title is not None or category is not None:
                 if not shelf:
                     conn.rollback()
                     return {"ok": False, "error": "Collection is required"}
                 category_id, _created = _get_or_create_category(conn, shelf)
 
             if (
-                title is not None
-                and next_title.casefold() != (row["title"] or "").casefold()
-            ) or (category is not None and category_id != int(row["category_id"])):
+                next_title.casefold() != (row["title"] or "").casefold()
+            ) or (category_id != int(row["category_id"])):
                 existing = conn.execute(
                     """
                     SELECT id FROM presets
@@ -1068,37 +1296,45 @@ def delete_preset(preset_id: int) -> Dict:
 
 
 def rename_category(name: str, new_name: str) -> Dict:
-    old = (name or "").strip()
-    new = (new_name or "").strip()
+    """Rename / move a collection path together with its sub-collections."""
+    old = _normalize_shelf_path(name)
+    new = _normalize_shelf_path(new_name)
     if not old:
         return {"ok": False, "error": "Not found"}
     if not new:
         return {"ok": False, "error": "Invalid name"}
-    if old.casefold() == new.casefold():
+    if old == new:
         return {"ok": True, "name": new}
+    if old.casefold() != new.casefold() and _in_shelf_tree(new, old):
+        return {"ok": False, "error": "Cannot move a collection into itself"}
 
     with _lock:
         conn = _connect()
         try:
             conn.execute("BEGIN")
-            row = conn.execute(
-                "SELECT id FROM categories WHERE name = ? COLLATE NOCASE",
-                (old,),
-            ).fetchone()
-            if not row:
+            rows = conn.execute("SELECT id, name FROM categories").fetchall()
+            moving = [row for row in rows if _in_shelf_tree(row["name"], old)]
+            if not moving:
                 conn.rollback()
                 return {"ok": False, "error": "Not found"}
-            existing = conn.execute(
-                "SELECT id FROM categories WHERE name = ? COLLATE NOCASE",
-                (new,),
-            ).fetchone()
-            if existing:
+            moving_ids = {int(row["id"]) for row in moving}
+            others = {
+                (row["name"] or "").casefold()
+                for row in rows
+                if int(row["id"]) not in moving_ids
+            }
+            renames = [
+                (int(row["id"]), new + (row["name"] or "")[len(old):]) for row in moving
+            ]
+            conflicts = [{"name": target} for _id, target in renames if target.casefold() in others]
+            if conflicts:
                 conn.rollback()
-                return {"ok": False, "conflicts": [{"name": new}]}
-            conn.execute(
-                "UPDATE categories SET name = ? WHERE id = ?",
-                (new, int(row["id"])),
-            )
+                return {"ok": False, "conflicts": conflicts}
+            for category_id, target in renames:
+                conn.execute(
+                    "UPDATE categories SET name = ? WHERE id = ?",
+                    (target, category_id),
+                )
             conn.commit()
             return {"ok": True, "name": new}
         except Exception:
@@ -1109,7 +1345,8 @@ def rename_category(name: str, new_name: str) -> Dict:
 
 
 def delete_category(name: str) -> Dict:
-    shelf = (name or "").strip()
+    """Delete a collection path together with its sub-collections."""
+    shelf = _normalize_shelf_path(name)
     if not shelf:
         return {"ok": False, "error": "Not found"}
 
@@ -1117,18 +1354,18 @@ def delete_category(name: str) -> Dict:
         conn = _connect()
         try:
             conn.execute("BEGIN")
-            row = conn.execute(
-                "SELECT id FROM categories WHERE name = ? COLLATE NOCASE",
-                (shelf,),
-            ).fetchone()
-            if not row:
+            rows = conn.execute("SELECT id, name FROM categories").fetchall()
+            ids = [int(row["id"]) for row in rows if _in_shelf_tree(row["name"], shelf)]
+            if not ids:
                 conn.rollback()
                 return {"ok": False, "error": "Not found"}
-            count = conn.execute(
-                "SELECT COUNT(*) AS c FROM presets WHERE category_id = ?",
-                (int(row["id"]),),
-            ).fetchone()["c"]
-            conn.execute("DELETE FROM categories WHERE id = ?", (int(row["id"]),))
+            count = 0
+            for category_id in ids:
+                count += conn.execute(
+                    "SELECT COUNT(*) AS c FROM presets WHERE category_id = ?",
+                    (category_id,),
+                ).fetchone()["c"]
+                conn.execute("DELETE FROM categories WHERE id = ?", (category_id,))
             conn.commit()
             return {"ok": True, "deleted": int(count)}
         except Exception:

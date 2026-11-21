@@ -1,5 +1,6 @@
 import { listCategories } from "./api.js";
 import { openPopup } from "./popup.js";
+import { shelfChildren } from "./shelf_paths.js";
 
 /**
  * Name a new group/pair slot: free text + shelves that already have saved pairs.
@@ -149,11 +150,10 @@ export function openAddGroupPopup({
           list.appendChild(err);
           return;
         }
-        // Only shelves that already have at least one saved pair (not empty leftovers).
-        names = (result.categories || [])
-          .filter((c) => Number(c?.count || 0) > 0)
-          .map((c) => String(c?.name || "").trim())
-          .filter(Boolean);
+        // Root collections that already hold at least one saved pair (sub-collections included).
+        names = shelfChildren(result.categories || [], "")
+          .filter((child) => child.total > 0)
+          .map((child) => child.path);
         paintList();
       });
     },

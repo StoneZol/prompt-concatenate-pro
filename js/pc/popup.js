@@ -1607,6 +1607,116 @@ const CSS = `
   padding-top: 0;
 }
 
+.pc-shelf-folder-row {
+  gap: 6px;
+}
+
+.pc-shelf-folder-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--descrip-text, #999);
+}
+
+.pc-shelf-folder-icon svg {
+  width: 11px;
+  height: 11px;
+  transform: rotate(-90deg);
+}
+
+.pc-shelf-folder-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.pc-shelf-folder-count {
+  flex: 0 0 auto;
+  color: var(--descrip-text, #888);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pc-shelf-new-btn {
+  gap: 4px;
+  margin-right: auto;
+}
+
+.pc-shelf-new-btn svg {
+  width: 11px;
+  height: 11px;
+}
+
+.pc-save-folder-row[hidden] {
+  display: none !important;
+}
+
+.pc-shelf-input-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+}
+
+.pc-shelf-input-wrap .pc-popup-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.pc-shelf-hints {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 2px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  padding: 3px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--comfy-menu-bg, #1f1f23);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.pc-shelf-hints[hidden] {
+  display: none !important;
+}
+
+.pc-shelf-hint {
+  text-align: left;
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--input-text, #ddd);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pc-shelf-hint.active,
+.pc-shelf-hint:hover {
+  background: #2f2b3d;
+  color: #e8e4f5;
+}
+
+.pc-load-shelf-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pc-load-shelf-nav:empty {
+  display: none;
+}
+
 .pc-pick-item.selected {
   background: #2f2b3d;
   border-color: #6d5aa8;
@@ -1686,6 +1796,12 @@ const CSS = `
 
 .pc-preset-folder.collapsed .pc-preset-folder-body {
   display: none;
+}
+
+.pc-preset-folder-body > .pc-preset-folder {
+  margin-left: 10px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .pc-mgr-tabs {

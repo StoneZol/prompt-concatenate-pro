@@ -98,7 +98,10 @@ async def save_preset(request):
 
 async def list_presets(request):
     try:
-        result = db.list_presets(request.query.get("category") or "")
+        result = db.list_presets(
+            request.query.get("category") or "",
+            recursive=(request.query.get("recursive") or "") in ("1", "true"),
+        )
     except Exception as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=500)
     return web.json_response(result)

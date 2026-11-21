@@ -1,4 +1,4 @@
-/** Shared library search: AND tokens; optional `shelf\ rest` / `shelf/ rest` path filter. */
+/** Shared library search: AND tokens; optional `shelf\ rest` / `path/to/shelf\ rest` / `shelf/ rest` filter. */
 
 function tokenize(text) {
   return String(text || "")
@@ -15,12 +15,21 @@ export function parseSearchQuery(raw) {
   const text = String(raw || "").trim();
   if (!text) return { shelf: null, tokens: [], hasShelfFilter: false };
 
-  const sep = text.search(/[\\/]/);
+  // `\` wins and may follow a collection path (`Scene/Walk\rain`); bare `/` keeps the legacy split.
+  const back = text.lastIndexOf("\\");
+  const sep = back >= 0 ? back : text.indexOf("/");
   if (sep < 0) {
     return { shelf: null, tokens: tokenize(text), hasShelfFilter: false };
   }
 
-  const shelf = text.slice(0, sep).trim().toLowerCase() || null;
+  const shelf =
+    text
+      .slice(0, sep)
+      .split("/")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join("/")
+      .toLowerCase() || null;
   const rest = text.slice(sep + 1).trim();
   return {
     shelf,

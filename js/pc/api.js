@@ -88,9 +88,9 @@ export async function savePreset({
   return readJson(res);
 }
 
-export async function listPresets({ category = "" } = {}) {
+export async function listPresets({ category = "", recursive = false } = {}) {
   const url = category
-    ? `${PRESETS_URL}?category=${encodeURIComponent(category)}`
+    ? `${PRESETS_URL}?category=${encodeURIComponent(category)}${recursive ? "&recursive=1" : ""}`
     : PRESETS_URL;
   const res = await fetch(url);
   return readJson(res);

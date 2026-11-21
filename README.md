@@ -49,6 +49,7 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 - **Presets** — slot names + order; folders; edit as comma-separated text in the manager
 - **Templates** — full packs; Load **replaces** all pairs, **+** merges by slot name (insert missing, leave unrelated groups alone); empty pairs omitted on save
 - **Prompt pairs** — save / load / append per group shelf; preview; **Search in prompts**
+- **Nested collections / folders** — `Scene/Walk/Night` paths for pairs, presets, and templates; a name with `/` nests under the current folder; type with hints or pick in a folder browser; manager trees; rename / move whole branches
 - **Smart search** — AND tokens; `shelf\keyword` filters a collection first
 - **Library manager** — Presets / Prompts / Templates (+ **Suggest** when autocomplete is on); duplicate, rename, move, delete; last tab remembered
 - **Prompt autocomplete** (Settings) — suggests segments from **your** library; caret popup (**Tab** accept / Add); Suggest tab + rebuild
@@ -173,6 +174,8 @@ Optional wired slot (Settings → **External prompt**). Fixed id, title `Externa
 | **Group** (collection) | Prompt pairs | `categories` |
 
 Shelves are created when you **Save pair**. Those with at least one pair show under **Add group → Groups** (so you can reuse exact names like `Scene255`).
+
+Collections and preset/template folders nest via `/`: `Scene/Walk`, `Looks/Daki`. Type a path in Save (hints after `/`, **Tab** completes) or **Choose** a folder (crumbs, sub-folders, **+ New folder**). Writing `Универсальный/18+` in the name field under `Основа` saves as `Основа/Универсальный` · `18+`. A group named `Scene` opens `Scene` in Load pair with its sub-folders; Add group lists root collections only. Manager **Rename** accepts a full path, so it also moves a branch. Since 2.3.0 `/` is reserved — older folder names with `/` were migrated to `|`, then slash-in-names were split into nested folders.
 
 ---
 

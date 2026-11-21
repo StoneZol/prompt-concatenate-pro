@@ -3,6 +3,7 @@ import { openConfirmPopup, openPopup } from "./popup.js";
 import { listLayouts } from "./api.js";
 import { matchesLayoutPreset } from "./search.js";
 import { displaySlotName } from "./external.js";
+import { normalizeShelfPath, shelfLeaf, shelfSegments } from "./shelf_paths.js";
 
 const DESC_PREVIEW_CHARS = 60;
 const UNCATEGORISED = "Uncategorised";
@@ -82,24 +83,46 @@ function makePresetCard(layout, { onLoad }) {
   return card;
 }
 
-function groupLayouts(layouts) {
-  const folders = new Map();
-  const uncategorised = [];
-  for (const layout of layouts) {
-    const folder = String(layout.folder || "").trim();
-    if (!folder) {
-      uncategorised.push(layout);
-      continue;
+function buildFolderTree(items, folderKey) {
+  const root = { path: "", items: [], children: new Map() };
+  for (const item of items) {
+    const path = normalizeShelfPath(item[folderKey]) || UNCATEGORISED;
+    let node = root;
+    for (const segment of shelfSegments(path)) {
+      const key = segment.toLowerCase();
+      if (!node.children.has(key)) {
+        node.children.set(key, {
+          path: node.path ? `${node.path}/${segment}` : segment,
+          items: [],
+          children: new Map(),
+        });
+      }
+      node = node.children.get(key);
     }
-    const list = folders.get(folder) || [];
-    list.push(layout);
-    folders.set(folder, list);
+    node.items.push(item);
   }
-  const named = [...folders.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  return { uncategorised, named, folders };
+  return root;
 }
 
-function makeFolder({ title, layouts, expanded, onLoad }) {
+function treeTotal(node) {
+  return (
+    node.items.length +
+    [...node.children.values()].reduce((sum, child) => sum + treeTotal(child), 0)
+  );
+}
+
+function sortedChildren(node) {
+  return [...node.children.values()].sort((a, b) => {
+    const aUncat = a.path.toLowerCase() === UNCATEGORISED.toLowerCase();
+    const bUncat = b.path.toLowerCase() === UNCATEGORISED.toLowerCase();
+    if (aUncat !== bUncat) return aUncat ? -1 : 1;
+    return shelfLeaf(a.path).localeCompare(shelfLeaf(b.path), undefined, {
+      sensitivity: "base",
+    });
+  });
+}
+
+function makeFolder({ title, layouts, expanded, onLoad, children = [], count, tooltip }) {
   const folder = document.createElement("div");
   folder.className = "pc-preset-folder";
   if (!expanded) folder.classList.add("collapsed");
@@ -115,17 +138,19 @@ function makeFolder({ title, layouts, expanded, onLoad }) {
   const label = document.createElement("span");
   label.className = "pc-preset-folder-name";
   label.textContent = title;
+  if (tooltip) label.title = tooltip;
 
-  const count = document.createElement("span");
-  count.className = "pc-preset-folder-count";
-  count.textContent = String(layouts.length);
+  const countEl = document.createElement("span");
+  countEl.className = "pc-preset-folder-count";
+  countEl.textContent = String(count ?? layouts.length);
 
-  head.append(chevron, label, count);
+  head.append(chevron, label, countEl);
   head.title = expanded ? "Collapse folder" : "Expand folder";
   head.setAttribute("aria-expanded", expanded ? "true" : "false");
 
   const body = document.createElement("div");
   body.className = "pc-preset-folder-body";
+  for (const child of children) body.appendChild(child);
   for (const layout of layouts) {
     body.appendChild(makePresetCard(layout, { onLoad }));
   }
@@ -157,28 +182,22 @@ function paintPresetList(list, layouts, query, onLoad) {
     return;
   }
 
-  const grouped = groupLayouts(matched);
   const searching = Boolean(q);
-
-  if (grouped.uncategorised.length) {
-    list.appendChild(
-      makeFolder({
-        title: UNCATEGORISED,
-        layouts: grouped.uncategorised,
-        expanded: true,
-        onLoad,
-      }),
-    );
-  }
-  for (const name of grouped.named) {
-    list.appendChild(
-      makeFolder({
-        title: name,
-        layouts: grouped.folders.get(name) || [],
-        expanded: searching,
-        onLoad,
-      }),
-    );
+  const root = buildFolderTree(matched, "folder");
+  const renderNode = (node) => {
+    const isUncat = node.path.toLowerCase() === UNCATEGORISED.toLowerCase();
+    return makeFolder({
+      title: isUncat ? node.path : shelfLeaf(node.path),
+      tooltip: isUncat ? undefined : node.path,
+      layouts: node.items,
+      count: treeTotal(node),
+      children: sortedChildren(node).map(renderNode),
+      expanded: searching || isUncat,
+      onLoad,
+    });
+  };
+  for (const node of sortedChildren(root)) {
+    list.appendChild(renderNode(node));
   }
 }
 
