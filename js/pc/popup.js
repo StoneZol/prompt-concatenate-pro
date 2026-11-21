@@ -137,7 +137,8 @@ const CSS = `
 /* Editors / manager: outer body does not scroll — inner list/scroll does. */
 .pc-popup-backdrop .pc-popup-body:has(> .pc-popup-fixed),
 .pc-popup-backdrop .pc-popup-body:has(.pc-mgr-list),
-.pc-popup-backdrop .pc-popup-body:has(.pc-preset-list) {
+.pc-popup-backdrop .pc-popup-body:has(.pc-preset-list),
+.pc-popup-backdrop .pc-popup-body:has(.pc-whats-new) {
   overflow: hidden;
 }
 
@@ -302,6 +303,84 @@ const CSS = `
   cursor: pointer;
   font-family: inherit;
   font-size: 12px;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.pc-whats-new {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(62vh, 520px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 2px;
+}
+
+.pc-whats-new-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pc-whats-new-heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--input-text, #ddd);
+}
+
+.pc-whats-new-list {
+  margin: 0;
+  padding: 0 0 0 1.15em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--descrip-text, #aaa);
+  line-height: 1.4;
+}
+
+.pc-whats-new-list li::marker {
+  color: var(--descrip-text, #777);
+}
+
+.pc-whats-new-figure {
+  margin: 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pc-whats-new-img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--comfy-input-bg, #2a2a2e);
+}
+
+.pc-whats-new-cap {
+  font-size: 11px;
+  color: var(--descrip-text, #888);
+  line-height: 1.35;
+}
+
+.pc-whats-new-note {
+  font-size: 11px;
+  color: var(--descrip-text, #888);
+  line-height: 1.4;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #444);
+  background: var(--comfy-input-bg, #2a2a2e);
+}
+
+.pc-whats-new-actions {
+  flex: 0 0 auto;
+  margin-top: 4px;
 }
 
 .pc-popup-btn:hover:not(:disabled) {

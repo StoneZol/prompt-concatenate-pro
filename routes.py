@@ -10,6 +10,7 @@ from aiohttp import web
 from server import PromptServer
 
 from . import db
+from .whats_new import get_whats_new, resolve_asset_file
 
 SAVE_ROUTE = "/prompt_craft/layouts"
 LIST_ROUTE = "/prompt_craft/layouts"
@@ -19,6 +20,8 @@ CATEGORIES_ROUTE = "/prompt_craft/categories"
 TEMPLATES_ROUTE = "/prompt_craft/templates"
 TEMPLATE_FOLDERS_ROUTE = "/prompt_craft/template_folders"
 PREFS_ROUTE = "/prompt_craft/prefs"
+WHATS_NEW_ROUTE = "/prompt_craft/whats_new"
+ASSET_ROUTE = "/prompt_craft/asset/{path:.+}"
 AUTOCOMPLETE_ROUTE = "/prompt_craft/autocomplete"
 RESOLVE_LORA_ROUTE = "/prompt_craft/resolve_lora"
 LORA_NOTE_ROUTE = "/prompt_craft/lora_note"
@@ -336,6 +339,22 @@ async def get_prefs(request):
     except Exception as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=500)
     return web.json_response(result)
+
+
+async def whats_new_route(request):
+    try:
+        result = get_whats_new()
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    return web.json_response(result)
+
+
+async def asset_route(request):
+    rel = request.match_info.get("path") or ""
+    path = resolve_asset_file(rel)
+    if not path:
+        return web.json_response({"ok": False, "error": "Not found"}, status=404)
+    return web.FileResponse(path)
 
 
 async def update_prefs(request):
@@ -734,6 +753,10 @@ if TEMPLATE_FOLDERS_ROUTE not in _existing:
 if PREFS_ROUTE not in _existing:
     PromptServer.instance.routes.get(PREFS_ROUTE)(get_prefs)
     PromptServer.instance.routes.patch(PREFS_ROUTE)(update_prefs)
+if WHATS_NEW_ROUTE not in _existing:
+    PromptServer.instance.routes.get(WHATS_NEW_ROUTE)(whats_new_route)
+if ASSET_ROUTE not in _existing:
+    PromptServer.instance.routes.get(ASSET_ROUTE)(asset_route)
 if AUTOCOMPLETE_ROUTE not in _existing:
     PromptServer.instance.routes.get(AUTOCOMPLETE_ROUTE)(autocomplete_lookup)
     PromptServer.instance.routes.get(f"{AUTOCOMPLETE_ROUTE}/list")(autocomplete_list)

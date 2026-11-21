@@ -21,13 +21,13 @@ Format: newest first.
 
 ### Nested collections / folders
 
-- Paths with `/` for pair collections **and** preset / template folders: `Scene/Walk`, `Looks/Daki` — as deep as you like; folders appear on first save
-- A name with `/` is also a path: `Основа` + `Универсальный/18+` saves as collection `Основа/Универсальный`, name `18+` (same for presets / templates)
+- Paths with `/` for pair collections **and** preset / template folders: `Scene/Walk`, `Looks/Portrait` — as deep as you like; folders appear on first save
+- A name with `/` is also a path: `Looks` + `Portrait/Soft` saves as collection `Looks/Portrait`, name `Soft` (same for presets / templates)
 - Type the path by hand (sub-folder hints after `/`, **Tab** completes) or **Choose** → folder browser: crumbs, sub-folders with counts, filter, **+ New folder**
 
 ![Save pair — nested path in collection](../docs/screenshots/2.3.0/1.png)
 
-- **Load pair** opens the group’s root collection (or the loaded pair’s folder) with crumbs + sub-folders; search covers the subtree; `Scene/Walk\rain` or `осн\уни\` filters by path
+- **Load pair** opens the group’s root collection (or the loaded pair’s folder) with crumbs + sub-folders; search covers the subtree; `Scene/Walk\rain` or `looks\port\` filters by path
 - Manager · Prompts / Presets / Templates are trees; **Rename** takes a full path (move a branch), **Delete** removes the branch
 
 ![Manager · nested folder tree](../docs/screenshots/2.3.0/1.1.png)
@@ -35,8 +35,8 @@ Format: newest first.
 ![Manager · path search in the tree](../docs/screenshots/2.3.0/1.2.png)
 
 - **Add group** lists root collections only; Pair browse stays in the current folder unless **Browse nested folders** is on
-- Migration on first start: folder / collection names that already contained `/` become `|` (`A/B` → `A|B`); then names like `test/daki1` or `Универсальный/18+` are split into folder + leaf so existing libraries nest correctly
-- Templates and presets are unique per **folder + name** (same as pairs per collection) — `daki1` can live in `test` and in `Looks` at once
+- Migration on first start: folder / collection names that already contained `/` become `|` (`A/B` → `A|B`); then names like `Studio/Soft` are split into folder + leaf so existing libraries nest correctly
+- Templates and presets are unique per **folder + name** (same as pairs per collection) — `soft-light` can live in `Studio` and in `Looks` at once
 
 ### Save over existing
 
@@ -58,6 +58,10 @@ Format: newest first.
 - Add group row: **Clear all** (✕) empties every pair’s prompts + loaded names, **Remove all** (trash) deletes all groups (External kept); both confirm first
 
 ![Add group row — Clear all / Remove all](../docs/screenshots/2.3.0/2.png)
+
+### What's new popup
+
+- First time a Prompt Concatenate Pro node opens on a new package version, a short **What's new** dialog shows the current release notes (Got it + link to the full GitHub changelog)
 
 > New settings keys need a full ComfyUI restart after update (then Ctrl+F5).
 

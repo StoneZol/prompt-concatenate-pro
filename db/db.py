@@ -1474,6 +1474,7 @@ UI_PREF_KEYS = (
     "templatesEnabled",
     "pairBrowse",
     "pairBrowseNested",
+    "lastSeenChangelog",
 )
 UI_PREF_DEFAULTS = {
     "otherCollections": False,
@@ -1487,6 +1488,7 @@ UI_PREF_DEFAULTS = {
     "templatesEnabled": True,
     "pairBrowse": False,
     "pairBrowseNested": False,
+    "lastSeenChangelog": "",
 }
 _MANAGER_TAB_VALUES = frozenset({"presets", "prompts", "templates", "suggest"})
 
@@ -1700,6 +1702,8 @@ def _normalize_ui_prefs(raw) -> Dict:
             if val == "stacks":
                 val = "presets"
             prefs[key] = val if val in _MANAGER_TAB_VALUES else "presets"
+        elif key == "lastSeenChangelog":
+            prefs[key] = str(raw[key] or "").strip()
         else:
             prefs[key] = bool(raw[key])
     return prefs
@@ -1749,6 +1753,8 @@ def set_ui_prefs(patch: Optional[Dict] = None) -> Dict:
                     if val == "stacks":
                         val = "presets"
                     prefs[key] = val if val in _MANAGER_TAB_VALUES else "presets"
+                elif key == "lastSeenChangelog":
+                    prefs[key] = str(incoming[key] or "").strip()
                 else:
                     prefs[key] = bool(incoming[key])
             payload = json.dumps(prefs)

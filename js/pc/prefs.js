@@ -24,6 +24,8 @@ const DEFAULTS = {
   /** Prev / next arrows on pairs — flip through saved pairs of a collection. */
   pairBrowse: false,
   pairBrowseNested: false,
+  /** Last changelog version the user dismissed (What's new). */
+  lastSeenChangelog: "",
 };
 
 export const UI_PREFS_EVENT = "pc-ui-prefs-changed";
@@ -40,6 +42,7 @@ function normalizeManagerTab(value) {
 
 function coercePref(key, value) {
   if (key === "managerTab") return normalizeManagerTab(value);
+  if (key === "lastSeenChangelog") return String(value || "").trim();
   return Boolean(value);
 }
 

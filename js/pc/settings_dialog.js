@@ -78,7 +78,7 @@ const PAIR_BROWSE_NESTED_HELP = {
   text:
     "Off by default. Saved in SQLite (all nodes). Needs Pair browse on.\n\n" +
     "When on, ‹ › walk the current collection and all of its sub-folders " +
-    "(e.g. Scene → Scene/Walk → Scene/18+/Night), same order as Load pair with a path filter. " +
+    "(e.g. Scene → Scene/Walk → Scene/Night/Closeup), same order as Load pair with a path filter. " +
     "When off, only the exact folder of the loaded pair (or the group shelf) is browsed.",
 };
 

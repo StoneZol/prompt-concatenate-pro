@@ -22,7 +22,7 @@ export function parseSearchQuery(raw) {
   const text = String(raw || "").trim();
   if (!text) return { shelf: null, tokens: [], hasShelfFilter: false };
 
-  // `\` wins: `Scene\kw`, `Scene/Walk\kw`, `осн\уни\` (trailing \ = path only).
+  // `\` wins: `Scene\kw`, `Scene/Walk\kw`, `looks\port\` (trailing \ = path only).
   // Bare `/` keeps the legacy split (`Scene/Walk` → shelf Scene, token Walk).
   if (text.includes("\\")) {
     const parts = text.split("\\");
@@ -71,7 +71,7 @@ function includesAll(haystack, tokens) {
   return tokens.every((token) => h.includes(token));
 }
 
-/** Ordered segment match: `осн/уни` → Основа/Универсальный (substring per segment). */
+/** Ordered segment match: `looks/port` → Looks/Portrait (substring per segment). */
 function shelfPathMatches(category, shelf) {
   if (!shelf) return true;
   const cat = String(category || "").toLowerCase();
@@ -100,7 +100,7 @@ export function emptyShelfMatchesSearch(name, rawQuery) {
   const label = String(name || "").toLowerCase();
   if (hasShelfFilter) {
     if (shelf && !shelfPathMatches(label, shelf)) return false;
-    // Tokens may also target a sub-folder name: `осн\уни` → Основа/Универсальный.
+    // Tokens may also target a sub-folder name: `looks\port` → Looks/Portrait.
     return includesAll(label, tokens);
   }
   return includesAll(label, tokens);
@@ -116,8 +116,8 @@ function shelfLabel(name, emptyLabel = "Uncategorised") {
  * When includeBody is true, positive/negative also participate.
  * Plain query (no `\`/`/`): AND over collection + name/desc (+ body).
  * With `shelf\token`: shelf scopes the collection path; tokens also match
- * path segments (so `осн\уни` hits both pair "Универсальный" and items under
- * Основа/Универсальный).
+ * path segments (so `looks\port` hits both pair "Portrait" and items under
+ * Looks/Portrait).
  */
 export function matchesPromptPreset(preset, rawQuery, { includeBody = false } = {}) {
   const { shelf, tokens, hasShelfFilter } = parseSearchQuery(rawQuery);

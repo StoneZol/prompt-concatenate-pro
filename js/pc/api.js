@@ -211,6 +211,13 @@ export async function updateUiPrefs(patch) {
   return readJson(res);
 }
 
+const WHATS_NEW_URL = "/prompt_craft/whats_new";
+
+export async function fetchWhatsNew() {
+  const res = await fetch(WHATS_NEW_URL);
+  return readJson(res);
+}
+
 const AUTOCOMPLETE_URL = "/prompt_craft/autocomplete";
 
 export async function autocompleteLookup(side, prefix, limit = 20) {

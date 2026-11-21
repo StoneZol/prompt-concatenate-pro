@@ -38,6 +38,7 @@ import { craftOutput, isJoinDebugEnabled, joinFields } from "./pc/join.js";
 import { baseShelfName, nextDuplicateTitle } from "./pc/titles.js";
 import { attachPromptMaterializeHooks } from "./pc/metadata.js";
 import { UI_PREFS_EVENT, ensureUiPrefs, getUiPref } from "./pc/prefs.js";
+import { maybeShowWhatsNew } from "./pc/whats_new.js";
 import { bindInfoTip, hidePromptTip } from "./pc/preview_tip.js";
 import {
   EXTERNAL_GROUP_ID,
@@ -1362,6 +1363,7 @@ app.registerExtension({
       ensureUiPrefs().then(() => {
         applyLibraryVisibility();
         fillDom();
+        maybeShowWhatsNew();
       });
 
       applyLibraryVisibility();
