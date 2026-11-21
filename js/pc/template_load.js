@@ -219,7 +219,7 @@ export function openLoadTemplatePopup({ anchor, onPick }) {
   return openPopup({
     anchor,
     title: "Load template",
-    width: 340,
+    width: 680,
     render(body, { close, reposition }) {
       const status = document.createElement("div");
       status.className = "pc-popup-message";

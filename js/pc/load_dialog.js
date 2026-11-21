@@ -205,7 +205,7 @@ export function openLoadPresetPopup({ anchor, onPick }) {
   return openPopup({
     anchor,
     title: "Load preset",
-    width: 340,
+    width: 680,
     render(body, { close, reposition }) {
       const status = document.createElement("div");
       status.className = "pc-popup-message";

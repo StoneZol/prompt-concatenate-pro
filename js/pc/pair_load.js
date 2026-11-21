@@ -369,7 +369,7 @@ export async function openLoadPairPopup({
         nested,
         anchor,
         title: shelf ? `Load pair · ${shelf}` : "Load pair",
-        width: 340,
+        width: 680,
         onClose: hidePromptTip,
         render(body, { close, reposition }) {
             const status = document.createElement("div");
