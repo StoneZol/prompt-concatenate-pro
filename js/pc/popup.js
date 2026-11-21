@@ -1595,6 +1595,18 @@ const CSS = `
   filter: brightness(1.12);
 }
 
+.pc-pick-group {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--descrip-text, #999);
+  padding: 6px 2px 2px;
+}
+
+.pc-pick-group:first-child {
+  padding-top: 0;
+}
+
 .pc-pick-item.selected {
   background: #2f2b3d;
   border-color: #6d5aa8;

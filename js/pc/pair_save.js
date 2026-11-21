@@ -1,6 +1,7 @@
 import { openConfirmPopup, openPopup } from "./popup.js";
-import { listCategories, savePreset, shelfNames } from "./api.js";
+import { listCategories, listPresets, savePreset, shelfNames } from "./api.js";
 import { baseShelfName } from "./titles.js";
+import { openExistingNamePicker } from "./save_name_picker.js";
 
 function matchesCategory(name, query) {
   if (!query) return true;
@@ -109,6 +110,17 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
       title.placeholder = "prompt name";
       title.value = loadedTitle;
 
+      const nameRow = document.createElement("div");
+      nameRow.className = "pc-save-folder-row";
+
+      const existingBtn = document.createElement("button");
+      existingBtn.type = "button";
+      existingBtn.className = "pc-popup-btn";
+      existingBtn.textContent = "Existing";
+      existingBtn.title = "Overwrite an existing pair";
+
+      nameRow.append(title, existingBtn);
+
       const categoryRow = document.createElement("div");
       categoryRow.className = "pc-save-folder-row";
 
@@ -145,6 +157,7 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
       let overwrite = false;
       let categories = [];
       let picker = null;
+      let existingPicker = null;
 
       function resetOverwrite() {
         if (!overwrite) return;
@@ -153,6 +166,49 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
         confirm.classList.remove("danger");
         confirm.classList.add("primary");
       }
+
+      function armOverwrite(message) {
+        overwrite = true;
+        errorEl.textContent = message;
+        confirm.textContent = "Overwrite";
+        confirm.classList.add("danger");
+        confirm.classList.remove("primary");
+      }
+
+      existingBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (existingPicker) {
+          existingPicker.close();
+          existingPicker = null;
+          return;
+        }
+        existingPicker = openExistingNamePicker({
+          anchor: existingBtn,
+          title: "Existing pairs",
+          currentGroup: category.value.trim() || defaultCategory,
+          currentName: title.value.trim(),
+          load: async () => {
+            const result = await listPresets();
+            if (!result.ok) throw new Error(result.error || "Failed to load prompts");
+            return (result.presets || []).map((preset) => ({
+              name: preset.title || "",
+              group: preset.category || "",
+              description: preset.description || "",
+            }));
+          },
+          onPick: (item) => {
+            title.value = item.name;
+            category.value = item.group;
+            if (!desc.value.trim()) desc.value = item.description || "";
+            title.classList.remove("invalid");
+            category.classList.remove("invalid");
+            armOverwrite(`Will overwrite in ${item.group}: ${item.name}`);
+          },
+          onClose: () => {
+            existingPicker = null;
+          },
+        });
+      });
 
       pickBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -167,6 +223,8 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
           current: category.value.trim() || defaultCategory,
           onPick: (name) => {
             category.value = name || "";
+            if (errorEl.textContent) errorEl.textContent = "";
+            resetOverwrite();
           },
           onClose: () => {
             picker = null;
@@ -200,11 +258,7 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
             overwrite,
           });
           if (result.conflicts?.length) {
-            errorEl.textContent = `Already exists in ${shelf}: ${name}`;
-            confirm.textContent = "Overwrite";
-            confirm.classList.add("danger");
-            confirm.classList.remove("primary");
-            overwrite = true;
+            armOverwrite(`Already exists in ${shelf}: ${name}`);
             return;
           }
           if (!result.ok) {
@@ -251,7 +305,7 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
       });
 
       actions.appendChild(confirm);
-      body.append(title, categoryRow, desc, errorEl, actions);
+      body.append(nameRow, categoryRow, desc, errorEl, actions);
       requestAnimationFrame(() => title.focus());
 
       listCategories()

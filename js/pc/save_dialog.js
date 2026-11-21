@@ -1,6 +1,7 @@
 import { openConfirmPopup, openPopup } from "./popup.js";
-import { listLayoutFolders, saveLayout, shelfNames } from "./api.js";
+import { listLayoutFolders, listLayouts, saveLayout, shelfNames } from "./api.js";
 import { displaySlotName, slotNameForGroup } from "./external.js";
+import { openExistingNamePicker } from "./save_name_picker.js";
 
 const UNCATEGORISED = "Uncategorised";
 
@@ -94,6 +95,17 @@ export function openSavePresetsPopup({ anchor, groups, loadedStack, onSaved }) {
       title.placeholder = "preset name";
       title.value = (loadedStack?.title || "").trim();
 
+      const nameRow = document.createElement("div");
+      nameRow.className = "pc-save-folder-row";
+
+      const existingBtn = document.createElement("button");
+      existingBtn.type = "button";
+      existingBtn.className = "pc-popup-btn";
+      existingBtn.textContent = "Existing";
+      existingBtn.title = "Overwrite an existing preset";
+
+      nameRow.append(title, existingBtn);
+
       const folderRow = document.createElement("div");
       folderRow.className = "pc-save-folder-row";
 
@@ -130,6 +142,7 @@ export function openSavePresetsPopup({ anchor, groups, loadedStack, onSaved }) {
       let overwrite = false;
       let folders = [];
       let picker = null;
+      let existingPicker = null;
 
       function resetOverwrite() {
         if (!overwrite) return;
@@ -138,6 +151,48 @@ export function openSavePresetsPopup({ anchor, groups, loadedStack, onSaved }) {
         confirm.classList.remove("danger");
         confirm.classList.add("primary");
       }
+
+      function armOverwrite(message) {
+        overwrite = true;
+        errorEl.textContent = message;
+        confirm.textContent = "Overwrite";
+        confirm.classList.add("danger");
+        confirm.classList.remove("primary");
+      }
+
+      existingBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (existingPicker) {
+          existingPicker.close();
+          existingPicker = null;
+          return;
+        }
+        existingPicker = openExistingNamePicker({
+          anchor: existingBtn,
+          title: "Existing presets",
+          currentGroup: folder.value.trim(),
+          currentName: title.value.trim(),
+          load: async () => {
+            const result = await listLayouts();
+            if (!result.ok) throw new Error(result.error || "Failed to load presets");
+            return (result.layouts || []).map((layout) => ({
+              name: layout.name || "",
+              group: layout.folder || "",
+              description: layout.description || "",
+            }));
+          },
+          onPick: (item) => {
+            title.value = item.name;
+            folder.value = item.group;
+            if (!desc.value.trim()) desc.value = item.description || "";
+            title.classList.remove("invalid");
+            armOverwrite(`Will overwrite: ${item.name}`);
+          },
+          onClose: () => {
+            existingPicker = null;
+          },
+        });
+      });
 
       pickBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -177,11 +232,7 @@ export function openSavePresetsPopup({ anchor, groups, loadedStack, onSaved }) {
             overwrite,
           });
           if (result.conflicts?.length) {
-            errorEl.textContent = `Already exists: ${name}`;
-            confirm.textContent = "Overwrite";
-            confirm.classList.add("danger");
-            confirm.classList.remove("primary");
-            overwrite = true;
+            armOverwrite(`Already exists: ${name}`);
             return;
           }
           if (!result.ok) {
@@ -224,7 +275,7 @@ export function openSavePresetsPopup({ anchor, groups, loadedStack, onSaved }) {
       });
 
       actions.appendChild(confirm);
-      body.append(hint, title, folderRow, desc, errorEl, actions);
+      body.append(hint, nameRow, folderRow, desc, errorEl, actions);
       requestAnimationFrame(() => title.focus());
 
       listLayoutFolders()
