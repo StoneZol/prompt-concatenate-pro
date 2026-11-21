@@ -16,6 +16,7 @@ import { EXTERNAL_GROUP_ID, EXTERNAL_TITLE, displaySlotName, isExternalSlotName 
 import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
 import { confirmClearPair, confirmReplacePair, openLoadPairPopup } from "./pair_load.js";
 import { openSavePairPopup } from "./pair_save.js";
+import { openExistingNamePicker } from "./save_name_picker.js";
 import { joinFields } from "./join.js";
 import {
   deleteCategory,
@@ -418,10 +419,7 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
             overwrite,
           });
           if (result.conflicts?.length) {
-            errorEl.textContent = `Already exists: ${nextName}`;
-            confirm.textContent = "Overwrite";
-            confirm.classList.remove("primary");
-            confirm.classList.add("danger");
+            armEditOverwrite(confirm, errorEl, `Already exists: ${nextName}`);
             overwrite = true;
             return;
           }
@@ -449,8 +447,33 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
         }
       });
 
+      const nameRow = makeEditNameRow({
+        title,
+        kind: "preset",
+        getGroup: () => folder.value.trim(),
+        setGroup: (value) => {
+          folder.value = value || "";
+        },
+        load: async () => {
+          const result = await listLayouts();
+          if (!result.ok) throw new Error(result.error || "Failed to load presets");
+          return (result.layouts || [])
+            .filter((item) => item.id !== layout.id)
+            .map((item) => ({ name: item.name || "", group: item.folder || "" }));
+        },
+        onArm: (item) => {
+          overwrite = true;
+          armEditOverwrite(confirm, errorEl, `Will overwrite: ${item.name}`);
+        },
+        onReset: () => {
+          if (!overwrite) return;
+          overwrite = false;
+          resetEditOverwrite(confirm, errorEl);
+        },
+      });
+
       actions.appendChild(confirm);
-      body.append(title, folderRow, slots, desc, errorEl, actions);
+      body.append(nameRow, folderRow, slots, desc, errorEl, actions);
       requestAnimationFrame(() => title.focus());
     },
   });
@@ -498,6 +521,68 @@ function makeCivitaiBtn(onClick) {
     onClick?.(btn);
   });
   return btn;
+}
+
+/**
+ * Name input + Existing button. Picking arms overwrite on the edit dialog.
+ * load() → [{ name, group }] (caller excludes the record being edited).
+ */
+function makeEditNameRow({ title, kind, getGroup, setGroup, load, onArm, onReset, watch = [] }) {
+  const row = document.createElement("div");
+  row.className = "pc-save-folder-row";
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "pc-popup-btn";
+  btn.textContent = "Existing";
+  btn.title = `Overwrite an existing ${kind}`;
+
+  let picker = null;
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (picker) {
+      picker.close();
+      picker = null;
+      return;
+    }
+    picker = openExistingNamePicker({
+      anchor: btn,
+      title: `Existing ${kind}s`,
+      currentGroup: getGroup(),
+      currentName: title.value.trim(),
+      load,
+      onPick: (item) => {
+        title.value = item.name;
+        setGroup(item.group);
+        title.classList.remove("invalid");
+        onArm?.(item);
+      },
+      onClose: () => {
+        picker = null;
+      },
+    });
+  });
+
+  for (const input of [title, ...watch]) {
+    input.addEventListener("input", () => onReset?.());
+  }
+
+  row.append(title, btn);
+  return row;
+}
+
+function armEditOverwrite(confirm, errorEl, message) {
+  errorEl.textContent = message;
+  confirm.textContent = "Overwrite";
+  confirm.classList.remove("primary");
+  confirm.classList.add("danger");
+}
+
+function resetEditOverwrite(confirm, errorEl) {
+  errorEl.textContent = "";
+  confirm.textContent = "Save";
+  confirm.classList.remove("danger");
+  confirm.classList.add("primary");
 }
 
 function openEditPromptPopup({ preset, categories, onSaved }) {
@@ -560,6 +645,12 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
       let overwrite = false;
       let picker = null;
 
+      function resetOverwrite() {
+        if (!overwrite) return;
+        overwrite = false;
+        resetEditOverwrite(confirm, errorEl);
+      }
+
       pickBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         if (picker) {
@@ -574,6 +665,7 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
           current: category.value.trim(),
           onPick: (name) => {
             category.value = name || "";
+            resetOverwrite();
           },
           onClose: () => {
             picker = null;
@@ -611,10 +703,7 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
             overwrite,
           });
           if (result.conflicts?.length) {
-            errorEl.textContent = `Already exists in ${shelf}: ${nextTitle}`;
-            confirm.textContent = "Overwrite";
-            confirm.classList.remove("primary");
-            confirm.classList.add("danger");
+            armEditOverwrite(confirm, errorEl, `Already exists in ${shelf}: ${nextTitle}`);
             overwrite = true;
             return;
           }
@@ -642,11 +731,33 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
         }
       });
 
+      const nameRow = makeEditNameRow({
+        title,
+        kind: "pair",
+        getGroup: () => category.value.trim(),
+        setGroup: (value) => {
+          category.value = value || "";
+        },
+        load: async () => {
+          const result = await listPresets();
+          if (!result.ok) throw new Error(result.error || "Failed to load prompts");
+          return (result.presets || [])
+            .filter((item) => item.id !== preset.id)
+            .map((item) => ({ name: item.title || "", group: item.category || "" }));
+        },
+        onArm: (item) => {
+          overwrite = true;
+          armEditOverwrite(confirm, errorEl, `Will overwrite in ${item.group}: ${item.name}`);
+        },
+        onReset: resetOverwrite,
+        watch: [category],
+      });
+
       actions.appendChild(confirm);
 
       const fixed = document.createElement("div");
       fixed.className = "pc-popup-fixed";
-      fixed.append(title, categoryRow, desc);
+      fixed.append(nameRow, categoryRow, desc);
 
       const scroll = document.createElement("div");
       scroll.className = "pc-popup-scroll";
@@ -1112,10 +1223,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             overwrite,
           });
           if (result.conflicts?.length) {
-            errorEl.textContent = `Already exists: ${nextName}`;
-            confirm.textContent = "Overwrite";
-            confirm.classList.remove("primary");
-            confirm.classList.add("danger");
+            armEditOverwrite(confirm, errorEl, `Already exists: ${nextName}`);
             overwrite = true;
             return;
           }
@@ -1143,11 +1251,36 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
         }
       });
 
+      const nameRow = makeEditNameRow({
+        title,
+        kind: "template",
+        getGroup: () => folder.value.trim(),
+        setGroup: (value) => {
+          folder.value = value || "";
+        },
+        load: async () => {
+          const result = await listTemplates();
+          if (!result.ok) throw new Error(result.error || "Failed to load templates");
+          return (result.templates || [])
+            .filter((item) => item.id !== template.id)
+            .map((item) => ({ name: item.name || "", group: item.folder || "" }));
+        },
+        onArm: (item) => {
+          overwrite = true;
+          armEditOverwrite(confirm, errorEl, `Will overwrite: ${item.name}`);
+        },
+        onReset: () => {
+          if (!overwrite) return;
+          overwrite = false;
+          resetEditOverwrite(confirm, errorEl);
+        },
+      });
+
       actions.appendChild(confirm);
 
       const fixed = document.createElement("div");
       fixed.className = "pc-popup-fixed";
-      fixed.append(title, folderRow, desc, addSlotBtn);
+      fixed.append(nameRow, folderRow, desc, addSlotBtn);
 
       const footer = document.createElement("div");
       footer.className = "pc-popup-footer";
