@@ -687,25 +687,15 @@ app.registerExtension({
                   persist();
                 },
               }),
+            onBrowsePair: (anchor, dir) => browsePair(group, card, anchor, dir),
+            onBrowseCount: () => browseCount(group),
             onLoadPair: (anchor) => {
               openLoadPairPopup({
                 anchor,
                 category: baseShelfName(group.title),
                 loadedCategory: group.loadedCategory || "",
                 onPick: (preset) => {
-                  const apply = () => {
-                    group.positive = preset.positive || "";
-                    group.negative = preset.negative || "";
-                    group.loadedTitle = (preset.title || "").trim();
-                    group.loadedCategory = (preset.category || "").trim();
-                    group.loadedDescription = (preset.description || "").trim();
-                    card.setField("positive", group.positive);
-                    card.setField("negative", group.negative);
-                    card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
-                    writeShadow(group, "positive", group.positive);
-                    writeShadow(group, "negative", group.negative);
-                    persist();
-                  };
+                  const apply = () => applyPairPreset(group, card, preset);
                   if ((group.positive || "").trim() || (group.negative || "").trim()) {
                     confirmReplacePair({ anchor, onConfirm: apply });
                     return;
@@ -866,6 +856,83 @@ app.registerExtension({
         renderCards();
         fillDom();
         hideDataWidget(dataWidget);
+      }
+
+      function applyPairPreset(group, card, preset) {
+        group.positive = preset.positive || "";
+        group.negative = preset.negative || "";
+        group.loadedTitle = (preset.title || "").trim();
+        group.loadedCategory = (preset.category || "").trim();
+        group.loadedDescription = (preset.description || "").trim();
+        card.setField("positive", group.positive);
+        card.setField("negative", group.negative);
+        card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
+        writeShadow(group, "positive", group.positive);
+        writeShadow(group, "negative", group.negative);
+        persist();
+      }
+
+      function browseShelf(group) {
+        const loadedTitle = (group.loadedTitle || "").trim();
+        return (loadedTitle && (group.loadedCategory || "").trim()) || baseShelfName(group.title);
+      }
+
+      async function browseCount(group) {
+        const shelf = browseShelf(group);
+        if (!shelf) return null;
+        const result = await listPresets({ category: shelf });
+        if (!result.ok) return null;
+        const list = result.presets || [];
+        const key = (group.loadedTitle || "").trim().toLowerCase();
+        const index = key
+          ? list.findIndex((preset) => (preset.title || "").trim().toLowerCase() === key)
+          : -1;
+        return { shelf, index, total: list.length };
+      }
+
+      async function browsePair(group, card, anchor, dir) {
+        const loadedTitle = (group.loadedTitle || "").trim();
+        const shelf = browseShelf(group);
+        const notice = (message) =>
+          openConfirmPopup({
+            anchor,
+            title: "Browse pairs",
+            message,
+            confirmLabel: "OK",
+            showCancel: false,
+            danger: false,
+          });
+        if (!shelf) {
+          notice("Name the group first.");
+          return;
+        }
+        const result = await listPresets({ category: shelf });
+        if (!result.ok) {
+          notice(result.error || "Failed to load prompts");
+          return;
+        }
+        const list = result.presets || [];
+        if (!list.length) {
+          notice(`No saved pairs in ${shelf}.`);
+          return;
+        }
+        const key = loadedTitle.toLowerCase();
+        const current = key
+          ? list.findIndex((preset) => (preset.title || "").trim().toLowerCase() === key)
+          : -1;
+        let nextIndex;
+        if (current < 0) nextIndex = dir < 0 ? list.length - 1 : 0;
+        else nextIndex = (current + dir + list.length) % list.length;
+        if (nextIndex === current) return;
+
+        collectFromShadows();
+        const preset = list[nextIndex];
+        const apply = () => applyPairPreset(group, card, preset);
+        if ((group.positive || "").trim() || (group.negative || "").trim()) {
+          confirmReplacePair({ anchor, onConfirm: apply });
+          return;
+        }
+        apply();
       }
 
       function clearAllGroups() {

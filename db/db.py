@@ -1148,6 +1148,7 @@ UI_PREF_KEYS = (
     "civitaiToolkitImport",
     "presetsEnabled",
     "templatesEnabled",
+    "pairBrowse",
 )
 UI_PREF_DEFAULTS = {
     "otherCollections": False,
@@ -1159,6 +1160,7 @@ UI_PREF_DEFAULTS = {
     "civitaiToolkitImport": False,
     "presetsEnabled": True,
     "templatesEnabled": True,
+    "pairBrowse": False,
 }
 _MANAGER_TAB_VALUES = frozenset({"presets", "prompts", "templates", "suggest"})
 

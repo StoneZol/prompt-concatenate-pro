@@ -63,7 +63,7 @@ function makeField(group, key, labelText, { onChange, onPrompt }) {
   return { wrap, area };
 }
 
-export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, onRename, onReorder, onDrop, onSavePair, onLoadPair, onCivitaiLoad, onReloadLoaded, onDuplicate }) {
+export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, onRename, onReorder, onDrop, onSavePair, onLoadPair, onCivitaiLoad, onReloadLoaded, onDuplicate, onBrowsePair, onBrowseCount }) {
   const card = document.createElement("div");
   card.className = "pc-group" + (isExternalGroup(group) ? " pc-group-external" : "");
   card.dataset.groupId = group.id;
@@ -349,13 +349,80 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
       onChange?.();
     });
 
-    loadedRow.append(loadedLabel, notesBtn, resetBtn, clearLoadedBtn);
+    const browseOn = Boolean(getUiPref("pairBrowse"));
+
+    function makeBrowseBtn(className, title, dir, html) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = className;
+      btn.title = title;
+      btn.innerHTML = html;
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        hidePromptTip();
+        onBrowsePair?.(btn, dir);
+      });
+      return btn;
+    }
+
+    const prevBtn = makeBrowseBtn("pc-loaded-browse prev", "Previous pair in collection", -1, CHEVRON_ICON_SVG);
+    const nextBtn = makeBrowseBtn("pc-loaded-browse next", "Next pair in collection", 1, CHEVRON_ICON_SVG);
+    const startBtn = makeBrowseBtn(
+      "pc-loaded-browse-start",
+      "Browse saved pairs of this group",
+      1,
+      `${CHEVRON_ICON_SVG}<span>Browse</span>`,
+    );
+
+    const browseNav = document.createElement("span");
+    browseNav.className = "pc-loaded-nav";
+    browseNav.append(prevBtn, nextBtn);
+
+    const countEl = document.createElement("span");
+    countEl.className = "pc-loaded-count";
+    countEl.hidden = true;
+
+    const loadedInfo = document.createElement("span");
+    loadedInfo.className = "pc-loaded-info";
+    loadedInfo.append(loadedLabel, countEl);
+
+    if (browseOn) {
+      loadedRow.append(browseNav, loadedInfo, startBtn, notesBtn, resetBtn, clearLoadedBtn);
+    } else {
+      loadedRow.append(loadedInfo, notesBtn, resetBtn, clearLoadedBtn);
+    }
+
+    let countToken = 0;
+    function refreshCount(name) {
+      const token = ++countToken;
+      countEl.hidden = true;
+      if (!browseOn || !onBrowseCount) return;
+      Promise.resolve(onBrowseCount())
+        .then((info) => {
+          if (token !== countToken || (group.loadedTitle || "").trim() !== name) return;
+          if (!info || !info.total) return;
+          countEl.textContent = info.index >= 0 ? `${info.index + 1}/${info.total}` : `${info.total}`;
+          countEl.title = info.index >= 0
+            ? `Pair ${info.index + 1} of ${info.total} in ${info.shelf}`
+            : `${info.total} pairs in ${info.shelf}`;
+          countEl.hidden = false;
+        })
+        .catch(() => {});
+    }
 
     paintLoaded = function paintLoadedInner() {
       const name = (group.loadedTitle || "").trim();
       const notes = (group.loadedDescription || "").trim();
-      if (!name) {
-        loadedRow.hidden = true;
+      const loaded = Boolean(name);
+      browseNav.hidden = !loaded;
+      startBtn.hidden = loaded;
+      loadedInfo.hidden = !loaded;
+      resetBtn.hidden = !loaded;
+      clearLoadedBtn.hidden = !loaded;
+      if (!loaded) {
+        countToken++;
+        countEl.hidden = true;
+        loadedRow.hidden = !browseOn;
         loadedLabel.textContent = "";
         notesBtn.hidden = true;
         return;
@@ -364,6 +431,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
       loadedLabel.textContent = name;
       loadedLabel.title = `Loaded: ${name}`;
       notesBtn.hidden = !notes;
+      refreshCount(name);
     };
 
     pos = makeField(group, "positive", "positive", { onChange, onPrompt });

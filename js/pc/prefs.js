@@ -21,6 +21,8 @@ const DEFAULTS = {
   presetsEnabled: true,
   /** Template section on nodes + Templates tab in the manager. */
   templatesEnabled: true,
+  /** Prev / next arrows on pairs — flip through saved pairs of a collection. */
+  pairBrowse: false,
 };
 
 export const UI_PREFS_EVENT = "pc-ui-prefs-changed";

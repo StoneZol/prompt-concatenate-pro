@@ -62,6 +62,16 @@ const TEMPLATES_ENABLED_HELP = {
     "and the Templates tab in Library manager. Saved templates stay in the database.",
 };
 
+const PAIR_BROWSE_HELP = {
+  title: "Pair browse",
+  text:
+    "Off by default. Saved in SQLite (all nodes).\n\n" +
+    "Adds ‹ › around the Loaded name on each pair: flip to the previous / next saved pair " +
+    "in the same collection (same order as Load pair, wraps around). Collection = the loaded one, " +
+    "or the group's default shelf when nothing is loaded — then a Browse button starts from the first pair.\n\n" +
+    "Replacing prompts asks for confirmation unless Skip pair overwrite confirms is on.",
+};
+
 const CIVITAI_TOOLKIT_HELP = {
   title: "Civitai Toolkit LoRA import",
   text:
@@ -246,6 +256,13 @@ export async function openSettingsPopup({ anchor, nodeSettings, onUiChange } = {
           label: "Templates",
           prefKey: "templatesEnabled",
           help: TEMPLATES_ENABLED_HELP,
+        }).el,
+      );
+      list.appendChild(
+        makeSettingRow({
+          label: "Pair browse",
+          prefKey: "pairBrowse",
+          help: PAIR_BROWSE_HELP,
         }).el,
       );
       list.appendChild(

@@ -666,12 +666,38 @@ const CSS = `
   display: none !important;
 }
 
-.pc-loaded-label {
+.pc-loaded-info {
   flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.pc-loaded-label {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pc-loaded-count {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--descrip-text, #777);
+  font-variant-numeric: tabular-nums;
+}
+
+.pc-loaded-count::before {
+  content: " · ";
+  white-space: pre;
+}
+
+.pc-loaded-nav {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .pc-loaded-label::before {
@@ -696,8 +722,75 @@ const CSS = `
   cursor: pointer;
 }
 
-.pc-loaded-notes[hidden] {
+.pc-loaded-notes[hidden],
+.pc-loaded-reset[hidden],
+.pc-loaded-clear[hidden],
+.pc-loaded-label[hidden],
+.pc-loaded-info[hidden],
+.pc-loaded-count[hidden],
+.pc-loaded-nav[hidden],
+.pc-loaded-browse[hidden],
+.pc-loaded-browse-start[hidden] {
   display: none !important;
+}
+
+.pc-loaded-browse {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  background: var(--comfy-input-bg, #2a2a2e);
+  color: var(--input-text, #ccc);
+  cursor: pointer;
+}
+
+.pc-loaded-browse:hover,
+.pc-loaded-browse-start:hover {
+  color: #e8e4f5;
+  border-color: #6d5aa8;
+  background: #2f2b3d;
+}
+
+.pc-loaded-browse svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.pc-loaded-browse.prev svg {
+  transform: rotate(90deg);
+}
+
+.pc-loaded-browse.next svg {
+  transform: rotate(-90deg);
+}
+
+.pc-loaded-browse-start {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 6px;
+  background: var(--comfy-input-bg, #2a2a2e);
+  color: var(--descrip-text, #aaa);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.pc-loaded-browse-start svg {
+  width: 11px;
+  height: 11px;
+  display: block;
+  transform: rotate(-90deg);
 }
 
 .pc-loaded-clear:hover,
