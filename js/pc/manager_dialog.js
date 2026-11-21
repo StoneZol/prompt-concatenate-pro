@@ -457,6 +457,7 @@ function openEditLayoutPopup({ anchor, layout, folders, onSaved }) {
           current: folder.value.trim(),
           allowEmpty: true,
           emptyLabel: UNCATEGORISED,
+          allowCreate: true,
           onPick: (name) => {
             folder.value = name || "";
           },
@@ -756,6 +757,7 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
           anchor: pickBtn,
           categories,
           current: category.value.trim(),
+          allowCreate: true,
           onPick: (name) => {
             category.value = name || "";
             resetOverwrite();
@@ -1277,6 +1279,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
           current: folder.value.trim(),
           allowEmpty: true,
           emptyLabel: UNCATEGORISED,
+          allowCreate: true,
           onPick: (name) => {
             folder.value = name || "";
           },

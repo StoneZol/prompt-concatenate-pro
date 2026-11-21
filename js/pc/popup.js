@@ -73,7 +73,8 @@ const CSS = `
 /* List / editor dialogs: stable shell height so tabs don't jump. */
 .pc-popup-backdrop > .pc-popup-root:has(.pc-mgr-list),
 .pc-popup-backdrop > .pc-popup-root:has(.pc-preset-list),
-.pc-popup-backdrop > .pc-popup-root:has(.pc-popup-scroll) {
+.pc-popup-backdrop > .pc-popup-root:has(.pc-popup-scroll),
+.pc-popup-backdrop > .pc-popup-root:has(.pc-shelf-pick-list) {
   height: min(88vh, 720px);
   max-height: min(88vh, 720px);
 }
@@ -138,7 +139,8 @@ const CSS = `
 .pc-popup-backdrop .pc-popup-body:has(> .pc-popup-fixed),
 .pc-popup-backdrop .pc-popup-body:has(.pc-mgr-list),
 .pc-popup-backdrop .pc-popup-body:has(.pc-preset-list),
-.pc-popup-backdrop .pc-popup-body:has(.pc-whats-new) {
+.pc-popup-backdrop .pc-popup-body:has(.pc-whats-new),
+.pc-popup-backdrop .pc-popup-body:has(.pc-shelf-pick-list) {
   overflow: hidden;
 }
 
@@ -184,7 +186,8 @@ const CSS = `
 }
 
 .pc-popup-backdrop .pc-mgr-list,
-.pc-popup-backdrop .pc-preset-list {
+.pc-popup-backdrop .pc-preset-list,
+.pc-popup-backdrop .pc-shelf-pick-list {
   flex: 1 1 auto;
   min-height: 0;
   overflow-x: hidden;
@@ -1639,6 +1642,13 @@ const CSS = `
   overflow-y: auto;
 }
 
+.pc-shelf-pick-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+}
+
 .pc-existing-list {
   gap: 6px;
   max-height: min(60vh, 420px);
@@ -2347,7 +2357,10 @@ export function openPopup(opts) {
     root.className = "pc-popup-root";
     if (opts.centered || blocking)
         root.classList.add("pc-popup-centered");
-    if (opts.width) root.style.width = `${opts.width}px`;
+    if (opts.width) {
+        root.style.width = `${opts.width}px`;
+        root.style.maxWidth = `min(${opts.width}px, calc(100vw - 32px))`;
+    }
     root.addEventListener("pointerdown", (e) =>
         e.stopPropagation(),
     );

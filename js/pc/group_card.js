@@ -369,7 +369,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     const nextBtn = makeBrowseBtn("pc-loaded-browse next", "Next pair in collection", 1, CHEVRON_ICON_SVG);
     const startBtn = makeBrowseBtn(
       "pc-loaded-browse-start",
-      "Browse saved pairs of this group",
+      "Pick a folder and browse its saved pairs",
       1,
       `${CHEVRON_ICON_SVG}<span>Browse</span>`,
     );

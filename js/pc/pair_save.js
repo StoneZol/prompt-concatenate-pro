@@ -166,6 +166,7 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
           anchor: pickBtn,
           categories,
           current: category.value.trim() || defaultCategory,
+          allowCreate: true,
           onPick: (name) => {
             category.value = name || "";
             if (errorEl.textContent) errorEl.textContent = "";

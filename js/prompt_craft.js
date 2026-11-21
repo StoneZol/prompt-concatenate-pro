@@ -27,7 +27,12 @@ import { confirmReplacePair, openLoadPairPopup } from "./pc/pair_load.js";
 import { openCivitaiLoadPopup } from "./pc/civitai_load.js";
 import { openManagerPopup } from "./pc/manager_dialog.js";
 import { openSettingsPopup } from "./pc/settings_dialog.js";
-import { listLayouts, listPresets, listTemplates } from "./pc/api.js";
+import { listCategories, listLayouts, listPresets, listTemplates } from "./pc/api.js";
+import {
+  isInShelfTree,
+  normalizeShelfPath,
+  openShelfPicker,
+} from "./pc/shelf_paths.js";
 import {
   createShadowString,
   hideOnCanvasKeepInPanel,
@@ -773,6 +778,7 @@ app.registerExtension({
               group.loadedTitle = (preset.title || "").trim();
               group.loadedCategory = (preset.category || "").trim();
               group.loadedDescription = (preset.description || "").trim();
+              reconcileBrowseShelf(group, group.loadedCategory);
               card.setField("positive", group.positive);
               card.setField("negative", group.negative);
               card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
@@ -833,6 +839,7 @@ app.registerExtension({
           loadedTitle: (source.loadedTitle || "").trim(),
           loadedCategory: (source.loadedCategory || "").trim(),
           loadedDescription: (source.loadedDescription || "").trim(),
+          browseShelf: normalizeShelfPath(source.browseShelf),
           enabled: source.enabled !== false,
           collapsed: false,
           ...stampLabels(name),
@@ -865,6 +872,7 @@ app.registerExtension({
         group.loadedTitle = (preset.title || "").trim();
         group.loadedCategory = (preset.category || "").trim();
         group.loadedDescription = (preset.description || "").trim();
+        reconcileBrowseShelf(group, group.loadedCategory);
         card.setField("positive", group.positive);
         card.setField("negative", group.negative);
         card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
@@ -873,9 +881,23 @@ app.registerExtension({
         persist();
       }
 
+      /** Keep pin if prompt is under it; otherwise raise browse root to the prompt folder. */
+      function reconcileBrowseShelf(group, category) {
+        const cat = normalizeShelfPath(category);
+        if (!cat) return;
+        const root = normalizeShelfPath(group.browseShelf);
+        if (root && isInShelfTree(cat, root)) return;
+        group.browseShelf = cat;
+      }
+
       function browseShelf(group) {
+        const pinned = normalizeShelfPath(group.browseShelf);
+        if (pinned) return pinned;
         const loadedTitle = (group.loadedTitle || "").trim();
-        return (loadedTitle && (group.loadedCategory || "").trim()) || baseShelfName(group.title);
+        if (loadedTitle) {
+          return normalizeShelfPath(group.loadedCategory) || baseShelfName(group.title);
+        }
+        return baseShelfName(group.title);
       }
 
       function browseListOpts(shelf) {
@@ -905,33 +927,31 @@ app.registerExtension({
         return { shelf, index: browseIndex(list, group), total: list.length };
       }
 
-      async function browsePair(group, card, anchor, dir) {
-        const shelf = browseShelf(group);
-        const notice = (message) =>
-          openConfirmPopup({
-            anchor,
-            title: "Browse pairs",
-            message,
-            confirmLabel: "OK",
-            showCancel: false,
-            danger: false,
-          });
-        if (!shelf) {
-          notice("Name the group first.");
-          return;
-        }
+      function browseNotice(anchor, message) {
+        openConfirmPopup({
+          anchor,
+          title: "Browse pairs",
+          message,
+          confirmLabel: "OK",
+          showCancel: false,
+          danger: false,
+        });
+      }
+
+      async function browseFlip(group, card, anchor, dir, shelf) {
         const nested = Boolean(getUiPref("pairBrowseNested"));
         const result = await listPresets(browseListOpts(shelf));
         if (!result.ok) {
-          notice(result.error || "Failed to load prompts");
+          browseNotice(anchor, result.error || "Failed to load prompts");
           return;
         }
         const list = result.presets || [];
         if (!list.length) {
-          notice(
+          browseNotice(
+            anchor,
             nested
               ? `No saved pairs in ${shelf} or its sub-folders.`
-              : `No saved pairs in ${shelf}.`,
+              : `No saved pairs in ${shelf}. Turn on Browse nested folders to include sub-folders.`,
           );
           return;
         }
@@ -949,6 +969,38 @@ app.registerExtension({
           return;
         }
         apply();
+      }
+
+      async function browsePair(group, card, anchor, dir) {
+        const loaded = (group.loadedTitle || "").trim();
+        // Empty card → pick a browse folder first (incl. empty parents with pairs below).
+        if (!loaded) {
+          const cats = await listCategories();
+          if (!cats.ok) {
+            browseNotice(anchor, cats.error || "Failed to load collections");
+            return;
+          }
+          openShelfPicker({
+            anchor,
+            title: "Browse folder",
+            categories: cats.categories || [],
+            current: normalizeShelfPath(group.browseShelf) || baseShelfName(group.title),
+            onlyWithPairs: true,
+            onPick: (path) => {
+              group.browseShelf = normalizeShelfPath(path);
+              persist();
+              browseFlip(group, card, anchor, dir, group.browseShelf);
+            },
+          });
+          return;
+        }
+
+        const shelf = browseShelf(group);
+        if (!shelf) {
+          browseNotice(anchor, "Name the group first.");
+          return;
+        }
+        await browseFlip(group, card, anchor, dir, shelf);
       }
 
       function clearAllGroups() {

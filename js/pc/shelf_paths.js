@@ -97,7 +97,7 @@ export function allShelfPaths(entries) {
   return [...paths.values()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
 
-function shelfTotal(entries, path) {
+export function shelfTotal(entries, path) {
   let total = 0;
   for (const entry of entries || []) {
     if (typeof entry === "string") continue;
@@ -172,8 +172,9 @@ export function makeShelfFolderRow({ leaf, total, title, onOpen }) {
 }
 
 /**
- * Choose a collection path: browse sub-collections, filter all paths, or create a sub-folder.
+ * Choose a collection / folder path: crumbs, sub-folders, filter.
  * `categories` — `{ name, count }` from listCategories (plain strings work too).
+ * `allowCreate` — Save/Choose only; Browse for flipping leaves it off.
  */
 export function openShelfPicker({
   anchor,
@@ -185,12 +186,17 @@ export function openShelfPicker({
   title = "Collection",
   allowEmpty = false,
   emptyLabel = "Uncategorised",
+  /** Show “New folder” (Save · Choose). Off for Browse folder. */
+  allowCreate = false,
+  /** Only paths with at least one pair in the subtree. */
+  onlyWithPairs = false,
+  width = 680,
 }) {
   return openPopup({
     nested,
     anchor,
     title,
-    width: 300,
+    width,
     onClose,
     render(body, { close, reposition }) {
       let path = normalizeShelfPath(current);
@@ -199,6 +205,9 @@ export function openShelfPicker({
         const parts = shelfSegments(path);
         while (parts.length && !known.has(parts.join(SHELF_SEP).toLowerCase())) parts.pop();
         path = parts.join(SHELF_SEP);
+      }
+      if (onlyWithPairs && path && shelfTotal(categories, path) <= 0) {
+        path = "";
       }
 
       const crumbsHost = document.createElement("div");
@@ -209,7 +218,7 @@ export function openShelfPicker({
       filter.placeholder = "filter all collections";
 
       const list = document.createElement("div");
-      list.className = "pc-pick-list";
+      list.className = "pc-pick-list pc-shelf-pick-list";
 
       const newRow = document.createElement("div");
       newRow.className = "pc-save-folder-row";
@@ -239,11 +248,17 @@ export function openShelfPicker({
       useBtn.type = "button";
       useBtn.className = "pc-popup-btn primary";
 
-      actions.append(newBtn, useBtn);
+      if (allowCreate) actions.append(newBtn, useBtn);
+      else actions.appendChild(useBtn);
 
       function pick(value) {
         close();
         onPick?.(normalizeShelfPath(value));
+      }
+
+      function pathAllowed(p) {
+        if (!onlyWithPairs) return true;
+        return shelfTotal(categories, p) > 0;
       }
 
       function paint() {
@@ -256,7 +271,8 @@ export function openShelfPicker({
             },
           }),
         );
-        useBtn.disabled = !path && !allowEmpty;
+        const canUse = (path && pathAllowed(path)) || (!path && allowEmpty);
+        useBtn.disabled = !canUse;
         useBtn.textContent = path
           ? `Use “${shelfLeaf(path)}”`
           : allowEmpty
@@ -267,7 +283,9 @@ export function openShelfPicker({
         list.replaceChildren();
         const q = filter.value.trim().toLowerCase();
         if (q) {
-          const shown = allShelfPaths(categories).filter((p) => p.toLowerCase().includes(q));
+          const shown = allShelfPaths(categories).filter(
+            (p) => p.toLowerCase().includes(q) && pathAllowed(p),
+          );
           if (!shown.length) {
             const empty = document.createElement("div");
             empty.className = "pc-popup-message";
@@ -293,7 +311,9 @@ export function openShelfPicker({
           return;
         }
 
-        const children = shelfChildren(categories, path);
+        const children = shelfChildren(categories, path).filter((child) =>
+          pathAllowed(child.path),
+        );
         if (!children.length) {
           const empty = document.createElement("div");
           empty.className = "pc-popup-message";
@@ -330,25 +350,28 @@ export function openShelfPicker({
         e.stopPropagation();
         if (path || allowEmpty) pick(path);
       });
-      newBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        newRow.hidden = !newRow.hidden;
-        if (!newRow.hidden) requestAnimationFrame(() => newInput.focus());
-        reposition?.();
-      });
-      newConfirm.addEventListener("click", (e) => {
-        e.stopPropagation();
-        createFolder();
-      });
-      newInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
+      if (allowCreate) {
+        newBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          newRow.hidden = !newRow.hidden;
+          if (!newRow.hidden) requestAnimationFrame(() => newInput.focus());
+          reposition?.();
+        });
+        newConfirm.addEventListener("click", (e) => {
+          e.stopPropagation();
           createFolder();
-        }
-      });
+        });
+        newInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            createFolder();
+          }
+        });
+      }
 
       paint();
-      body.append(crumbsHost, filter, list, newRow, actions);
+      if (allowCreate) body.append(crumbsHost, filter, list, newRow, actions);
+      else body.append(crumbsHost, filter, list, actions);
       requestAnimationFrame(() => filter.focus());
     },
   });

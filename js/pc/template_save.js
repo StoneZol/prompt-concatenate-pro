@@ -149,6 +149,7 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
           current: folder.value.trim(),
           allowEmpty: true,
           emptyLabel: UNCATEGORISED,
+          allowCreate: true,
           onPick: (name) => {
             folder.value = name || "";
             resetOverwrite();

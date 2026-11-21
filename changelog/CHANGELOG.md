@@ -14,7 +14,8 @@ Format: newest first.
 - **‹ ›** in the Loaded row step to the previous / next pair of the loaded pair’s collection (same order as Load pair, wraps around); hidden when the shelf has fewer than two pairs
 - Counter after the name: **Loaded · name · 38/45** (position / pairs in the collection)
 - **Browse nested folders** (off by default) — ‹ › also walk sub-folders under the current shelf (e.g. `Scene` → `Scene/Walk` → …)
-- Nothing loaded → compact **› Browse** starts from the first pair of the group’s default shelf
+- Nothing loaded → **› Browse** opens a folder picker (incl. empty parents that only have pairs in sub-folders), then starts from the first pair in that scope
+- Browse root is remembered on the group: Load a pair inside the scope keeps it; a pair outside raises the root to that pair’s folder
 - Replace confirm follows **Skip pair overwrite confirms** (asked only if the pair has text)
 
 ![Pair browse — ‹ › + counter in the Loaded row](../docs/screenshots/2.3.0/0.png)
@@ -23,7 +24,7 @@ Format: newest first.
 
 - Paths with `/` for pair collections **and** preset / template folders: `Scene/Walk`, `Looks/Portrait` — as deep as you like; folders appear on first save
 - A name with `/` is also a path: `Looks` + `Portrait/Soft` saves as collection `Looks/Portrait`, name `Soft` (same for presets / templates)
-- Type the path by hand (sub-folder hints after `/`, **Tab** completes) or **Choose** → folder browser: crumbs, sub-folders with counts, filter, **+ New folder**
+- Type the path by hand (sub-folder hints after `/`, **Tab** completes) or **Choose** → folder browser: crumbs, sub-folders with counts, filter, **+ New folder** (Save only; Browse for flipping has no create)
 
 ![Save pair — nested path in collection](../docs/screenshots/2.3.0/1.png)
 
