@@ -106,6 +106,19 @@ export function shelfTotal(entries, path) {
   return total;
 }
 
+/** Direct pairs on this path only (not sub-folders). */
+export function shelfDirectCount(entries, path) {
+  const key = normalizeShelfPath(path).toLowerCase();
+  if (!key) return 0;
+  for (const entry of entries || []) {
+    if (typeof entry === "string") continue;
+    if (normalizeShelfPath(entry?.name).toLowerCase() === key) {
+      return Number(entry?.count || 0);
+    }
+  }
+  return 0;
+}
+
 export function makeShelfCrumbs({ path, rootLabel = "All", root = "", onNavigate }) {
   const crumbs = document.createElement("div");
   crumbs.className = "pc-civitai-crumbs pc-shelf-crumbs";
@@ -188,8 +201,10 @@ export function openShelfPicker({
   emptyLabel = "Uncategorised",
   /** Show “New folder” (Save · Choose). Off for Browse folder. */
   allowCreate = false,
-  /** Only paths with at least one pair in the subtree. */
+  /** Only paths with at least one pair (`tree` = subtree, `exact` = this folder only). */
   onlyWithPairs = false,
+  /** Used with onlyWithPairs: include empty parents that only have pairs below. */
+  pairScope = "tree",
   width = 680,
 }) {
   return openPopup({
@@ -199,6 +214,9 @@ export function openShelfPicker({
     width,
     onClose,
     render(body, { close, reposition }) {
+      const pairCount = (p) =>
+        pairScope === "exact" ? shelfDirectCount(categories, p) : shelfTotal(categories, p);
+
       let path = normalizeShelfPath(current);
       const known = new Set(allShelfPaths(categories).map((p) => p.toLowerCase()));
       if (path && !known.has(path.toLowerCase())) {
@@ -206,7 +224,7 @@ export function openShelfPicker({
         while (parts.length && !known.has(parts.join(SHELF_SEP).toLowerCase())) parts.pop();
         path = parts.join(SHELF_SEP);
       }
-      if (onlyWithPairs && path && shelfTotal(categories, path) <= 0) {
+      if (onlyWithPairs && path && pairCount(path) <= 0) {
         path = "";
       }
 
@@ -258,7 +276,7 @@ export function openShelfPicker({
 
       function pathAllowed(p) {
         if (!onlyWithPairs) return true;
-        return shelfTotal(categories, p) > 0;
+        return pairCount(p) > 0;
       }
 
       function paint() {

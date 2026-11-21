@@ -980,12 +980,15 @@ app.registerExtension({
             browseNotice(anchor, cats.error || "Failed to load collections");
             return;
           }
+          const nestedBrowse = Boolean(getUiPref("pairBrowseNested"));
           openShelfPicker({
             anchor,
             title: "Browse folder",
             categories: cats.categories || [],
             current: normalizeShelfPath(group.browseShelf) || baseShelfName(group.title),
             onlyWithPairs: true,
+            // Empty parents (pairs only in sub-folders) only when Nested is on.
+            pairScope: nestedBrowse ? "tree" : "exact",
             onPick: (path) => {
               group.browseShelf = normalizeShelfPath(path);
               persist();
