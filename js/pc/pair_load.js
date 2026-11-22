@@ -10,6 +10,7 @@ import {
     bindPromptTip,
     hidePromptTip,
 } from "./preview_tip.js";
+import { makePairPreviewBtn, presetPreviewUrl } from "./pair_preview.js";
 import {
     getUiPref,
     setUiPref,
@@ -55,6 +56,12 @@ function makePromptCard(preset, { onLoad, onAppend }) {
     name.className = "pc-preset-name";
     name.textContent = preset.title || "Untitled";
 
+    const coverBtn = makePairPreviewBtn(
+        () => (preset.hasPreview ? presetPreviewUrl(preset, preset.updated_at || "") : ""),
+        { className: "pc-pair-preview-btn" },
+    );
+    coverBtn.hidden = !preset.hasPreview;
+
     const peekBtn = document.createElement("button");
     peekBtn.type = "button";
     peekBtn.className = "pc-preset-peek";
@@ -87,7 +94,7 @@ function makePromptCard(preset, { onLoad, onAppend }) {
         onAppend?.(preset);
     });
 
-    head.append(name, peekBtn, loadBtn, appendBtn);
+    head.append(coverBtn, name, peekBtn, loadBtn, appendBtn);
     card.appendChild(head);
 
     const description = (preset.description || "").trim();

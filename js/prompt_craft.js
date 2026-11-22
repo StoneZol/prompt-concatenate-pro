@@ -688,8 +688,17 @@ app.registerExtension({
               openSavePairPopup({
                 anchor,
                 group,
-                onSaved: (name) => {
-                  card.setLoadedTitle(name, group.loadedCategory);
+                onSaved: (name, meta) => {
+                  card.setLoadedTitle(name, group.loadedCategory, {
+                    id: meta?.id || group.loadedPresetId || 0,
+                    hasPreview: Boolean(meta?.hasPreview ?? group.loadedHasPreview),
+                  });
+                  // Refresh hasPreview from save result when upload ran.
+                  if (meta?.id) {
+                    group.loadedPresetId = Number(meta.id);
+                    group.loadedHasPreview = Boolean(meta.hasPreview);
+                    // If preview was uploaded, force true after successful upload path in save.
+                  }
                   persist();
                 },
               }),
@@ -715,6 +724,8 @@ app.registerExtension({
                   group.loadedTitle = "";
                   group.loadedCategory = "";
                   group.loadedDescription = "";
+                  group.loadedPresetId = 0;
+                  group.loadedHasPreview = false;
                   card.setField("positive", group.positive);
                   card.setField("negative", group.negative);
                   card.setLoadedTitle("");
@@ -735,6 +746,8 @@ app.registerExtension({
                   group.loadedTitle = "";
                   group.loadedCategory = "";
                   group.loadedDescription = "";
+                  group.loadedPresetId = 0;
+                  group.loadedHasPreview = false;
                   card.setField("positive", group.positive);
                   card.setLoadedTitle("");
                   writeShadow(group, "positive", group.positive);
@@ -778,10 +791,15 @@ app.registerExtension({
               group.loadedTitle = (preset.title || "").trim();
               group.loadedCategory = (preset.category || "").trim();
               group.loadedDescription = (preset.description || "").trim();
+              group.loadedPresetId = Number(preset.id || 0);
+              group.loadedHasPreview = Boolean(preset.hasPreview);
               reconcileBrowseShelf(group, group.loadedCategory);
               card.setField("positive", group.positive);
               card.setField("negative", group.negative);
-              card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
+              card.setLoadedTitle(group.loadedTitle, group.loadedCategory, {
+                id: group.loadedPresetId,
+                hasPreview: group.loadedHasPreview,
+              });
               writeShadow(group, "positive", group.positive);
               writeShadow(group, "negative", group.negative);
               persist();
@@ -839,6 +857,8 @@ app.registerExtension({
           loadedTitle: (source.loadedTitle || "").trim(),
           loadedCategory: (source.loadedCategory || "").trim(),
           loadedDescription: (source.loadedDescription || "").trim(),
+          loadedPresetId: Number(source.loadedPresetId || 0),
+          loadedHasPreview: Boolean(source.loadedHasPreview),
           browseShelf: normalizeShelfPath(source.browseShelf),
           enabled: source.enabled !== false,
           collapsed: false,
@@ -872,10 +892,15 @@ app.registerExtension({
         group.loadedTitle = (preset.title || "").trim();
         group.loadedCategory = (preset.category || "").trim();
         group.loadedDescription = (preset.description || "").trim();
+        group.loadedPresetId = Number(preset.id || 0);
+        group.loadedHasPreview = Boolean(preset.hasPreview);
         reconcileBrowseShelf(group, group.loadedCategory);
         card.setField("positive", group.positive);
         card.setField("negative", group.negative);
-        card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
+        card.setLoadedTitle(group.loadedTitle, group.loadedCategory, {
+          id: group.loadedPresetId,
+          hasPreview: group.loadedHasPreview,
+        });
         writeShadow(group, "positive", group.positive);
         writeShadow(group, "negative", group.negative);
         persist();
@@ -1007,6 +1032,8 @@ app.registerExtension({
           group.loadedTitle = "";
           group.loadedCategory = "";
           group.loadedDescription = "";
+          group.loadedPresetId = 0;
+          group.loadedHasPreview = false;
           writeShadow(group, "positive", "");
           writeShadow(group, "negative", "");
         }

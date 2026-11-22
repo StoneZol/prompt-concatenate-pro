@@ -45,6 +45,7 @@ MIT — see [LICENSE](LICENSE) © StoneZol · [Changelog](changelog/CHANGELOG.md
 - **Pin to sidebar** — `Group \| positive` / `Group \| negative` in Inputs / Favorites
 - **Loaded tracking** — after Load, **Loaded ·** name (+ folder); notes / reload / detach; Save prefills from the chip
 - **Pair browse** (Settings, optional) — **‹ ›** flip through the browse folder **and sub-folders** with a **38/45** counter; **› Browse** picks a folder when nothing is loaded
+- **Pair previews** — paste a reference image on Save/Edit; hover icon in Load, Loaded chip, and Manager (`db/previews/`)
 - **Save over existing** — **Existing** in Save / Edit dialogs picks a saved name (grouped by collection) to overwrite; taken names warn with an explicit **Overwrite**
 - **Presets** — slot names + order; folders; edit as comma-separated text in the manager
 - **Templates** — full packs; Load **replaces** all pairs, **+** merges by slot name (insert missing, leave unrelated groups alone); empty pairs omitted on save

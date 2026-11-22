@@ -2,6 +2,7 @@ import { openConfirmPopup, openPopup } from "./popup.js";
 import { listCategories, listPresets, savePreset } from "./api.js";
 import { baseShelfName } from "./titles.js";
 import { openExistingNamePicker } from "./save_name_picker.js";
+import { mountPreviewEditor, presetPreviewUrl } from "./pair_preview.js";
 import {
   normalizeShelfPath,
   openShelfPicker,
@@ -47,7 +48,7 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
     nested,
     anchor,
     title: "Save pair",
-    width: 320,
+    width: 420,
     render(body, { close }) {
       const title = document.createElement("input");
       title.className = "pc-popup-input";
@@ -103,6 +104,15 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
       let categories = [];
       let picker = null;
       let existingPicker = null;
+      let existingPresetId = 0;
+
+      const previewHost = document.createElement("div");
+      let previewEditor = mountPreviewEditor(previewHost, {
+        initialUrl:
+          group?.loadedHasPreview && group?.loadedPresetId
+            ? presetPreviewUrl(group.loadedPresetId, "1")
+            : "",
+      });
 
       function resetOverwrite() {
         if (!overwrite) return;
@@ -136,18 +146,27 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
             const result = await listPresets();
             if (!result.ok) throw new Error(result.error || "Failed to load prompts");
             return (result.presets || []).map((preset) => ({
+              id: preset.id,
               name: preset.title || "",
               group: preset.category || "",
               description: preset.description || "",
+              hasPreview: Boolean(preset.hasPreview),
             }));
           },
           onPick: (item) => {
             title.value = item.name;
             category.value = item.group;
+            existingPresetId = Number(item.id || 0);
             if (!desc.value.trim()) desc.value = item.description || "";
             title.classList.remove("invalid");
             category.classList.remove("invalid");
             armOverwrite(`Will overwrite in ${item.group}: ${item.name}`);
+            previewHost.replaceChildren();
+            previewEditor = mountPreviewEditor(previewHost, {
+              initialUrl: item.hasPreview && existingPresetId
+                ? presetPreviewUrl(existingPresetId, String(Date.now()))
+                : "",
+            });
           },
           onClose: () => {
             existingPicker = null;
@@ -214,10 +233,22 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
             errorEl.textContent = result.error || "Save failed";
             return;
           }
+          const presetId = Number(result.id || existingPresetId || 0);
+          let hasPreview = Boolean(result.hasPreview);
+          if (presetId && previewEditor.hasPending()) {
+            const previewResult = await previewEditor.uploadAfterSave(presetId);
+            if (!previewResult?.ok) {
+              errorEl.textContent = previewResult?.error || "Preview save failed";
+              return;
+            }
+            hasPreview = Boolean(previewResult.hasPreview);
+          }
           group.loadedTitle = name;
           group.loadedCategory = shelf;
           group.loadedDescription = desc.value.trim();
-          onSaved?.(name);
+          group.loadedPresetId = presetId || 0;
+          group.loadedHasPreview = hasPreview;
+          onSaved?.(name, { id: presetId, hasPreview });
           close();
         } catch (err) {
           errorEl.textContent = err?.message || "Save failed";
@@ -254,7 +285,7 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
       });
 
       actions.appendChild(confirm);
-      body.append(nameRow, categoryRow, desc, errorEl, actions);
+      body.append(nameRow, categoryRow, desc, previewHost, errorEl, actions);
       requestAnimationFrame(() => title.focus());
 
       listCategories()

@@ -1,6 +1,7 @@
 import { CHEVRON_ICON_SVG, CLOSE_ICON_SVG, COPY_ICON_SVG, GRIP_ICON_SVG, LOAD_ICON_SVG, RESET_ICON_SVG, SAVE_ICON_SVG, TEXT_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
 import { openConfirmPopup } from "./popup.js";
 import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
+import { hidePairPreviewTip, makePairPreviewBtn, presetPreviewUrl } from "./pair_preview.js";
 import { bindPromptAutocomplete } from "./autocomplete.js";
 import { EXTERNAL_TITLE, isExternalGroup } from "./external.js";
 import { confirmClearPair } from "./pair_load.js";
@@ -309,6 +310,19 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     const loadedRow = document.createElement("div");
     loadedRow.className = "pc-loaded-row";
 
+    const loadedPrefix = document.createElement("span");
+    loadedPrefix.className = "pc-loaded-prefix";
+    loadedPrefix.textContent = "Loaded ·";
+
+    const previewBtn = makePairPreviewBtn(
+      () => {
+        const id = Number(group.loadedPresetId || 0);
+        return id ? presetPreviewUrl(id, group.loadedPreviewRev || "") : "";
+      },
+      { className: "pc-loaded-preview" },
+    );
+    previewBtn.hidden = true;
+
     const loadedLabel = document.createElement("span");
     loadedLabel.className = "pc-loaded-label";
 
@@ -342,9 +356,11 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     clearLoadedBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       hidePromptTip();
+      hidePairPreviewTip();
       group.loadedTitle = "";
       group.loadedCategory = "";
       group.loadedDescription = "";
+      group.loadedPresetId = 0;
       paintLoaded();
       onChange?.();
     });
@@ -384,7 +400,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
 
     const loadedInfo = document.createElement("span");
     loadedInfo.className = "pc-loaded-info";
-    loadedInfo.append(loadedLabel, countEl);
+    loadedInfo.append(loadedPrefix, previewBtn, loadedLabel, countEl);
 
     if (browseOn) {
       loadedRow.append(browseNav, loadedInfo, startBtn, notesBtn, resetBtn, clearLoadedBtn);
@@ -428,6 +444,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
         countEl.hidden = true;
         loadedRow.hidden = !browseOn;
         loadedLabel.textContent = "";
+        previewBtn.hidden = true;
         notesBtn.hidden = true;
         return;
       }
@@ -435,6 +452,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
       loadedLabel.textContent = name;
       const shelf = (group.loadedCategory || "").trim();
       loadedLabel.title = shelf ? `Loaded: ${shelf} / ${name}` : `Loaded: ${name}`;
+      previewBtn.hidden = !Boolean(group.loadedHasPreview && group.loadedPresetId);
       notesBtn.hidden = !notes;
       refreshCount(name);
     };
@@ -458,6 +476,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
           group.loadedTitle = "";
           group.loadedCategory = "";
           group.loadedDescription = "";
+          group.loadedPresetId = 0;
           pos.area.value = "";
           neg.area.value = "";
           onPrompt?.("positive", "");
@@ -504,10 +523,15 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
       if (!area || area.value === value) return;
       area.value = value ?? "";
     },
-    setLoadedTitle(value, category = "") {
+    setLoadedTitle(value, category = "", meta = null) {
       if (external) return;
       group.loadedTitle = (value || "").trim();
       if (arguments.length > 1) group.loadedCategory = (category || "").trim();
+      if (meta && typeof meta === "object") {
+        if ("id" in meta) group.loadedPresetId = Number(meta.id || 0);
+        if ("hasPreview" in meta) group.loadedHasPreview = Boolean(meta.hasPreview);
+        group.loadedPreviewRev = String(Date.now());
+      }
       paintLoaded();
     },
   };

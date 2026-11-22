@@ -17,6 +17,7 @@ import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
 import { confirmClearPair, confirmReplacePair, openLoadPairPopup } from "./pair_load.js";
 import { openSavePairPopup } from "./pair_save.js";
 import { openExistingNamePicker } from "./save_name_picker.js";
+import { makePairPreviewBtn, mountPreviewEditor, presetPreviewUrl } from "./pair_preview.js";
 import { joinFields } from "./join.js";
 import {
   deleteCategory,
@@ -342,18 +343,28 @@ function folderExpanded(name, { query, openMap }) {
   return false;
 }
 
-function makeItemRow(item, { name, meta, onEdit, onDuplicate, onDelete }) {
+function makeItemRow(item, { name, meta, previewUrl, onEdit, onDuplicate, onDelete }) {
   const row = document.createElement("div");
   row.className = "pc-mgr-item";
 
   const info = document.createElement("div");
   info.className = "pc-mgr-item-info";
 
+  const titleRow = document.createElement("div");
+  titleRow.className = "pc-mgr-item-title-row";
+
+  if (previewUrl) {
+    titleRow.appendChild(
+      makePairPreviewBtn(() => previewUrl, { className: "pc-pair-preview-btn" }),
+    );
+  }
+
   const titleEl = document.createElement("div");
   titleEl.className = "pc-mgr-item-name";
   titleEl.textContent = name;
+  titleRow.appendChild(titleEl);
 
-  info.appendChild(titleEl);
+  info.appendChild(titleRow);
   if (meta) {
     const metaEl = document.createElement("div");
     metaEl.className = "pc-mgr-item-meta";
@@ -715,6 +726,11 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
       desc.rows = 3;
       desc.value = preset.description || "";
 
+      const previewHost = document.createElement("div");
+      const previewEditor = mountPreviewEditor(previewHost, {
+        initialUrl: preset.hasPreview ? presetPreviewUrl(preset, "edit") : "",
+      });
+
       const pos = makePromptField("positive", "positive", preset.positive);
       const neg = makePromptField("negative", "negative", preset.negative);
 
@@ -809,6 +825,13 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
             errorEl.textContent = result.error || "Save failed";
             return;
           }
+          if (previewEditor.hasPending()) {
+            const previewResult = await previewEditor.uploadAfterSave(preset.id);
+            if (!previewResult?.ok) {
+              errorEl.textContent = previewResult?.error || "Preview save failed";
+              return;
+            }
+          }
           close();
           onSaved?.();
         } catch (err) {
@@ -855,7 +878,7 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
 
       const fixed = document.createElement("div");
       fixed.className = "pc-popup-fixed";
-      fixed.append(nameRow, categoryRow, desc);
+      fixed.append(nameRow, categoryRow, desc, previewHost);
 
       const scroll = document.createElement("div");
       scroll.className = "pc-popup-scroll";
@@ -1864,6 +1887,7 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
           makeItemRow(preset, {
             name: preset.title || "Untitled",
             meta: (preset.description || "").trim() || undefined,
+            previewUrl: preset.hasPreview ? presetPreviewUrl(preset) : "",
             onEdit: () => {
               openEditPromptPopup({
                 preset,

@@ -118,6 +118,24 @@ export async function deletePreset(id) {
   return readJson(res);
 }
 
+const PRESET_PREVIEW_URL = "/prompt_craft/preset_preview";
+
+export async function setPresetPreview({ id, data, mime = "image/jpeg" }) {
+  const res = await fetch(PRESET_PREVIEW_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, data, mime }),
+  });
+  return readJson(res);
+}
+
+export async function clearPresetPreview(id) {
+  const res = await fetch(`${PRESET_PREVIEW_URL}?id=${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  return readJson(res);
+}
+
 const CATEGORIES_URL = "/prompt_craft/categories";
 
 export async function listCategories() {

@@ -6,6 +6,18 @@ Format: newest first.
 
 ---
 
+## [2.4.0] — 2026-11-22
+
+### Pair preview images
+
+- Attach a reference image to a saved pair (character / scene / light / …)
+- Paste from clipboard on **Save pair** and **Edit prompt** — small thumb in the dialog; paste again to replace; Clear removes it
+- Files live under `db/previews/` next to SQLite; the pair stores only a relative path (rename keeps the image)
+- Deleting a pair (or its collection) removes the preview file
+- Hover preview icon: **Load pair** (beside the name), **Loaded ·** chip (after Loaded, before the name), Library manager prompt rows
+
+---
+
 ## [2.3.0] — 2026-11-21
 
 ### Pair browse (optional)
