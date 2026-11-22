@@ -17,6 +17,7 @@ import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
 import { confirmClearPair, confirmReplacePair, openLoadPairPopup } from "./pair_load.js";
 import { openSavePairPopup } from "./pair_save.js";
 import { openExistingNamePicker } from "./save_name_picker.js";
+import { makePairPreviewBtn, mountPreviewEditor, presetPreviewUrl } from "./pair_preview.js";
 import { joinFields } from "./join.js";
 import {
   deleteCategory,
@@ -44,6 +45,7 @@ import {
 } from "./api.js";
 import {
   emptyShelfMatchesSearch,
+  fillWithQueryHighlight,
   matchesLayoutPreset,
   matchesPromptPreset,
   matchesTemplatePreset,
@@ -54,6 +56,7 @@ import { mountAutocompletePanel } from "./autocomplete_manager.js";
 import { openCivitaiLoadPopup } from "./civitai_load.js";
 import { baseShelfName, nextDuplicateName } from "./titles.js";
 import {
+  formatLoadedPairChip,
   isInShelfTree,
   normalizeShelfPath,
   openShelfPicker,
@@ -272,6 +275,7 @@ function makeFolderSection({
   renderItem,
   count: totalCount,
   tooltip,
+  query = "",
   children = [],
 }) {
   const folder = document.createElement("div");
@@ -291,7 +295,7 @@ function makeFolderSection({
 
   const label = document.createElement("span");
   label.className = "pc-preset-folder-name";
-  label.textContent = title;
+  fillWithQueryHighlight(label, title, query);
 
   const count = document.createElement("span");
   count.className = "pc-preset-folder-count";
@@ -342,18 +346,28 @@ function folderExpanded(name, { query, openMap }) {
   return false;
 }
 
-function makeItemRow(item, { name, meta, onEdit, onDuplicate, onDelete }) {
+function makeItemRow(item, { name, meta, previewUrl, query = "", onEdit, onDuplicate, onDelete }) {
   const row = document.createElement("div");
   row.className = "pc-mgr-item";
 
   const info = document.createElement("div");
   info.className = "pc-mgr-item-info";
 
+  const titleRow = document.createElement("div");
+  titleRow.className = "pc-mgr-item-title-row";
+
+  if (previewUrl) {
+    titleRow.appendChild(
+      makePairPreviewBtn(() => previewUrl, { className: "pc-pair-preview-btn" }),
+    );
+  }
+
   const titleEl = document.createElement("div");
   titleEl.className = "pc-mgr-item-name";
-  titleEl.textContent = name;
+  fillWithQueryHighlight(titleEl, name, query);
+  titleRow.appendChild(titleEl);
 
-  info.appendChild(titleEl);
+  info.appendChild(titleRow);
   if (meta) {
     const metaEl = document.createElement("div");
     metaEl.className = "pc-mgr-item-meta";
@@ -715,6 +729,11 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
       desc.rows = 3;
       desc.value = preset.description || "";
 
+      const previewHost = document.createElement("div");
+      const previewEditor = mountPreviewEditor(previewHost, {
+        initialUrl: preset.hasPreview ? presetPreviewUrl(preset, "edit") : "",
+      });
+
       const pos = makePromptField("positive", "positive", preset.positive);
       const neg = makePromptField("negative", "negative", preset.negative);
 
@@ -809,6 +828,13 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
             errorEl.textContent = result.error || "Save failed";
             return;
           }
+          if (previewEditor.hasPending()) {
+            const previewResult = await previewEditor.uploadAfterSave(preset.id);
+            if (!previewResult?.ok) {
+              errorEl.textContent = previewResult?.error || "Preview save failed";
+              return;
+            }
+          }
           close();
           onSaved?.();
         } catch (err) {
@@ -855,7 +881,7 @@ function openEditPromptPopup({ preset, categories, onSaved }) {
 
       const fixed = document.createElement("div");
       fixed.className = "pc-popup-fixed";
-      fixed.append(nameRow, categoryRow, desc);
+      fixed.append(nameRow, categoryRow, desc, previewHost);
 
       const scroll = document.createElement("div");
       scroll.className = "pc-popup-scroll";
@@ -1183,8 +1209,15 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
           } else {
             const loadedLabel = document.createElement("span");
             loadedLabel.className = "pc-loaded-label";
-            loadedLabel.textContent = loadedName;
-            loadedLabel.title = `Loaded: ${loadedName}`;
+            const loadedShelf = (slot.loadedCategory || "").trim();
+            loadedLabel.textContent = formatLoadedPairChip(
+              loadedShelf,
+              loadedName,
+              baseShelfName(slot.title),
+            );
+            loadedLabel.title = loadedShelf
+              ? `Loaded: ${loadedShelf} / ${loadedName}`
+              : `Loaded: ${loadedName}`;
 
             const notesBtn = document.createElement("button");
             notesBtn.type = "button";
@@ -1437,6 +1470,7 @@ function paintTemplatesTab(listEl, { templates, folders, showEmpty, query, openM
     return makeFolderSection({
       title: isUncat ? folderName : shelfLeaf(folderName),
       tooltip: isUncat ? undefined : folderName,
+      query: q,
       items,
       count: total,
       children: sortedTreeChildren(node).map(renderNode),
@@ -1506,6 +1540,7 @@ function paintTemplatesTab(listEl, { templates, folders, showEmpty, query, openM
         return makeItemRow(template, {
           name: template.name || "Untitled",
           meta,
+          query: q,
           onEdit: (btn) =>
             openEditTemplatePopup({
               anchor: btn,
@@ -1601,6 +1636,7 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
     return makeFolderSection({
       title: isUncat ? folderName : shelfLeaf(folderName),
       tooltip: isUncat ? undefined : folderName,
+      query: q,
       items,
       count: total,
       children: sortedTreeChildren(node).map(renderNode),
@@ -1677,6 +1713,7 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
         return makeItemRow(layout, {
           name: layout.name || "Untitled",
           meta: slotNames.join(" · ") || "No fields",
+          query: q,
           onEdit: (btn) => {
             openEditLayoutPopup({
               anchor: btn,
@@ -1791,6 +1828,7 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
     return makeFolderSection({
         title: shelfLeaf(categoryName),
         tooltip: categoryName,
+        query: q,
         items,
         count: total,
         children: sortedChildren(node).map(renderNode),
@@ -1864,6 +1902,8 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
           makeItemRow(preset, {
             name: preset.title || "Untitled",
             meta: (preset.description || "").trim() || undefined,
+            previewUrl: preset.hasPreview ? presetPreviewUrl(preset) : "",
+            query: q,
             onEdit: () => {
               openEditPromptPopup({
                 preset,

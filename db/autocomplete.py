@@ -279,15 +279,20 @@ def lookup(side: str, prefix: str, limit: int = DEFAULT_LIMIT) -> Dict:
     with _lock_for(key, bucket):
         conn = _connect_bucket(key, bucket)
         try:
+            # Closest first: exact → shorter (whit→white before white hair) → popularity.
             rows = conn.execute(
                 """
                 SELECT text, use_count
                 FROM segments
                 WHERE text LIKE ? ESCAPE '\\' COLLATE NOCASE
-                ORDER BY use_count DESC, text COLLATE NOCASE ASC
+                ORDER BY
+                    CASE WHEN text = ? COLLATE NOCASE THEN 0 ELSE 1 END,
+                    length(text) ASC,
+                    use_count DESC,
+                    text COLLATE NOCASE ASC
                 LIMIT ?
                 """,
-                (like, lim),
+                (like, needle, lim),
             ).fetchall()
             items = [{"text": row["text"], "use_count": int(row["use_count"])} for row in rows]
             return {"ok": True, "side": key, "prefix": needle, "items": items}

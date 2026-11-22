@@ -1,10 +1,19 @@
 import { CHEVRON_ICON_SVG, CLOSE_ICON_SVG, COPY_ICON_SVG, GRIP_ICON_SVG, LOAD_ICON_SVG, RESET_ICON_SVG, SAVE_ICON_SVG, TEXT_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
 import { openConfirmPopup } from "./popup.js";
 import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
+import {
+  clearLoadedPreviewMeta,
+  hidePairPreviewTip,
+  loadedPreviewSrc,
+  makePairPreviewBtn,
+  writeLoadedPreviewMeta,
+} from "./pair_preview.js";
 import { bindPromptAutocomplete } from "./autocomplete.js";
 import { EXTERNAL_TITLE, isExternalGroup } from "./external.js";
 import { confirmClearPair } from "./pair_load.js";
 import { getUiPref } from "./prefs.js";
+import { formatLoadedPairChip } from "./shelf_paths.js";
+import { baseShelfName } from "./titles.js";
 
 function isEnabled(group) {
   return group.enabled !== false;
@@ -309,6 +318,17 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     const loadedRow = document.createElement("div");
     loadedRow.className = "pc-loaded-row";
 
+    const loadedPrefix = document.createElement("span");
+    loadedPrefix.className = "pc-loaded-prefix";
+    loadedPrefix.textContent = "Loaded ·";
+
+    // Ready URL from blocks_data (group.loadedPreviewPath), same as LoRA coverPath.
+    const previewBtn = makePairPreviewBtn(
+      () => group.loadedPreviewPath || "",
+      { className: "pc-loaded-preview" },
+    );
+    previewBtn.hidden = true;
+
     const loadedLabel = document.createElement("span");
     loadedLabel.className = "pc-loaded-label";
 
@@ -342,9 +362,11 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     clearLoadedBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       hidePromptTip();
+      hidePairPreviewTip();
       group.loadedTitle = "";
       group.loadedCategory = "";
       group.loadedDescription = "";
+      clearLoadedPreviewMeta(group);
       paintLoaded();
       onChange?.();
     });
@@ -384,7 +406,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
 
     const loadedInfo = document.createElement("span");
     loadedInfo.className = "pc-loaded-info";
-    loadedInfo.append(loadedLabel, countEl);
+    loadedInfo.append(loadedPrefix, previewBtn, loadedLabel, countEl);
 
     if (browseOn) {
       loadedRow.append(browseNav, loadedInfo, startBtn, notesBtn, resetBtn, clearLoadedBtn);
@@ -428,13 +450,19 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
         countEl.hidden = true;
         loadedRow.hidden = !browseOn;
         loadedLabel.textContent = "";
+        previewBtn.hidden = true;
         notesBtn.hidden = true;
         return;
       }
       loadedRow.hidden = false;
-      loadedLabel.textContent = name;
       const shelf = (group.loadedCategory || "").trim();
+      loadedLabel.textContent = formatLoadedPairChip(
+        shelf,
+        name,
+        baseShelfName(group.title),
+      );
       loadedLabel.title = shelf ? `Loaded: ${shelf} / ${name}` : `Loaded: ${name}`;
+      previewBtn.hidden = !Boolean(loadedPreviewSrc(group));
       notesBtn.hidden = !notes;
       refreshCount(name);
     };
@@ -458,6 +486,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
           group.loadedTitle = "";
           group.loadedCategory = "";
           group.loadedDescription = "";
+          clearLoadedPreviewMeta(group);
           pos.area.value = "";
           neg.area.value = "";
           onPrompt?.("positive", "");
@@ -504,10 +533,21 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
       if (!area || area.value === value) return;
       area.value = value ?? "";
     },
-    setLoadedTitle(value, category = "") {
+    setLoadedTitle(value, category = "", meta = null) {
       if (external) return;
       group.loadedTitle = (value || "").trim();
       if (arguments.length > 1) group.loadedCategory = (category || "").trim();
+      if (meta && typeof meta === "object") {
+        writeLoadedPreviewMeta(group, {
+          id: "id" in meta ? meta.id : group.loadedPresetId,
+          hasPreview: "hasPreview" in meta ? meta.hasPreview : group.loadedHasPreview,
+          bust: meta.bust || Date.now(),
+          category: group.loadedCategory,
+          title: group.loadedTitle,
+        });
+      } else if (!group.loadedTitle) {
+        clearLoadedPreviewMeta(group);
+      }
       paintLoaded();
     },
   };

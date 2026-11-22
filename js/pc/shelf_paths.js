@@ -40,6 +40,23 @@ export function shelfLeaf(path) {
   return segments[segments.length - 1] || "";
 }
 
+/**
+ * Chip text: last folder · pair name (full path stays in title).
+ * Skips the folder when it is the group's main shelf (avoids "Одежда · …" on an Одежда card).
+ */
+export function formatLoadedPairChip(category, title, mainShelf = "") {
+  const name = String(title || "").trim();
+  if (!name) return "";
+  const leaf = shelfLeaf(category);
+  if (!leaf) return name;
+  const mainKey = normalizeShelfPath(mainShelf).toLowerCase();
+  const leafKey = leaf.toLowerCase();
+  if (mainKey && (leafKey === mainKey || leafKey === shelfLeaf(mainKey).toLowerCase())) {
+    return name;
+  }
+  return `${leaf} · ${name}`;
+}
+
 export function shelfRoot(path) {
   return shelfSegments(path)[0] || "";
 }

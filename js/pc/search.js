@@ -71,6 +71,82 @@ function includesAll(haystack, tokens) {
   return tokens.every((token) => h.includes(token));
 }
 
+/** Needles to paint in titles/folders: query tokens + shelf path segments. */
+export function searchHighlightNeedles(rawQuery) {
+  const { shelf, tokens } = parseSearchQuery(rawQuery);
+  const out = [];
+  const seen = new Set();
+  const add = (value) => {
+    const t = String(value || "").trim().toLowerCase();
+    if (!t || seen.has(t)) return;
+    seen.add(t);
+    out.push(t);
+  };
+  for (const token of tokens) add(token);
+  if (shelf) {
+    for (const part of shelf.split("/")) add(part);
+  }
+  // Plain phrase with no path syntax: also keep the full query for contiguous hits
+  // (e.g. AC manager filters by full substring).
+  if (!shelf && tokens.length > 1) {
+    const full = String(rawQuery || "").trim().toLowerCase();
+    if (full && !full.includes("/") && !full.includes("\\")) add(full);
+  }
+  return out;
+}
+
+function mergeRanges(ranges) {
+  if (!ranges.length) return [];
+  const sorted = [...ranges].sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  const merged = [sorted[0]];
+  for (let i = 1; i < sorted.length; i += 1) {
+    const cur = sorted[i];
+    const last = merged[merged.length - 1];
+    if (cur[0] <= last[1]) last[1] = Math.max(last[1], cur[1]);
+    else merged.push(cur);
+  }
+  return merged;
+}
+
+/** Fill el with text; wrap case-insensitive needle hits in <mark.pc-search-hit>. */
+export function fillWithQueryHighlight(el, text, rawQuery) {
+  el.replaceChildren();
+  const raw = String(text || "");
+  const needles = Array.isArray(rawQuery)
+    ? rawQuery.map((n) => String(n || "").trim().toLowerCase()).filter(Boolean)
+    : searchHighlightNeedles(rawQuery);
+  if (!needles.length) {
+    el.textContent = raw;
+    return;
+  }
+  const lower = raw.toLowerCase();
+  const ranges = [];
+  for (const needle of needles) {
+    let from = 0;
+    let at = lower.indexOf(needle, from);
+    while (at >= 0) {
+      ranges.push([at, at + needle.length]);
+      from = at + needle.length;
+      at = lower.indexOf(needle, from);
+    }
+  }
+  const merged = mergeRanges(ranges);
+  if (!merged.length) {
+    el.textContent = raw;
+    return;
+  }
+  let cursor = 0;
+  for (const [start, end] of merged) {
+    if (start > cursor) el.appendChild(document.createTextNode(raw.slice(cursor, start)));
+    const mark = document.createElement("mark");
+    mark.className = "pc-search-hit";
+    mark.textContent = raw.slice(start, end);
+    el.appendChild(mark);
+    cursor = end;
+  }
+  if (cursor < raw.length) el.appendChild(document.createTextNode(raw.slice(cursor)));
+}
+
 /** Ordered segment match: `looks/port` → Looks/Portrait (substring per segment). */
 function shelfPathMatches(category, shelf) {
   if (!shelf) return true;

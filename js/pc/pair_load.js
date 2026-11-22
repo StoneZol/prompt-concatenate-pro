@@ -10,12 +10,14 @@ import {
     bindPromptTip,
     hidePromptTip,
 } from "./preview_tip.js";
+import { makePairPreviewBtn, presetPreviewUrl } from "./pair_preview.js";
 import {
     getUiPref,
     setUiPref,
     ensureUiPrefs,
 } from "./prefs.js";
 import {
+    fillWithQueryHighlight,
     matchesPromptPreset,
     parseSearchQuery,
 } from "./search.js";
@@ -44,7 +46,7 @@ function shelfCounts(presets) {
 
 const DESC_PREVIEW_CHARS = 60;
 
-function makePromptCard(preset, { onLoad, onAppend }) {
+function makePromptCard(preset, { onLoad, onAppend, query = "" }) {
     const card = document.createElement("div");
     card.className = "pc-preset-item";
 
@@ -53,7 +55,13 @@ function makePromptCard(preset, { onLoad, onAppend }) {
 
     const name = document.createElement("div");
     name.className = "pc-preset-name";
-    name.textContent = preset.title || "Untitled";
+    fillWithQueryHighlight(name, preset.title || "Untitled", query);
+
+    const coverBtn = makePairPreviewBtn(
+        () => (preset.hasPreview ? presetPreviewUrl(preset, preset.updated_at || "") : ""),
+        { className: "pc-pair-preview-btn" },
+    );
+    coverBtn.hidden = !preset.hasPreview;
 
     const peekBtn = document.createElement("button");
     peekBtn.type = "button";
@@ -87,7 +95,7 @@ function makePromptCard(preset, { onLoad, onAppend }) {
         onAppend?.(preset);
     });
 
-    head.append(name, peekBtn, loadBtn, appendBtn);
+    head.append(coverBtn, name, peekBtn, loadBtn, appendBtn);
     card.appendChild(head);
 
     const description = (preset.description || "").trim();
@@ -153,6 +161,7 @@ function makeFolder({
     children = [],
     count,
     tooltip,
+    query = "",
 }) {
     const folder = document.createElement("div");
     folder.className = "pc-preset-folder";
@@ -168,7 +177,7 @@ function makeFolder({
 
     const label = document.createElement("span");
     label.className = "pc-preset-folder-name";
-    label.textContent = title;
+    fillWithQueryHighlight(label, title, query);
     if (tooltip) label.title = tooltip;
 
     const countEl = document.createElement("span");
@@ -191,7 +200,7 @@ function makeFolder({
     }
     for (const preset of presets) {
         body.appendChild(
-            makePromptCard(preset, { onLoad, onAppend }),
+            makePromptCard(preset, { onLoad, onAppend, query }),
         );
     }
 
@@ -290,6 +299,7 @@ function paintList(
                 makePromptCard(preset, {
                     onLoad,
                     onAppend,
+                    query: q,
                 }),
             );
         }
@@ -328,6 +338,7 @@ function paintList(
         return makeFolder({
             title: isUncat ? node.path : shelfLeaf(node.path),
             tooltip: isUncat ? undefined : node.path,
+            query: q,
             presets: node.items,
             count: treeTotal(node),
             children: sorted(node).map(renderNode),

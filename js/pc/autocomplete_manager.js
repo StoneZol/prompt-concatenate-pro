@@ -1,5 +1,6 @@
 import { autocompleteAction, autocompleteList, rebuildAutocomplete } from "./api.js";
-import { CHEVRON_ICON_SVG, TEXT_ICON_SVG } from "./icons.js";
+import { CHEVRON_ICON_SVG, EDIT_ICON_SVG, TEXT_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
+import { fillWithQueryHighlight } from "./search.js";
 import { makeBusyLine } from "./busy.js";
 import { openConfirmPopup, openInputPopup, openPopup } from "./popup.js";
 import { bindPromptTip, hidePromptTip } from "./preview_tip.js";
@@ -137,12 +138,24 @@ function groupByBucket(rows) {
   return map;
 }
 
-function sortBucketKeys(keys) {
+/** Prefer the query's starting letter bucket, then A–Z, then other. */
+function sortBucketKeys(keys, preferBucket = "") {
+  const prefer = (preferBucket || "").toLowerCase();
   return [...keys].sort((a, b) => {
+    if (prefer) {
+      if (a === prefer && b !== prefer) return -1;
+      if (b === prefer && a !== prefer) return 1;
+    }
     if (a === "_other") return 1;
     if (b === "_other") return -1;
     return a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
   });
+}
+
+function queryBucket(q) {
+  const ch = String(q || "").trim().charAt(0).toLowerCase();
+  if (!ch || !/[0-9a-z]/i.test(ch)) return "_other";
+  return ch;
 }
 
 /** Search forces open; otherwise remember toggles (default collapsed). */
@@ -150,6 +163,26 @@ function groupExpanded(name, { query, openMap }) {
   if ((query || "").trim()) return true;
   if (openMap?.has(name)) return openMap.get(name);
   return false;
+}
+
+/** Exact → prefix → word-start inside → other contains. */
+function rankSearchHit(text, q) {
+  const t = String(text || "").toLowerCase();
+  if (t === q) return 0;
+  if (t.startsWith(q)) return 1;
+  if (t.includes(` ${q}`)) return 2;
+  return 3;
+}
+
+function sortSearchHits(rows, q) {
+  return [...rows].sort((a, b) => {
+    const ra = rankSearchHit(a.text, q);
+    const rb = rankSearchHit(b.text, q);
+    if (ra !== rb) return ra - rb;
+    return String(a.text || "").localeCompare(String(b.text || ""), undefined, {
+      sensitivity: "base",
+    });
+  });
 }
 
 function makeBucketSection({ title, bucketKey, items, expanded, onToggleExpand, renderItem }) {
@@ -291,6 +324,49 @@ export function mountAutocompletePanel(host, { reposition } = {}) {
     );
   }
 
+  function makeSegmentRow(row) {
+    const line = document.createElement("div");
+    line.className = "pc-ac-mgr-row";
+    const label = document.createElement("div");
+    label.className = "pc-ac-mgr-text";
+    fillWithQueryHighlight(label, row.text, filter.value.trim());
+    label.title = `${row.text} · ×${row.use_count || 1}`;
+
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "pc-popup-btn pc-ac-mgr-icon-btn";
+    edit.innerHTML = EDIT_ICON_SVG;
+    edit.title = "Rename segment";
+    edit.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startRename(row.text, edit);
+    });
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "pc-popup-btn danger pc-ac-mgr-icon-btn";
+    del.innerHTML = TRASH_ICON_SVG;
+    del.title = "Remove";
+    del.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      del.disabled = true;
+      const result = await autocompleteAction({
+        action: "delete",
+        side,
+        text: row.text,
+      });
+      if (!result.ok) {
+        status.textContent = result.error || "Delete failed";
+        del.disabled = false;
+        return;
+      }
+      status.textContent = "";
+      load();
+    });
+    line.append(label, edit, del);
+    return line;
+  }
+
   function paintList() {
     const q = filter.value.trim().toLowerCase();
     const openMap = openMaps[side];
@@ -310,10 +386,12 @@ export function mountAutocompletePanel(host, { reposition } = {}) {
     }
 
     const grouped = groupByBucket(matched);
-    const keys = sortBucketKeys(grouped.keys());
+    // Search: lift the query's letter group (e.g. "with" → "w") above contains-hits.
+    const keys = sortBucketKeys(grouped.keys(), q ? queryBucket(q) : "");
 
     for (const key of keys) {
-      const groupItems = grouped.get(key) || [];
+      let groupItems = grouped.get(key) || [];
+      if (q) groupItems = sortSearchHits(groupItems, q);
       list.appendChild(
         makeBucketSection({
           title: bucketLabel(key),
@@ -321,48 +399,7 @@ export function mountAutocompletePanel(host, { reposition } = {}) {
           items: groupItems,
           expanded: groupExpanded(key, { query: q, openMap }),
           onToggleExpand: (open) => openMap.set(key, open),
-          renderItem: (row) => {
-            const line = document.createElement("div");
-            line.className = "pc-ac-mgr-row";
-            const label = document.createElement("div");
-            label.className = "pc-ac-mgr-text";
-            label.textContent = row.text;
-            label.title = `${row.text} · ×${row.use_count || 1}`;
-
-            const edit = document.createElement("button");
-            edit.type = "button";
-            edit.className = "pc-popup-btn";
-            edit.textContent = "Edit";
-            edit.title = "Rename segment";
-            edit.addEventListener("click", (e) => {
-              e.stopPropagation();
-              startRename(row.text, edit);
-            });
-
-            const del = document.createElement("button");
-            del.type = "button";
-            del.className = "pc-popup-btn danger";
-            del.textContent = "×";
-            del.title = "Remove";
-            del.addEventListener("click", async (e) => {
-              e.stopPropagation();
-              del.disabled = true;
-              const result = await autocompleteAction({
-                action: "delete",
-                side,
-                text: row.text,
-              });
-              if (!result.ok) {
-                status.textContent = result.error || "Delete failed";
-                del.disabled = false;
-                return;
-              }
-              status.textContent = "";
-              load();
-            });
-            line.append(label, edit, del);
-            return line;
-          },
+          renderItem: makeSegmentRow,
         }),
       );
     }

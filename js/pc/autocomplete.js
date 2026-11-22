@@ -46,13 +46,17 @@ export function currentSegment(value, caret) {
     };
 }
 
+function createItemKey(item) {
+    return `${item?.scope || "phrase"}:${normalizePrefix(item?.text || "")}`;
+}
+
 function clearSavedFlash(state) {
     if (!state) return;
     if (state.savedTimer) {
         clearTimeout(state.savedTimer);
         state.savedTimer = null;
     }
-    state.savedFlash = false;
+    state.savedFlashKey = "";
 }
 
 function dismissPopup() {
@@ -67,15 +71,32 @@ function dismissPopup() {
     activePopup = null;
 }
 
-function flashSaved(state) {
-    if (!state?.root) return;
-    state.savedFlash = true;
+/** Flash only the saved create row, then drop it and keep the popup for the other Add. */
+function flashSavedCreate(state, item) {
+    if (!state?.root || !isCreateItem(item)) return;
+    const key = createItemKey(item);
+    state.savedFlashKey = key;
     renderItems(state);
     placePopup(state);
     if (state.savedTimer) clearTimeout(state.savedTimer);
     state.savedTimer = setTimeout(() => {
-        if (activePopup === state) dismissPopup();
-    }, 1500);
+        if (activePopup !== state) return;
+        state.savedFlashKey = "";
+        state.items = state.items.filter(
+            (row) => !(isCreateItem(row) && createItemKey(row) === key),
+        );
+        if (!state.items.length) {
+            dismissPopup();
+            return;
+        }
+        const nextCreate = state.items.findIndex(isCreateItem);
+        state.selected =
+            nextCreate >= 0
+                ? nextCreate
+                : Math.min(state.selected, state.items.length - 1);
+        renderItems(state);
+        placePopup(state);
+    }, 700);
     state.textarea?.focus();
 }
 
@@ -245,12 +266,62 @@ function looksLikeWeightEdit(raw) {
     return /:\s*[\d.]*$/u.test(text) || /^\(.*:\s*[\d.]*\)?$/u.test(text);
 }
 
-function makeCreateItem(prefix) {
-    return { kind: "create", text: prefix };
+function makeCreateItem(text, scope = "phrase") {
+    return { kind: "create", text, scope };
 }
 
 function isCreateItem(item) {
     return item?.kind === "create";
+}
+
+function isWordItem(item) {
+    return item?.kind === "word";
+}
+
+/**
+ * Split comma-segment prefix into prior words + last token.
+ * `white jak` → { head: "white", lastWord: "jak", multi: true }
+ * `white `   → { head: "white", lastWord: "", multi: true }
+ */
+function splitLastWord(prefix) {
+    const leading = String(prefix || "").replace(/^\s+/, "");
+    const trailingSpace = /\s$/.test(leading);
+    const collapsed = leading.replace(/\s+/g, " ").replace(/\s+$/, "");
+    const parts = collapsed ? collapsed.split(" ") : [];
+    if (!parts.length) {
+        return { head: "", lastWord: "", multi: false };
+    }
+    if (trailingSpace) {
+        return { head: collapsed, lastWord: "", multi: true };
+    }
+    if (parts.length === 1) {
+        return { head: "", lastWord: parts[0], multi: false };
+    }
+    return {
+        head: parts.slice(0, -1).join(" "),
+        lastWord: parts[parts.length - 1],
+        multi: true,
+    };
+}
+
+function glueHeadWord(head, word) {
+    const h = String(head || "").trim();
+    const w = String(word || "").trim();
+    if (!h) return w;
+    if (!w) return h;
+    return `${h} ${w}`;
+}
+
+/** `white office suit panties` + head `white office suit` → `panties`. */
+function suffixAfterHead(full, head) {
+    const h = String(head || "").trim();
+    const t = String(full || "").trim();
+    if (!h || !t) return t;
+    const lower = t.toLowerCase();
+    const hl = h.toLowerCase();
+    if (lower.startsWith(`${hl} `)) return t.slice(h.length).trimStart();
+    if (lower === hl) return "";
+    return t;
 }
 
 async function saveSegmentToLib(side, text) {
@@ -263,29 +334,39 @@ async function saveSegmentToLib(side, text) {
 }
 
 function renderItems(state) {
-    const { root, items, selected, onPick, savedFlash } = state;
+    const { root, items, selected, onPick, savedFlashKey } = state;
     root.replaceChildren();
     items.forEach((item, index) => {
         const btn = document.createElement("button");
         btn.type = "button";
         const selectedCls = index === selected ? " selected" : "";
         if (isCreateItem(item)) {
+            const thisSaved = Boolean(
+                savedFlashKey && savedFlashKey === createItemKey(item),
+            );
             btn.className =
                 "pc-ac-item pc-ac-item-create" +
                 selectedCls +
-                (savedFlash ? " is-saved" : "");
+                (thisSaved ? " is-saved" : "");
             const main = document.createElement("div");
             main.className = "pc-ac-item-main";
             main.textContent = item.text;
             const hint = document.createElement("div");
             hint.className =
-                "pc-ac-item-hint" + (savedFlash ? " is-saved" : "");
-            hint.textContent = savedFlash ? "Saved" : "Tab to add";
+                "pc-ac-item-hint" + (thisSaved ? " is-saved" : "");
+            const addLabel =
+                item.scope === "word" ? "Tab to add word" : "Tab to add phrase";
+            hint.textContent = thisSaved ? "Saved" : addLabel;
             btn.append(main, hint);
-            btn.title = savedFlash
+            btn.title = thisSaved
                 ? "Saved to dictionary"
                 : `Add “${item.text}” to dictionary`;
-            if (savedFlash) btn.disabled = true;
+            if (thisSaved) btn.disabled = true;
+        } else if (isWordItem(item)) {
+            // List shows only from the current space; Tab still glues onto head.
+            btn.className = "pc-ac-item" + selectedCls;
+            btn.textContent = item.text;
+            btn.title = `Tab → ${glueHeadWord(item.head, item.text)}`;
         } else {
             btn.className = "pc-ac-item" + selectedCls;
             btn.textContent = item.text;
@@ -294,7 +375,13 @@ function renderItems(state) {
         btn.addEventListener("mousedown", (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (savedFlash) return;
+            if (
+                isCreateItem(item) &&
+                savedFlashKey &&
+                savedFlashKey === createItemKey(item)
+            ) {
+                return;
+            }
             onPick(item);
         });
         root.appendChild(btn);
@@ -325,6 +412,9 @@ async function showSuggestions(textarea, side, segment) {
     }
 
     const root = ensurePopupRoot();
+    const prevPrefix = reuse
+        ? normalizePrefix(activePopup.segment?.prefix || "")
+        : null;
     const prevSelectedKey =
         reuse && activePopup.items?.[activePopup.selected]
             ? `${activePopup.items[activePopup.selected].kind || "match"}:${activePopup.items[activePopup.selected].text}`
@@ -336,65 +426,127 @@ async function showSuggestions(textarea, side, segment) {
         side,
         segment,
         items: reuse ? activePopup.items : [],
-        selected: reuse ? activePopup.selected : 0,
+        selected: 0,
         abort,
         async onPick(item) {
-            if (state.savedFlash) return;
+            if (
+                isCreateItem(item) &&
+                state.savedFlashKey &&
+                state.savedFlashKey === createItemKey(item)
+            ) {
+                return;
+            }
             if (isCreateItem(item)) {
                 const ok = await saveSegmentToLib(side, item.text);
                 if (!ok || activePopup !== state) return;
-                flashSaved(state);
+                flashSavedCreate(state, item);
                 return;
             }
-            applyCompletion(textarea, segment, item.text);
+            const nextText = isWordItem(item)
+                ? glueHeadWord(item.head, item.text)
+                : item.text;
+            applyCompletion(textarea, segment, nextText);
             dismissPopup();
             textarea.focus();
+            // After chaining a word (white → jacket), reopen so Add can offer the full phrase.
+            if (isWordItem(item)) {
+                scheduleSuggest(textarea, side);
+            }
         },
     };
     activePopup = state;
     placePopup(state);
 
     try {
-        const result = await autocompleteLookup(
-            normalizeSide(side),
-            prefix,
-            MAX_ITEMS,
-        );
+        const sideKey = normalizeSide(side);
+        const needle = normalizePrefix(prefix);
+        const { head, lastWord, multi } = splitLastWord(prefix);
+
+        const wordNeedle = normalizePrefix(lastWord);
+        const [phraseResult, wordResult] = await Promise.all([
+            autocompleteLookup(sideKey, prefix, MAX_ITEMS),
+            multi && lastWord.length >= 1
+                ? autocompleteLookup(sideKey, lastWord, MAX_ITEMS)
+                : Promise.resolve({ items: [] }),
+        ]);
         if (activePopup !== state || abort.signal.aborted)
             return;
-        const needle = normalizePrefix(prefix);
-        const raw = result.items || [];
-        const hasExact = raw.some(
+
+        const phraseRaw = phraseResult.items || [];
+        const wordRaw = wordResult.items || [];
+        const hasExactPhrase = phraseRaw.some(
             (row) => normalizePrefix(row.text) === needle,
         );
-        const matches = raw
-            .filter((row) => normalizePrefix(row.text) !== needle)
-            .slice(0, MAX_ITEMS)
-            .map((row) => ({ kind: "match", text: row.text }));
+        const hasExactLastWord =
+            Boolean(wordNeedle) &&
+            wordRaw.some(
+                (row) => normalizePrefix(row.text) === wordNeedle,
+            );
 
-        if (matches.length) {
-            state.items = matches;
-            // Longer hits exist (e.g. "sweet dreams") but typed "sweet" is new — offer Add at end.
-            if (
-                !hasExact &&
-                needle.length >= MIN_SAVE_LEN &&
-                !looksLikeWeightEdit(prefix)
-            ) {
-                state.items = [...matches, makeCreateItem(needle)];
-            }
-        } else if (hasExact || looksLikeWeightEdit(prefix)) {
-            // Already known, or user is tweaking (tag:1.2) weights — stay quiet.
+        const phraseMatches = phraseRaw
+            .filter((row) => normalizePrefix(row.text) !== needle)
+            .slice(0, MAX_ITEMS);
+
+        // Multi-word: list only the part after the current space (panties, not
+        // "white office suit panties"). Tab still inserts the full glue.
+        let items = [];
+        if (phraseMatches.length) {
+            items = phraseMatches.map((row) => {
+                if (multi && head) {
+                    const suffix = suffixAfterHead(row.text, head);
+                    if (suffix) {
+                        return { kind: "word", text: suffix, head };
+                    }
+                }
+                return { kind: "match", text: row.text };
+            });
+        } else if (multi && lastWord.length >= 1) {
+            items = wordRaw
+                .filter(
+                    (row) =>
+                        normalizePrefix(row.text) !== wordNeedle,
+                )
+                .slice(0, MAX_ITEMS)
+                .map((row) => ({
+                    kind: "word",
+                    text: row.text,
+                    head,
+                }));
+        }
+
+        const weightEdit = looksLikeWeightEdit(prefix);
+        const offerAddWord =
+            multi &&
+            lastWord.length >= MIN_SAVE_LEN &&
+            !hasExactLastWord &&
+            !weightEdit;
+        const offerAddPhrase =
+            !hasExactPhrase &&
+            needle.length >= MIN_SAVE_LEN &&
+            !weightEdit &&
+            // Avoid duplicating the same create row for a single token.
+            (!offerAddWord || needle !== wordNeedle);
+
+        if (items.length) {
+            if (offerAddWord) items = [...items, makeCreateItem(lastWord, "word")];
+            if (offerAddPhrase) items = [...items, makeCreateItem(needle, "phrase")];
+        } else if (hasExactPhrase || weightEdit) {
             dismissPopup();
             return;
-        } else if (needle.length >= MIN_SAVE_LEN) {
-            // Offer clean phrase, not the weighted wrapper.
-            state.items = [makeCreateItem(needle)];
+        } else if (offerAddWord || offerAddPhrase) {
+            items = [];
+            if (offerAddWord) items.push(makeCreateItem(lastWord, "word"));
+            if (offerAddPhrase) items.push(makeCreateItem(needle, "phrase"));
         } else {
             dismissPopup();
             return;
         }
 
-        if (prevSelectedKey) {
+        state.items = items;
+
+        // Keep highlight only for the same prefix (list refresh). On type/backspace
+        // always jump to the new best match — else Tab sticks on "white socks" after whit│.
+        if (prevSelectedKey && prevPrefix === needle) {
             const keep = state.items.findIndex(
                 (row) =>
                     `${row.kind || "match"}:${row.text}` ===
@@ -416,9 +568,9 @@ function scheduleSuggest(textarea, side) {
         dismissPopup();
         return;
     }
-    // Any typing / click ends the Saved flash immediately.
-    if (activePopup?.savedFlash && activePopup.textarea === textarea) {
-        dismissPopup();
+    // Typing cancels an in-progress create flash and refreshes suggestions.
+    if (activePopup?.savedFlashKey && activePopup.textarea === textarea) {
+        clearSavedFlash(activePopup);
     }
     // Weight tweak / dismissed: wait for a new segment delimiter.
     if (suppressed.get(textarea)) {
@@ -512,16 +664,22 @@ export function bindPromptAutocomplete(textarea, side) {
                 modHeld.set(textarea, true);
             }
 
-            // Saved flash: any key ends it (Tab is swallowed).
+            // During create flash, Tab on another row is OK; arrows OK; typing dismisses flash via input.
             if (
-                activePopup?.savedFlash &&
-                activePopup.textarea === textarea
+                activePopup?.savedFlashKey &&
+                activePopup.textarea === textarea &&
+                e.key === "Tab"
             ) {
-                if (e.key === "Tab") {
+                const flashItem =
+                    activePopup.items?.[activePopup.selected];
+                if (
+                    isCreateItem(flashItem) &&
+                    createItemKey(flashItem) === activePopup.savedFlashKey
+                ) {
+                    // Don't re-save the row that's mid-flash.
                     stopKey(e);
                     return;
                 }
-                dismissPopup();
             }
 
             // Esc: close and ignore until space / enter / comma starts a new bit.
@@ -572,7 +730,6 @@ export function bindPromptAutocomplete(textarea, side) {
             }
             if (e.key === "Tab") {
                 stopKey(e);
-                if (popup.savedFlash) return;
                 const item = popup.items[popup.selected];
                 if (item) popup.onPick(item);
             }

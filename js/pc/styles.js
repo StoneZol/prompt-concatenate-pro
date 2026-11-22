@@ -671,6 +671,13 @@ const CSS = `
   min-width: 0;
   display: flex;
   align-items: center;
+  gap: 4px;
+}
+
+.pc-loaded-prefix {
+  flex: 0 0 auto;
+  color: var(--descrip-text, #777);
+  white-space: nowrap;
 }
 
 .pc-loaded-label {
@@ -700,9 +707,33 @@ const CSS = `
   gap: 2px;
 }
 
-.pc-loaded-label::before {
-  content: "Loaded · ";
-  color: var(--descrip-text, #777);
+.pc-loaded-preview,
+.pc-pair-preview-btn {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--descrip-text, #888);
+  cursor: pointer;
+}
+
+.pc-loaded-preview svg,
+.pc-pair-preview-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.pc-loaded-preview:hover,
+.pc-pair-preview-btn:hover {
+  color: var(--input-text, #ddd);
+  background: var(--comfy-input-bg, #2a2a2e);
 }
 
 .pc-loaded-clear,
@@ -725,6 +756,8 @@ const CSS = `
 .pc-loaded-notes[hidden],
 .pc-loaded-reset[hidden],
 .pc-loaded-clear[hidden],
+.pc-loaded-preview[hidden],
+.pc-pair-preview-btn[hidden],
 .pc-loaded-label[hidden],
 .pc-loaded-info[hidden],
 .pc-loaded-count[hidden],

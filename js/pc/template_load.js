@@ -1,7 +1,7 @@
 import { CHEVRON_ICON_SVG, LOAD_ICON_SVG, PLUS_ICON_SVG } from "./icons.js";
 import { openConfirmPopup, openPopup } from "./popup.js";
 import { listTemplates } from "./api.js";
-import { matchesTemplatePreset } from "./search.js";
+import { fillWithQueryHighlight, matchesTemplatePreset } from "./search.js";
 import { normalizeShelfPath, shelfLeaf, shelfSegments } from "./shelf_paths.js";
 
 const DESC_PREVIEW_CHARS = 60;
@@ -17,7 +17,7 @@ function slotMeta(template) {
   return names;
 }
 
-function makeTemplateCard(template, { onLoad }) {
+function makeTemplateCard(template, { onLoad, query = "" }) {
   const card = document.createElement("div");
   card.className = "pc-preset-item";
 
@@ -26,7 +26,7 @@ function makeTemplateCard(template, { onLoad }) {
 
   const name = document.createElement("div");
   name.className = "pc-preset-name";
-  name.textContent = template.name || "Untitled";
+  fillWithQueryHighlight(name, template.name || "Untitled", query);
 
   const loadBtn = document.createElement("button");
   loadBtn.type = "button";
@@ -138,7 +138,7 @@ function sortedChildren(node) {
   });
 }
 
-function makeFolder({ title, templates, expanded, onLoad, children = [], count, tooltip }) {
+function makeFolder({ title, templates, expanded, onLoad, children = [], count, tooltip, query = "" }) {
   const folder = document.createElement("div");
   folder.className = "pc-preset-folder";
   if (!expanded) folder.classList.add("collapsed");
@@ -153,7 +153,7 @@ function makeFolder({ title, templates, expanded, onLoad, children = [], count, 
 
   const label = document.createElement("span");
   label.className = "pc-preset-folder-name";
-  label.textContent = title;
+  fillWithQueryHighlight(label, title, query);
   if (tooltip) label.title = tooltip;
 
   const countEl = document.createElement("span");
@@ -168,7 +168,7 @@ function makeFolder({ title, templates, expanded, onLoad, children = [], count, 
   body.className = "pc-preset-folder-body";
   for (const child of children) body.appendChild(child);
   for (const template of templates) {
-    body.appendChild(makeTemplateCard(template, { onLoad }));
+    body.appendChild(makeTemplateCard(template, { onLoad, query }));
   }
 
   head.addEventListener("click", (e) => {
@@ -203,6 +203,7 @@ function paintTemplateList(list, templates, query, onLoad) {
     return makeFolder({
       title: isUncat ? node.path : shelfLeaf(node.path),
       tooltip: isUncat ? undefined : node.path,
+      query: q,
       templates: node.items,
       count: treeTotal(node),
       children: sortedChildren(node).map(renderNode),

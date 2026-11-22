@@ -11,7 +11,7 @@ import {
   TRASH_ICON_SVG,
 } from "./pc/icons.js";
 import { makeGroupCard } from "./pc/group_card.js";
-import { openConfirmPopup } from "./pc/popup.js";
+import { injectPopupStyles, openConfirmPopup } from "./pc/popup.js";
 import { openAddGroupPopup } from "./pc/add_group.js";
 import { openSavePresetsPopup } from "./pc/save_dialog.js";
 import { confirmReplaceGroups, openLoadPresetPopup } from "./pc/load_dialog.js";
@@ -45,6 +45,7 @@ import { attachPromptMaterializeHooks } from "./pc/metadata.js";
 import { UI_PREFS_EVENT, ensureUiPrefs, getUiPref } from "./pc/prefs.js";
 import { maybeShowWhatsNew } from "./pc/whats_new.js";
 import { bindInfoTip, hidePromptTip } from "./pc/preview_tip.js";
+import { clearLoadedPreviewMeta, writeLoadedPreviewMeta } from "./pc/pair_preview.js";
 import {
   EXTERNAL_GROUP_ID,
   EXTERNAL_TITLE,
@@ -57,6 +58,8 @@ import {
 
 const config = await loadConfig();
 injectStyles(config.style_id);
+// Tip / preview CSS lives in popup styles — inject on boot, not on first dialog open.
+injectPopupStyles();
 ensureUiPrefs();
 
 const MIN_NODE_WIDTH = 400;
@@ -97,6 +100,31 @@ function normalizeGroup(raw) {
     g.collapsed = Boolean(raw.collapsed);
     return g;
   }
+  // Preview: ready URL in loadedPreviewPath (LoRA coverPath) — written on Load/Save, used as-is.
+  raw.loadedPresetId = Number(raw.loadedPresetId || 0);
+  raw.loadedPreviewRev = String(raw.loadedPreviewRev || "");
+  raw.loadedPreviewKey = String(raw.loadedPreviewKey || "").trim();
+  raw.loadedPreviewPath = String(raw.loadedPreviewPath || "").trim();
+  const hadPreview =
+    Boolean(raw.loadedHasPreview) ||
+    Boolean(raw.loadedPreviewPath) ||
+    Boolean(raw.loadedPreviewKey);
+  raw.loadedHasPreview = hadPreview;
+  if (hadPreview && (raw.loadedTitle || raw.loadedPreviewPath)) {
+    // Ensure full URL is present after older saves that only had the flag/key.
+    if (!raw.loadedPreviewPath && raw.loadedTitle) {
+      writeLoadedPreviewMeta(raw, {
+        id: raw.loadedPresetId,
+        hasPreview: true,
+        bust: raw.loadedPreviewRev || "1",
+        category: raw.loadedCategory,
+        title: raw.loadedTitle,
+      });
+    }
+  } else {
+    clearLoadedPreviewMeta(raw);
+  }
+  raw.browseShelf = normalizeShelfPath(raw.browseShelf);
   return raw;
 }
 
@@ -688,8 +716,12 @@ app.registerExtension({
               openSavePairPopup({
                 anchor,
                 group,
-                onSaved: (name) => {
-                  card.setLoadedTitle(name, group.loadedCategory);
+                onSaved: (name, meta) => {
+                  card.setLoadedTitle(name, group.loadedCategory, {
+                    id: meta?.id || group.loadedPresetId || 0,
+                    hasPreview: Boolean(meta?.hasPreview ?? group.loadedHasPreview),
+                    bust: Date.now(),
+                  });
                   persist();
                 },
               }),
@@ -715,6 +747,7 @@ app.registerExtension({
                   group.loadedTitle = "";
                   group.loadedCategory = "";
                   group.loadedDescription = "";
+                  clearLoadedPreviewMeta(group);
                   card.setField("positive", group.positive);
                   card.setField("negative", group.negative);
                   card.setLoadedTitle("");
@@ -735,6 +768,7 @@ app.registerExtension({
                   group.loadedTitle = "";
                   group.loadedCategory = "";
                   group.loadedDescription = "";
+                  clearLoadedPreviewMeta(group);
                   card.setField("positive", group.positive);
                   card.setLoadedTitle("");
                   writeShadow(group, "positive", group.positive);
@@ -781,7 +815,10 @@ app.registerExtension({
               reconcileBrowseShelf(group, group.loadedCategory);
               card.setField("positive", group.positive);
               card.setField("negative", group.negative);
-              card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
+              card.setLoadedTitle(group.loadedTitle, group.loadedCategory, {
+                id: preset.id || 0,
+                hasPreview: Boolean(preset.hasPreview),
+              });
               writeShadow(group, "positive", group.positive);
               writeShadow(group, "negative", group.negative);
               persist();
@@ -839,6 +876,11 @@ app.registerExtension({
           loadedTitle: (source.loadedTitle || "").trim(),
           loadedCategory: (source.loadedCategory || "").trim(),
           loadedDescription: (source.loadedDescription || "").trim(),
+          loadedPresetId: Number(source.loadedPresetId || 0),
+          loadedHasPreview: Boolean(source.loadedHasPreview),
+          loadedPreviewKey: String(source.loadedPreviewKey || "").trim(),
+          loadedPreviewPath: String(source.loadedPreviewPath || "").trim(),
+          loadedPreviewRev: String(source.loadedPreviewRev || ""),
           browseShelf: normalizeShelfPath(source.browseShelf),
           enabled: source.enabled !== false,
           collapsed: false,
@@ -875,7 +917,10 @@ app.registerExtension({
         reconcileBrowseShelf(group, group.loadedCategory);
         card.setField("positive", group.positive);
         card.setField("negative", group.negative);
-        card.setLoadedTitle(group.loadedTitle, group.loadedCategory);
+        card.setLoadedTitle(group.loadedTitle, group.loadedCategory, {
+          id: preset.id || 0,
+          hasPreview: Boolean(preset.hasPreview),
+        });
         writeShadow(group, "positive", group.positive);
         writeShadow(group, "negative", group.negative);
         persist();
@@ -1007,6 +1052,7 @@ app.registerExtension({
           group.loadedTitle = "";
           group.loadedCategory = "";
           group.loadedDescription = "";
+          clearLoadedPreviewMeta(group);
           writeShadow(group, "positive", "");
           writeShadow(group, "negative", "");
         }

@@ -1023,7 +1023,8 @@ const CSS = `
   white-space: nowrap;
 }
 
-.pc-civitai-cover-tip {
+.pc-civitai-cover-tip,
+.pc-pair-preview-tip {
   position: fixed;
   z-index: 12250;
   width: 220px;
@@ -1035,7 +1036,8 @@ const CSS = `
   pointer-events: none;
 }
 
-.pc-civitai-cover-tip img {
+.pc-civitai-cover-tip img,
+.pc-pair-preview-tip img {
   display: block;
   width: 100%;
   height: auto;
@@ -1043,6 +1045,63 @@ const CSS = `
   object-fit: contain;
   border-radius: 4px;
   background: #111;
+}
+
+.pc-pair-preview-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pc-pair-preview-edit.capped {
+  max-width: 100%;
+}
+
+.pc-pair-preview-thumb {
+  width: 180px;
+  height: 220px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #444);
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--descrip-text, #888);
+  font-size: 11px;
+}
+
+.pc-pair-preview-thumb.is-empty {
+  border-style: dashed;
+  background: var(--comfy-input-bg, #2a2a2e);
+}
+
+.pc-pair-preview-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* .pc-popup-btn / thumb img set display and would otherwise beat [hidden]. */
+.pc-pair-preview-edit [hidden] {
+  display: none !important;
+}
+
+.pc-pair-preview-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pc-pair-preview-edit-status {
+  min-height: 1.2em;
+  font-size: 11px;
+  color: var(--descrip-text, #888);
+}
+
+.pc-pair-preview-edit-status:empty {
+  display: none;
 }
 
 .pc-civitai-groups {
@@ -1463,11 +1522,35 @@ const CSS = `
   color: var(--input-text, #ddd);
 }
 
+.pc-search-hit,
+.pc-ac-mgr-hit {
+  background: color-mix(in srgb, var(--p-primary-color, #7c5cbf) 35%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  font-weight: 600;
+}
+
 .pc-ac-mgr-row .pc-popup-btn {
   flex: 0 0 auto;
   min-width: 28px;
   padding: 0 8px;
   height: 26px;
+}
+
+.pc-ac-mgr-row .pc-ac-mgr-icon-btn {
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pc-ac-mgr-row .pc-ac-mgr-icon-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .pc-ac-replace-list {
@@ -1520,6 +1603,12 @@ const CSS = `
 
 .pc-info-tip {
   max-width: min(380px, calc(100vw - 16px));
+}
+
+.pc-preset-head .pc-pair-preview-btn {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
 }
 
 .pc-preset-peek {
@@ -2025,7 +2114,16 @@ const CSS = `
   min-width: 0;
 }
 
+.pc-mgr-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .pc-mgr-item-name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 12px;
   line-height: 1.3;
   overflow: hidden;
@@ -2269,7 +2367,8 @@ function placePopup(el, { anchor, position, centered }) {
         const below = anchorRect.bottom + gap;
         const above = anchorRect.top - box.height - gap;
         const fitsBelow =
-            below + box.height <= window.innerHeight - margin;
+            below + box.height <=
+            window.innerHeight - margin;
         y = !fitsBelow && above >= margin ? above : below;
     }
     clampPopupPosition(el, x, y);
@@ -2303,9 +2402,15 @@ function bindPopupDrag(root, handle, onMoved) {
 
         function onUp(ev) {
             handle.releasePointerCapture(ev.pointerId);
-            handle.removeEventListener("pointermove", onMove);
+            handle.removeEventListener(
+                "pointermove",
+                onMove,
+            );
             handle.removeEventListener("pointerup", onUp);
-            handle.removeEventListener("pointercancel", onUp);
+            handle.removeEventListener(
+                "pointercancel",
+                onUp,
+            );
         }
 
         handle.addEventListener("pointermove", onMove);
@@ -2372,7 +2477,8 @@ export function openPopup(opts) {
     if (blocking) {
         backdrop = document.createElement("div");
         backdrop.className = "pc-popup-backdrop";
-        if (opts.nested) backdrop.classList.add("pc-popup-nested");
+        if (opts.nested)
+            backdrop.classList.add("pc-popup-nested");
         backdrop.addEventListener("pointerdown", (e) => {
             e.stopPropagation();
         });
@@ -2400,7 +2506,8 @@ export function openPopup(opts) {
         backdrop.appendChild(root);
         host = backdrop;
     } else {
-        if (opts.nested) root.classList.add("pc-popup-nested");
+        if (opts.nested)
+            root.classList.add("pc-popup-nested");
         root.append(titleEl, body);
     }
 
@@ -2470,10 +2577,15 @@ export function openPopup(opts) {
         close,
         root,
         reposition() {
-            if (closed || !root.isConnected || blocking) return;
+            if (closed || !root.isConnected || blocking)
+                return;
             if (userMoved) {
                 const rect = root.getBoundingClientRect();
-                clampPopupPosition(root, rect.left, rect.top);
+                clampPopupPosition(
+                    root,
+                    rect.left,
+                    rect.top,
+                );
                 return;
             }
             placePopup(root, opts);
