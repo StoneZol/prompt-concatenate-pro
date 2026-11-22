@@ -22,9 +22,10 @@ const AUTOCOMPLETE_HELP = {
     "and from the autocomplete dictionary (comma / newline separated; weights stripped). " +
     "Dictionaries are stored per side (pos/neg) in letter buckets.\n\n" +
     "Manage the dictionary in Library manager → Suggest. " +
-    "Scrollable list at the caret (letter bucket only). Tab accepts a suggestion; " +
-    "if nothing matches (or only longer hits like “sweet dreams” for typed “sweet”), " +
-    "an Add row at the bottom saves the typed segment with Tab. Esc closes; Enter still inserts a newline.",
+    "Scrollable list at the caret (letter bucket only). Tab accepts a suggestion. " +
+    "If the full phrase has no hits, the last word is matched alone (white jak → jacket) " +
+    "so you can chain words; an Add row at the bottom always offers saving the full segment " +
+    "up to the comma. Esc closes; Enter still inserts a newline.",
 };
 
 const EXTERNAL_PROMPT_HELP = {

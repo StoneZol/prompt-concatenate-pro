@@ -253,6 +253,44 @@ function isCreateItem(item) {
     return item?.kind === "create";
 }
 
+function isWordItem(item) {
+    return item?.kind === "word";
+}
+
+/**
+ * Split comma-segment prefix into prior words + last token.
+ * `white jak` → { head: "white", lastWord: "jak", multi: true }
+ * `white `   → { head: "white", lastWord: "", multi: true }
+ */
+function splitLastWord(prefix) {
+    const leading = String(prefix || "").replace(/^\s+/, "");
+    const trailingSpace = /\s$/.test(leading);
+    const collapsed = leading.replace(/\s+/g, " ").replace(/\s+$/, "");
+    const parts = collapsed ? collapsed.split(" ") : [];
+    if (!parts.length) {
+        return { head: "", lastWord: "", multi: false };
+    }
+    if (trailingSpace) {
+        return { head: collapsed, lastWord: "", multi: true };
+    }
+    if (parts.length === 1) {
+        return { head: "", lastWord: parts[0], multi: false };
+    }
+    return {
+        head: parts.slice(0, -1).join(" "),
+        lastWord: parts[parts.length - 1],
+        multi: true,
+    };
+}
+
+function glueHeadWord(head, word) {
+    const h = String(head || "").trim();
+    const w = String(word || "").trim();
+    if (!h) return w;
+    if (!w) return h;
+    return `${h} ${w}`;
+}
+
 async function saveSegmentToLib(side, text) {
     const result = await autocompleteAction({
         action: "add",
@@ -286,6 +324,11 @@ function renderItems(state) {
                 ? "Saved to dictionary"
                 : `Add “${item.text}” to dictionary`;
             if (savedFlash) btn.disabled = true;
+        } else if (isWordItem(item)) {
+            const glued = glueHeadWord(item.head, item.text);
+            btn.className = "pc-ac-item" + selectedCls;
+            btn.textContent = glued;
+            btn.title = `Complete last word → ${glued}`;
         } else {
             btn.className = "pc-ac-item" + selectedCls;
             btn.textContent = item.text;
@@ -349,53 +392,98 @@ async function showSuggestions(textarea, side, segment) {
                 flashSaved(state);
                 return;
             }
-            applyCompletion(textarea, segment, item.text);
+            const nextText = isWordItem(item)
+                ? glueHeadWord(item.head, item.text)
+                : item.text;
+            applyCompletion(textarea, segment, nextText);
             dismissPopup();
             textarea.focus();
+            // After chaining a word (white → jacket), reopen so Add can offer the full phrase.
+            if (isWordItem(item)) {
+                scheduleSuggest(textarea, side);
+            }
         },
     };
     activePopup = state;
     placePopup(state);
 
     try {
-        const result = await autocompleteLookup(
-            normalizeSide(side),
+        const sideKey = normalizeSide(side);
+        const needle = normalizePrefix(prefix);
+        const { head, lastWord, multi } = splitLastWord(prefix);
+
+        const phraseResult = await autocompleteLookup(
+            sideKey,
             prefix,
             MAX_ITEMS,
         );
         if (activePopup !== state || abort.signal.aborted)
             return;
-        const needle = normalizePrefix(prefix);
-        const raw = result.items || [];
-        const hasExact = raw.some(
+
+        const phraseRaw = phraseResult.items || [];
+        const hasExactPhrase = phraseRaw.some(
             (row) => normalizePrefix(row.text) === needle,
         );
-        const matches = raw
+        const phraseMatches = phraseRaw
             .filter((row) => normalizePrefix(row.text) !== needle)
             .slice(0, MAX_ITEMS)
             .map((row) => ({ kind: "match", text: row.text }));
 
-        if (matches.length) {
-            state.items = matches;
-            // Longer hits exist (e.g. "sweet dreams") but typed "sweet" is new — offer Add at end.
-            if (
-                !hasExact &&
-                needle.length >= MIN_SAVE_LEN &&
-                !looksLikeWeightEdit(prefix)
-            ) {
-                state.items = [...matches, makeCreateItem(needle)];
-            }
-        } else if (hasExact || looksLikeWeightEdit(prefix)) {
-            // Already known, or user is tweaking (tag:1.2) weights — stay quiet.
+        let wordMatches = [];
+        // No phrase hits → match the last word alone (white jak → jacket).
+        if (
+            !phraseMatches.length &&
+            multi &&
+            lastWord.length >= 1
+        ) {
+            const wordResult = await autocompleteLookup(
+                sideKey,
+                lastWord,
+                MAX_ITEMS,
+            );
+            if (activePopup !== state || abort.signal.aborted)
+                return;
+            const wordNeedle = normalizePrefix(lastWord);
+            wordMatches = (wordResult.items || [])
+                .filter(
+                    (row) =>
+                        normalizePrefix(row.text) !== wordNeedle,
+                )
+                .slice(0, MAX_ITEMS)
+                .map((row) => ({
+                    kind: "word",
+                    text: row.text,
+                    head,
+                }));
+        }
+
+        let items = [];
+        if (phraseMatches.length) {
+            items = phraseMatches;
+        } else if (wordMatches.length) {
+            items = wordMatches;
+        }
+
+        const offerAdd =
+            !hasExactPhrase &&
+            needle.length >= MIN_SAVE_LEN &&
+            !looksLikeWeightEdit(prefix);
+
+        if (items.length) {
+            // Always keep full-segment Add at the bottom while building a phrase.
+            if (offerAdd) items = [...items, makeCreateItem(needle)];
+        } else if (hasExactPhrase || looksLikeWeightEdit(prefix)) {
+            // Known single/multi phrase, or weight edit — stay quiet.
             dismissPopup();
             return;
-        } else if (needle.length >= MIN_SAVE_LEN) {
-            // Offer clean phrase, not the weighted wrapper.
-            state.items = [makeCreateItem(needle)];
+        } else if (offerAdd) {
+            items = [makeCreateItem(needle)];
         } else {
             dismissPopup();
             return;
         }
+
+        state.items = items;
 
         // Keep highlight only for the same prefix (list refresh). On type/backspace
         // always jump to the new best match — else Tab sticks on "white socks" after whit│.
