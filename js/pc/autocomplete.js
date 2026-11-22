@@ -245,8 +245,8 @@ function looksLikeWeightEdit(raw) {
     return /:\s*[\d.]*$/u.test(text) || /^\(.*:\s*[\d.]*\)?$/u.test(text);
 }
 
-function makeCreateItem(prefix) {
-    return { kind: "create", text: prefix };
+function makeCreateItem(text, scope = "phrase") {
+    return { kind: "create", text, scope };
 }
 
 function isCreateItem(item) {
@@ -291,6 +291,18 @@ function glueHeadWord(head, word) {
     return `${h} ${w}`;
 }
 
+/** `white office suit panties` + head `white office suit` → `panties`. */
+function suffixAfterHead(full, head) {
+    const h = String(head || "").trim();
+    const t = String(full || "").trim();
+    if (!h || !t) return t;
+    const lower = t.toLowerCase();
+    const hl = h.toLowerCase();
+    if (lower.startsWith(`${hl} `)) return t.slice(h.length).trimStart();
+    if (lower === hl) return "";
+    return t;
+}
+
 async function saveSegmentToLib(side, text) {
     const result = await autocompleteAction({
         action: "add",
@@ -318,17 +330,19 @@ function renderItems(state) {
             const hint = document.createElement("div");
             hint.className =
                 "pc-ac-item-hint" + (savedFlash ? " is-saved" : "");
-            hint.textContent = savedFlash ? "Saved" : "Tab to add";
+            const addLabel =
+                item.scope === "word" ? "Tab to add word" : "Tab to add phrase";
+            hint.textContent = savedFlash ? "Saved" : addLabel;
             btn.append(main, hint);
             btn.title = savedFlash
                 ? "Saved to dictionary"
                 : `Add “${item.text}” to dictionary`;
             if (savedFlash) btn.disabled = true;
         } else if (isWordItem(item)) {
-            const glued = glueHeadWord(item.head, item.text);
+            // List shows only from the current space; Tab still glues onto head.
             btn.className = "pc-ac-item" + selectedCls;
-            btn.textContent = glued;
-            btn.title = `Complete last word → ${glued}`;
+            btn.textContent = item.text;
+            btn.title = `Tab → ${glueHeadWord(item.head, item.text)}`;
         } else {
             btn.className = "pc-ac-item" + selectedCls;
             btn.textContent = item.text;
@@ -412,39 +426,46 @@ async function showSuggestions(textarea, side, segment) {
         const needle = normalizePrefix(prefix);
         const { head, lastWord, multi } = splitLastWord(prefix);
 
-        const phraseResult = await autocompleteLookup(
-            sideKey,
-            prefix,
-            MAX_ITEMS,
-        );
+        const wordNeedle = normalizePrefix(lastWord);
+        const [phraseResult, wordResult] = await Promise.all([
+            autocompleteLookup(sideKey, prefix, MAX_ITEMS),
+            multi && lastWord.length >= 1
+                ? autocompleteLookup(sideKey, lastWord, MAX_ITEMS)
+                : Promise.resolve({ items: [] }),
+        ]);
         if (activePopup !== state || abort.signal.aborted)
             return;
 
         const phraseRaw = phraseResult.items || [];
+        const wordRaw = wordResult.items || [];
         const hasExactPhrase = phraseRaw.some(
             (row) => normalizePrefix(row.text) === needle,
         );
+        const hasExactLastWord =
+            Boolean(wordNeedle) &&
+            wordRaw.some(
+                (row) => normalizePrefix(row.text) === wordNeedle,
+            );
+
         const phraseMatches = phraseRaw
             .filter((row) => normalizePrefix(row.text) !== needle)
-            .slice(0, MAX_ITEMS)
-            .map((row) => ({ kind: "match", text: row.text }));
+            .slice(0, MAX_ITEMS);
 
-        let wordMatches = [];
-        // No phrase hits → match the last word alone (white jak → jacket).
-        if (
-            !phraseMatches.length &&
-            multi &&
-            lastWord.length >= 1
-        ) {
-            const wordResult = await autocompleteLookup(
-                sideKey,
-                lastWord,
-                MAX_ITEMS,
-            );
-            if (activePopup !== state || abort.signal.aborted)
-                return;
-            const wordNeedle = normalizePrefix(lastWord);
-            wordMatches = (wordResult.items || [])
+        // Multi-word: list only the part after the current space (panties, not
+        // "white office suit panties"). Tab still inserts the full glue.
+        let items = [];
+        if (phraseMatches.length) {
+            items = phraseMatches.map((row) => {
+                if (multi && head) {
+                    const suffix = suffixAfterHead(row.text, head);
+                    if (suffix) {
+                        return { kind: "word", text: suffix, head };
+                    }
+                }
+                return { kind: "match", text: row.text };
+            });
+        } else if (multi && lastWord.length >= 1) {
+            items = wordRaw
                 .filter(
                     (row) =>
                         normalizePrefix(row.text) !== wordNeedle,
@@ -457,27 +478,29 @@ async function showSuggestions(textarea, side, segment) {
                 }));
         }
 
-        let items = [];
-        if (phraseMatches.length) {
-            items = phraseMatches;
-        } else if (wordMatches.length) {
-            items = wordMatches;
-        }
-
-        const offerAdd =
+        const weightEdit = looksLikeWeightEdit(prefix);
+        const offerAddWord =
+            multi &&
+            lastWord.length >= MIN_SAVE_LEN &&
+            !hasExactLastWord &&
+            !weightEdit;
+        const offerAddPhrase =
             !hasExactPhrase &&
             needle.length >= MIN_SAVE_LEN &&
-            !looksLikeWeightEdit(prefix);
+            !weightEdit &&
+            // Avoid duplicating the same create row for a single token.
+            (!offerAddWord || needle !== wordNeedle);
 
         if (items.length) {
-            // Always keep full-segment Add at the bottom while building a phrase.
-            if (offerAdd) items = [...items, makeCreateItem(needle)];
-        } else if (hasExactPhrase || looksLikeWeightEdit(prefix)) {
-            // Known single/multi phrase, or weight edit — stay quiet.
+            if (offerAddWord) items = [...items, makeCreateItem(lastWord, "word")];
+            if (offerAddPhrase) items = [...items, makeCreateItem(needle, "phrase")];
+        } else if (hasExactPhrase || weightEdit) {
             dismissPopup();
             return;
-        } else if (offerAdd) {
-            items = [makeCreateItem(needle)];
+        } else if (offerAddWord || offerAddPhrase) {
+            items = [];
+            if (offerAddWord) items.push(makeCreateItem(lastWord, "word"));
+            if (offerAddPhrase) items.push(makeCreateItem(needle, "phrase"));
         } else {
             dismissPopup();
             return;
