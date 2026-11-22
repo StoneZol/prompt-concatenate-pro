@@ -13,8 +13,30 @@ Format: newest first.
 - Attach a reference image to a saved pair (character / scene / light / …)
 - Paste from clipboard on **Save pair** and **Edit prompt** — small thumb in the dialog; paste again to replace; Clear removes it
 - Files live under `db/previews/` next to SQLite; the pair stores only a relative path (rename keeps the image)
+- Preview resolves by shelf + title (`previews/{shelf}/{title}.jpg`) so reload after F5 stays in sync
 - Deleting a pair (or its collection) removes the preview file
-- Hover preview icon: **Load pair** (beside the name), **Loaded ·** chip (after Loaded, before the name), Library manager prompt rows
+- Hover preview icon: **Load pair** (beside the name), **Loaded ·** chip with shelf context (after Loaded, before the name), Library manager prompt rows
+- Hover tip styles load on boot (visible before the first popup); larger contain thumb in save / edit dialogs
+
+### Autocomplete: ranking + multi-word chain
+
+- Suggestions prefer **exact** match, then shorter prefixes, then popularity (`use_count`) — less sticky “almost” hits when you type a full word
+- Multi-word segment: if the full phrase has no hits, the **last word** is matched alone (`white jak` → `jacket`), so you can chain words with Tab
+- List shows the word/suffix from the current space; Tab still inserts onto the prior head
+- Bottom rows: **Add** the last word and/or the full phrase up to the comma (Saved flash only on the row you used)
+
+### Suggest manager
+
+- Search keeps letter groups, but lifts the group for the query’s first letter (e.g. `with` → **w** on top) and ranks exact / prefix / contains inside the group
+- Edit / delete are pencil and trash icons
+- Query matches are highlighted in segment text
+
+### Search highlight everywhere
+
+- Matching tokens (and path segments from `folder\token`) are highlighted in titles and nested folder names across:
+  - Library manager · Presets / Prompts / Templates
+  - Load preset / Load pair / Load template
+  - Save · **Existing** name picker
 
 ---
 
