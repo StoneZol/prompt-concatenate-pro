@@ -1,5 +1,6 @@
 import { autocompleteAction, autocompleteList, rebuildAutocomplete } from "./api.js";
 import { CHEVRON_ICON_SVG, EDIT_ICON_SVG, TEXT_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
+import { fillWithQueryHighlight } from "./search.js";
 import { makeBusyLine } from "./busy.js";
 import { openConfirmPopup, openInputPopup, openPopup } from "./popup.js";
 import { bindPromptTip, hidePromptTip } from "./preview_tip.js";
@@ -155,35 +156,6 @@ function queryBucket(q) {
   const ch = String(q || "").trim().charAt(0).toLowerCase();
   if (!ch || !/[0-9a-z]/i.test(ch)) return "_other";
   return ch;
-}
-
-/** Fill el with text; wrap case-insensitive query hits in <mark>. */
-function fillWithQueryHighlight(el, text, q) {
-  el.replaceChildren();
-  const raw = String(text || "");
-  const needle = String(q || "").trim();
-  if (!needle) {
-    el.textContent = raw;
-    return;
-  }
-  const lower = raw.toLowerCase();
-  const n = needle.toLowerCase();
-  let from = 0;
-  let at = lower.indexOf(n, from);
-  if (at < 0) {
-    el.textContent = raw;
-    return;
-  }
-  while (at >= 0) {
-    if (at > from) el.appendChild(document.createTextNode(raw.slice(from, at)));
-    const mark = document.createElement("mark");
-    mark.className = "pc-ac-mgr-hit";
-    mark.textContent = raw.slice(at, at + needle.length);
-    el.appendChild(mark);
-    from = at + needle.length;
-    at = lower.indexOf(n, from);
-  }
-  if (from < raw.length) el.appendChild(document.createTextNode(raw.slice(from)));
 }
 
 /** Search forces open; otherwise remember toggles (default collapsed). */

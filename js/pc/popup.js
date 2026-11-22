@@ -1522,6 +1522,7 @@ const CSS = `
   color: var(--input-text, #ddd);
 }
 
+.pc-search-hit,
 .pc-ac-mgr-hit {
   background: color-mix(in srgb, var(--p-primary-color, #7c5cbf) 35%, transparent);
   color: inherit;

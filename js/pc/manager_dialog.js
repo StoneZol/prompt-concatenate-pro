@@ -45,6 +45,7 @@ import {
 } from "./api.js";
 import {
   emptyShelfMatchesSearch,
+  fillWithQueryHighlight,
   matchesLayoutPreset,
   matchesPromptPreset,
   matchesTemplatePreset,
@@ -274,6 +275,7 @@ function makeFolderSection({
   renderItem,
   count: totalCount,
   tooltip,
+  query = "",
   children = [],
 }) {
   const folder = document.createElement("div");
@@ -293,7 +295,7 @@ function makeFolderSection({
 
   const label = document.createElement("span");
   label.className = "pc-preset-folder-name";
-  label.textContent = title;
+  fillWithQueryHighlight(label, title, query);
 
   const count = document.createElement("span");
   count.className = "pc-preset-folder-count";
@@ -344,7 +346,7 @@ function folderExpanded(name, { query, openMap }) {
   return false;
 }
 
-function makeItemRow(item, { name, meta, previewUrl, onEdit, onDuplicate, onDelete }) {
+function makeItemRow(item, { name, meta, previewUrl, query = "", onEdit, onDuplicate, onDelete }) {
   const row = document.createElement("div");
   row.className = "pc-mgr-item";
 
@@ -362,7 +364,7 @@ function makeItemRow(item, { name, meta, previewUrl, onEdit, onDuplicate, onDele
 
   const titleEl = document.createElement("div");
   titleEl.className = "pc-mgr-item-name";
-  titleEl.textContent = name;
+  fillWithQueryHighlight(titleEl, name, query);
   titleRow.appendChild(titleEl);
 
   info.appendChild(titleRow);
@@ -1468,6 +1470,7 @@ function paintTemplatesTab(listEl, { templates, folders, showEmpty, query, openM
     return makeFolderSection({
       title: isUncat ? folderName : shelfLeaf(folderName),
       tooltip: isUncat ? undefined : folderName,
+      query: q,
       items,
       count: total,
       children: sortedTreeChildren(node).map(renderNode),
@@ -1537,6 +1540,7 @@ function paintTemplatesTab(listEl, { templates, folders, showEmpty, query, openM
         return makeItemRow(template, {
           name: template.name || "Untitled",
           meta,
+          query: q,
           onEdit: (btn) =>
             openEditTemplatePopup({
               anchor: btn,
@@ -1632,6 +1636,7 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
     return makeFolderSection({
       title: isUncat ? folderName : shelfLeaf(folderName),
       tooltip: isUncat ? undefined : folderName,
+      query: q,
       items,
       count: total,
       children: sortedTreeChildren(node).map(renderNode),
@@ -1708,6 +1713,7 @@ function paintStacksTab(listEl, { layouts, folders, showEmpty, query, openMap, r
         return makeItemRow(layout, {
           name: layout.name || "Untitled",
           meta: slotNames.join(" · ") || "No fields",
+          query: q,
           onEdit: (btn) => {
             openEditLayoutPopup({
               anchor: btn,
@@ -1822,6 +1828,7 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
     return makeFolderSection({
         title: shelfLeaf(categoryName),
         tooltip: categoryName,
+        query: q,
         items,
         count: total,
         children: sortedChildren(node).map(renderNode),
@@ -1896,6 +1903,7 @@ function paintPromptsTab(listEl, { presets, categories, showEmpty, includeBody, 
             name: preset.title || "Untitled",
             meta: (preset.description || "").trim() || undefined,
             previewUrl: preset.hasPreview ? presetPreviewUrl(preset) : "",
+            query: q,
             onEdit: () => {
               openEditPromptPopup({
                 preset,
