@@ -46,13 +46,17 @@ export function currentSegment(value, caret) {
     };
 }
 
+function createItemKey(item) {
+    return `${item?.scope || "phrase"}:${normalizePrefix(item?.text || "")}`;
+}
+
 function clearSavedFlash(state) {
     if (!state) return;
     if (state.savedTimer) {
         clearTimeout(state.savedTimer);
         state.savedTimer = null;
     }
-    state.savedFlash = false;
+    state.savedFlashKey = "";
 }
 
 function dismissPopup() {
@@ -67,15 +71,32 @@ function dismissPopup() {
     activePopup = null;
 }
 
-function flashSaved(state) {
-    if (!state?.root) return;
-    state.savedFlash = true;
+/** Flash only the saved create row, then drop it and keep the popup for the other Add. */
+function flashSavedCreate(state, item) {
+    if (!state?.root || !isCreateItem(item)) return;
+    const key = createItemKey(item);
+    state.savedFlashKey = key;
     renderItems(state);
     placePopup(state);
     if (state.savedTimer) clearTimeout(state.savedTimer);
     state.savedTimer = setTimeout(() => {
-        if (activePopup === state) dismissPopup();
-    }, 1500);
+        if (activePopup !== state) return;
+        state.savedFlashKey = "";
+        state.items = state.items.filter(
+            (row) => !(isCreateItem(row) && createItemKey(row) === key),
+        );
+        if (!state.items.length) {
+            dismissPopup();
+            return;
+        }
+        const nextCreate = state.items.findIndex(isCreateItem);
+        state.selected =
+            nextCreate >= 0
+                ? nextCreate
+                : Math.min(state.selected, state.items.length - 1);
+        renderItems(state);
+        placePopup(state);
+    }, 700);
     state.textarea?.focus();
 }
 
@@ -313,31 +334,34 @@ async function saveSegmentToLib(side, text) {
 }
 
 function renderItems(state) {
-    const { root, items, selected, onPick, savedFlash } = state;
+    const { root, items, selected, onPick, savedFlashKey } = state;
     root.replaceChildren();
     items.forEach((item, index) => {
         const btn = document.createElement("button");
         btn.type = "button";
         const selectedCls = index === selected ? " selected" : "";
         if (isCreateItem(item)) {
+            const thisSaved = Boolean(
+                savedFlashKey && savedFlashKey === createItemKey(item),
+            );
             btn.className =
                 "pc-ac-item pc-ac-item-create" +
                 selectedCls +
-                (savedFlash ? " is-saved" : "");
+                (thisSaved ? " is-saved" : "");
             const main = document.createElement("div");
             main.className = "pc-ac-item-main";
             main.textContent = item.text;
             const hint = document.createElement("div");
             hint.className =
-                "pc-ac-item-hint" + (savedFlash ? " is-saved" : "");
+                "pc-ac-item-hint" + (thisSaved ? " is-saved" : "");
             const addLabel =
                 item.scope === "word" ? "Tab to add word" : "Tab to add phrase";
-            hint.textContent = savedFlash ? "Saved" : addLabel;
+            hint.textContent = thisSaved ? "Saved" : addLabel;
             btn.append(main, hint);
-            btn.title = savedFlash
+            btn.title = thisSaved
                 ? "Saved to dictionary"
                 : `Add “${item.text}” to dictionary`;
-            if (savedFlash) btn.disabled = true;
+            if (thisSaved) btn.disabled = true;
         } else if (isWordItem(item)) {
             // List shows only from the current space; Tab still glues onto head.
             btn.className = "pc-ac-item" + selectedCls;
@@ -351,7 +375,13 @@ function renderItems(state) {
         btn.addEventListener("mousedown", (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (savedFlash) return;
+            if (
+                isCreateItem(item) &&
+                savedFlashKey &&
+                savedFlashKey === createItemKey(item)
+            ) {
+                return;
+            }
             onPick(item);
         });
         root.appendChild(btn);
@@ -399,11 +429,17 @@ async function showSuggestions(textarea, side, segment) {
         selected: 0,
         abort,
         async onPick(item) {
-            if (state.savedFlash) return;
+            if (
+                isCreateItem(item) &&
+                state.savedFlashKey &&
+                state.savedFlashKey === createItemKey(item)
+            ) {
+                return;
+            }
             if (isCreateItem(item)) {
                 const ok = await saveSegmentToLib(side, item.text);
                 if (!ok || activePopup !== state) return;
-                flashSaved(state);
+                flashSavedCreate(state, item);
                 return;
             }
             const nextText = isWordItem(item)
@@ -532,9 +568,9 @@ function scheduleSuggest(textarea, side) {
         dismissPopup();
         return;
     }
-    // Any typing / click ends the Saved flash immediately.
-    if (activePopup?.savedFlash && activePopup.textarea === textarea) {
-        dismissPopup();
+    // Typing cancels an in-progress create flash and refreshes suggestions.
+    if (activePopup?.savedFlashKey && activePopup.textarea === textarea) {
+        clearSavedFlash(activePopup);
     }
     // Weight tweak / dismissed: wait for a new segment delimiter.
     if (suppressed.get(textarea)) {
@@ -628,16 +664,22 @@ export function bindPromptAutocomplete(textarea, side) {
                 modHeld.set(textarea, true);
             }
 
-            // Saved flash: any key ends it (Tab is swallowed).
+            // During create flash, Tab on another row is OK; arrows OK; typing dismisses flash via input.
             if (
-                activePopup?.savedFlash &&
-                activePopup.textarea === textarea
+                activePopup?.savedFlashKey &&
+                activePopup.textarea === textarea &&
+                e.key === "Tab"
             ) {
-                if (e.key === "Tab") {
+                const flashItem =
+                    activePopup.items?.[activePopup.selected];
+                if (
+                    isCreateItem(flashItem) &&
+                    createItemKey(flashItem) === activePopup.savedFlashKey
+                ) {
+                    // Don't re-save the row that's mid-flash.
                     stopKey(e);
                     return;
                 }
-                dismissPopup();
             }
 
             // Esc: close and ignore until space / enter / comma starts a new bit.
@@ -688,7 +730,6 @@ export function bindPromptAutocomplete(textarea, side) {
             }
             if (e.key === "Tab") {
                 stopKey(e);
-                if (popup.savedFlash) return;
                 const item = popup.items[popup.selected];
                 if (item) popup.onPick(item);
             }
