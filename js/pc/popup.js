@@ -1058,11 +1058,11 @@ const CSS = `
 }
 
 .pc-pair-preview-thumb {
-  width: 96px;
-  height: 96px;
+  width: 180px;
+  height: 220px;
   border-radius: 8px;
   border: 1px solid var(--border-color, #444);
-  background: var(--comfy-input-bg, #2a2a2e);
+  background: #111;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1073,12 +1073,13 @@ const CSS = `
 
 .pc-pair-preview-thumb.is-empty {
   border-style: dashed;
+  background: var(--comfy-input-bg, #2a2a2e);
 }
 
 .pc-pair-preview-thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 
@@ -2342,7 +2343,8 @@ function placePopup(el, { anchor, position, centered }) {
         const below = anchorRect.bottom + gap;
         const above = anchorRect.top - box.height - gap;
         const fitsBelow =
-            below + box.height <= window.innerHeight - margin;
+            below + box.height <=
+            window.innerHeight - margin;
         y = !fitsBelow && above >= margin ? above : below;
     }
     clampPopupPosition(el, x, y);
@@ -2376,9 +2378,15 @@ function bindPopupDrag(root, handle, onMoved) {
 
         function onUp(ev) {
             handle.releasePointerCapture(ev.pointerId);
-            handle.removeEventListener("pointermove", onMove);
+            handle.removeEventListener(
+                "pointermove",
+                onMove,
+            );
             handle.removeEventListener("pointerup", onUp);
-            handle.removeEventListener("pointercancel", onUp);
+            handle.removeEventListener(
+                "pointercancel",
+                onUp,
+            );
         }
 
         handle.addEventListener("pointermove", onMove);
@@ -2445,7 +2453,8 @@ export function openPopup(opts) {
     if (blocking) {
         backdrop = document.createElement("div");
         backdrop.className = "pc-popup-backdrop";
-        if (opts.nested) backdrop.classList.add("pc-popup-nested");
+        if (opts.nested)
+            backdrop.classList.add("pc-popup-nested");
         backdrop.addEventListener("pointerdown", (e) => {
             e.stopPropagation();
         });
@@ -2473,7 +2482,8 @@ export function openPopup(opts) {
         backdrop.appendChild(root);
         host = backdrop;
     } else {
-        if (opts.nested) root.classList.add("pc-popup-nested");
+        if (opts.nested)
+            root.classList.add("pc-popup-nested");
         root.append(titleEl, body);
     }
 
@@ -2543,10 +2553,15 @@ export function openPopup(opts) {
         close,
         root,
         reposition() {
-            if (closed || !root.isConnected || blocking) return;
+            if (closed || !root.isConnected || blocking)
+                return;
             if (userMoved) {
                 const rect = root.getBoundingClientRect();
-                clampPopupPosition(root, rect.left, rect.top);
+                clampPopupPosition(
+                    root,
+                    rect.left,
+                    rect.top,
+                );
                 return;
             }
             placePopup(root, opts);

@@ -325,6 +325,9 @@ async function showSuggestions(textarea, side, segment) {
     }
 
     const root = ensurePopupRoot();
+    const prevPrefix = reuse
+        ? normalizePrefix(activePopup.segment?.prefix || "")
+        : null;
     const prevSelectedKey =
         reuse && activePopup.items?.[activePopup.selected]
             ? `${activePopup.items[activePopup.selected].kind || "match"}:${activePopup.items[activePopup.selected].text}`
@@ -336,7 +339,7 @@ async function showSuggestions(textarea, side, segment) {
         side,
         segment,
         items: reuse ? activePopup.items : [],
-        selected: reuse ? activePopup.selected : 0,
+        selected: 0,
         abort,
         async onPick(item) {
             if (state.savedFlash) return;
@@ -394,7 +397,9 @@ async function showSuggestions(textarea, side, segment) {
             return;
         }
 
-        if (prevSelectedKey) {
+        // Keep highlight only for the same prefix (list refresh). On type/backspace
+        // always jump to the new best match — else Tab sticks on "white socks" after whit│.
+        if (prevSelectedKey && prevPrefix === needle) {
             const keep = state.items.findIndex(
                 (row) =>
                     `${row.kind || "match"}:${row.text}` ===
