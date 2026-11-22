@@ -1522,6 +1522,14 @@ const CSS = `
   color: var(--input-text, #ddd);
 }
 
+.pc-ac-mgr-hit {
+  background: color-mix(in srgb, var(--p-primary-color, #7c5cbf) 35%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  font-weight: 600;
+}
+
 .pc-ac-mgr-row .pc-popup-btn {
   flex: 0 0 auto;
   min-width: 28px;

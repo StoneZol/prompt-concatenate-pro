@@ -157,6 +157,35 @@ function queryBucket(q) {
   return ch;
 }
 
+/** Fill el with text; wrap case-insensitive query hits in <mark>. */
+function fillWithQueryHighlight(el, text, q) {
+  el.replaceChildren();
+  const raw = String(text || "");
+  const needle = String(q || "").trim();
+  if (!needle) {
+    el.textContent = raw;
+    return;
+  }
+  const lower = raw.toLowerCase();
+  const n = needle.toLowerCase();
+  let from = 0;
+  let at = lower.indexOf(n, from);
+  if (at < 0) {
+    el.textContent = raw;
+    return;
+  }
+  while (at >= 0) {
+    if (at > from) el.appendChild(document.createTextNode(raw.slice(from, at)));
+    const mark = document.createElement("mark");
+    mark.className = "pc-ac-mgr-hit";
+    mark.textContent = raw.slice(at, at + needle.length);
+    el.appendChild(mark);
+    from = at + needle.length;
+    at = lower.indexOf(n, from);
+  }
+  if (from < raw.length) el.appendChild(document.createTextNode(raw.slice(from)));
+}
+
 /** Search forces open; otherwise remember toggles (default collapsed). */
 function groupExpanded(name, { query, openMap }) {
   if ((query || "").trim()) return true;
@@ -328,7 +357,7 @@ export function mountAutocompletePanel(host, { reposition } = {}) {
     line.className = "pc-ac-mgr-row";
     const label = document.createElement("div");
     label.className = "pc-ac-mgr-text";
-    label.textContent = row.text;
+    fillWithQueryHighlight(label, row.text, filter.value.trim());
     label.title = `${row.text} · ×${row.use_count || 1}`;
 
     const edit = document.createElement("button");
