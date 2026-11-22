@@ -1,19 +1,77 @@
 import { IMAGE_ICON_SVG } from "./icons.js";
 import { clearPresetPreview, setPresetPreview } from "./api.js";
+import { injectPopupStyles } from "./popup.js";
+import { normalizeShelfPath, SHELF_SEP } from "./shelf_paths.js";
 
 const MAX_EDGE = 512;
 const JPEG_QUALITY = 0.85;
 
 let coverTip = null;
 
-export function presetPreviewUrl(presetOrId, bust = "") {
-  const id =
-    typeof presetOrId === "object" && presetOrId
-      ? Number(presetOrId.id || 0)
-      : Number(presetOrId || 0);
-  if (!id) return "";
+/** Library key written into blocks_data / URL: `одежда/office suit/v1`. */
+export function pairPreviewKey(category, title) {
+  const shelf = normalizeShelfPath(category);
+  const name = String(title || "").trim();
+  if (!name) return "";
+  return shelf ? `${shelf}${SHELF_SEP}${name}` : name;
+}
+
+function withBust(url, bust = "") {
+  if (!url) return "";
   const qs = bust ? `?v=${encodeURIComponent(bust)}` : "";
-  return `/prompt_craft/preset_preview/${id}${qs}`;
+  return `${url}${qs}`;
+}
+
+/** Prefer shelf/title path (stable after F5); fall back to numeric id. */
+export function presetPreviewUrl(presetOrId, bust = "") {
+  if (presetOrId && typeof presetOrId === "object") {
+    const key = pairPreviewKey(presetOrId.category, presetOrId.title);
+    if (key) {
+      return withBust(
+        `/prompt_craft/preset_preview/by/${key.split(SHELF_SEP).map(encodeURIComponent).join("/")}`,
+        bust,
+      );
+    }
+    const id = Number(presetOrId.id || 0);
+    return id ? withBust(`/prompt_craft/preset_preview/${id}`, bust) : "";
+  }
+  const id = Number(presetOrId || 0);
+  return id ? withBust(`/prompt_craft/preset_preview/${id}`, bust) : "";
+}
+
+/**
+ * Write the ready preview URL into blocks_data once (LoRA coverPath style).
+ * Hover only reads group.loadedPreviewPath — never rebuilds.
+ */
+export function writeLoadedPreviewMeta(
+  group,
+  { id = 0, hasPreview = false, bust = "", category = "", title = "" } = {},
+) {
+  if (!group || typeof group !== "object") return;
+  const presetId = Number(id || 0);
+  const shelf = normalizeShelfPath(category || group.loadedCategory);
+  const name = String(title || group.loadedTitle || "").trim();
+  const key = pairPreviewKey(shelf, name);
+  const on = Boolean(hasPreview) && Boolean(key || presetId);
+  const rev = String(bust || Date.now());
+  group.loadedPresetId = on ? presetId : 0;
+  group.loadedHasPreview = on;
+  group.loadedPreviewRev = on ? rev : "";
+  group.loadedPreviewKey = on && key ? key : "";
+  // Full ready URL — persisted in blocks_data next to loadedTitle.
+  group.loadedPreviewPath = on
+    ? presetPreviewUrl(key ? { category: shelf, title: name, id: presetId } : presetId, rev)
+    : "";
+}
+
+export function clearLoadedPreviewMeta(group) {
+  writeLoadedPreviewMeta(group, { id: 0, hasPreview: false });
+}
+
+/** Ready path from blocks_data only (no rebuild on hover). */
+export function loadedPreviewSrc(group) {
+  if (!group?.loadedHasPreview) return "";
+  return String(group.loadedPreviewPath || "").trim();
 }
 
 export function hidePairPreviewTip() {
@@ -22,9 +80,12 @@ export function hidePairPreviewTip() {
   coverTip = null;
 }
 
+/** Same pattern as Ultimate LoRA Loader: plain img.src from a known path. */
 export function showPairPreviewTip(anchorEl, coverUrl) {
   hidePairPreviewTip();
   if (!coverUrl || !anchorEl) return;
+  // Styles for .pc-pair-preview-tip are in popup CSS (position/z-index).
+  injectPopupStyles();
 
   const tip = document.createElement("div");
   tip.className = "pc-pair-preview-tip";
@@ -51,20 +112,25 @@ export function showPairPreviewTip(anchorEl, coverUrl) {
 
 export function bindPairPreviewHover(btn, getUrl) {
   if (!btn) return;
-  btn.addEventListener("mouseenter", () => {
+  // Property handlers like LoRA loader — more reliable inside Comfy DOM widgets.
+  btn.onmouseenter = () => {
     const url = typeof getUrl === "function" ? getUrl() : getUrl;
     if (url) showPairPreviewTip(btn, url);
-  });
-  btn.addEventListener("mouseleave", hidePairPreviewTip);
-  btn.addEventListener("click", (e) => e.stopPropagation());
+  };
+  btn.onmouseleave = () => hidePairPreviewTip();
+  btn.onmousedown = (e) => e.stopPropagation();
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const url = typeof getUrl === "function" ? getUrl() : getUrl;
+    if (url) showPairPreviewTip(btn, url);
+  };
 }
 
-/** Compact eye/image button; hidden when no url. */
+/** Compact eye control (div, no native title — it covers the tip). */
 export function makePairPreviewBtn(getUrl, { className = "pc-pair-preview-btn" } = {}) {
-  const btn = document.createElement("button");
-  btn.type = "button";
+  const btn = document.createElement("div");
   btn.className = className;
-  btn.title = "Preview";
   btn.innerHTML = IMAGE_ICON_SVG;
   bindPairPreviewHover(btn, getUrl);
   return btn;

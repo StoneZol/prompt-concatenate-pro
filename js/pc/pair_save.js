@@ -2,7 +2,11 @@ import { openConfirmPopup, openPopup } from "./popup.js";
 import { listCategories, listPresets, savePreset } from "./api.js";
 import { baseShelfName } from "./titles.js";
 import { openExistingNamePicker } from "./save_name_picker.js";
-import { mountPreviewEditor, presetPreviewUrl } from "./pair_preview.js";
+import {
+  mountPreviewEditor,
+  presetPreviewUrl,
+  writeLoadedPreviewMeta,
+} from "./pair_preview.js";
 import {
   normalizeShelfPath,
   openShelfPicker,
@@ -246,8 +250,13 @@ export function openSavePairPopup({ anchor, group, onSaved, nested = false }) {
           group.loadedTitle = name;
           group.loadedCategory = shelf;
           group.loadedDescription = desc.value.trim();
-          group.loadedPresetId = presetId || 0;
-          group.loadedHasPreview = hasPreview;
+          writeLoadedPreviewMeta(group, {
+            id: presetId || 0,
+            hasPreview,
+            bust: Date.now(),
+            category: shelf,
+            title: name,
+          });
           onSaved?.(name, { id: presetId, hasPreview });
           close();
         } catch (err) {

@@ -1,7 +1,13 @@
 import { CHEVRON_ICON_SVG, CLOSE_ICON_SVG, COPY_ICON_SVG, GRIP_ICON_SVG, LOAD_ICON_SVG, RESET_ICON_SVG, SAVE_ICON_SVG, TEXT_ICON_SVG, TRASH_ICON_SVG } from "./icons.js";
 import { openConfirmPopup } from "./popup.js";
 import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
-import { hidePairPreviewTip, makePairPreviewBtn, presetPreviewUrl } from "./pair_preview.js";
+import {
+  clearLoadedPreviewMeta,
+  hidePairPreviewTip,
+  loadedPreviewSrc,
+  makePairPreviewBtn,
+  writeLoadedPreviewMeta,
+} from "./pair_preview.js";
 import { bindPromptAutocomplete } from "./autocomplete.js";
 import { EXTERNAL_TITLE, isExternalGroup } from "./external.js";
 import { confirmClearPair } from "./pair_load.js";
@@ -316,11 +322,9 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
     loadedPrefix.className = "pc-loaded-prefix";
     loadedPrefix.textContent = "Loaded ·";
 
+    // Ready URL from blocks_data (group.loadedPreviewPath), same as LoRA coverPath.
     const previewBtn = makePairPreviewBtn(
-      () => {
-        const id = Number(group.loadedPresetId || 0);
-        return id ? presetPreviewUrl(id, group.loadedPreviewRev || "") : "";
-      },
+      () => group.loadedPreviewPath || "",
       { className: "pc-loaded-preview" },
     );
     previewBtn.hidden = true;
@@ -362,7 +366,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
       group.loadedTitle = "";
       group.loadedCategory = "";
       group.loadedDescription = "";
-      group.loadedPresetId = 0;
+      clearLoadedPreviewMeta(group);
       paintLoaded();
       onChange?.();
     });
@@ -458,7 +462,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
         baseShelfName(group.title),
       );
       loadedLabel.title = shelf ? `Loaded: ${shelf} / ${name}` : `Loaded: ${name}`;
-      previewBtn.hidden = !Boolean(group.loadedHasPreview && group.loadedPresetId);
+      previewBtn.hidden = !Boolean(loadedPreviewSrc(group));
       notesBtn.hidden = !notes;
       refreshCount(name);
     };
@@ -482,7 +486,7 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
           group.loadedTitle = "";
           group.loadedCategory = "";
           group.loadedDescription = "";
-          group.loadedPresetId = 0;
+          clearLoadedPreviewMeta(group);
           pos.area.value = "";
           neg.area.value = "";
           onPrompt?.("positive", "");
@@ -534,9 +538,15 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
       group.loadedTitle = (value || "").trim();
       if (arguments.length > 1) group.loadedCategory = (category || "").trim();
       if (meta && typeof meta === "object") {
-        if ("id" in meta) group.loadedPresetId = Number(meta.id || 0);
-        if ("hasPreview" in meta) group.loadedHasPreview = Boolean(meta.hasPreview);
-        group.loadedPreviewRev = String(Date.now());
+        writeLoadedPreviewMeta(group, {
+          id: "id" in meta ? meta.id : group.loadedPresetId,
+          hasPreview: "hasPreview" in meta ? meta.hasPreview : group.loadedHasPreview,
+          bust: meta.bust || Date.now(),
+          category: group.loadedCategory,
+          title: group.loadedTitle,
+        });
+      } else if (!group.loadedTitle) {
+        clearLoadedPreviewMeta(group);
       }
       paintLoaded();
     },

@@ -19,6 +19,7 @@ FOLDERS_ROUTE = "/prompt_craft/layout_folders"
 PRESETS_ROUTE = "/prompt_craft/presets"
 PRESET_PREVIEW_ROUTE = "/prompt_craft/preset_preview"
 PRESET_PREVIEW_FILE_ROUTE = "/prompt_craft/preset_preview/{preset_id}"
+PRESET_PREVIEW_BY_PATH_ROUTE = "/prompt_craft/preset_preview/by/{path:.+}"
 CATEGORIES_ROUTE = "/prompt_craft/categories"
 TEMPLATES_ROUTE = "/prompt_craft/templates"
 TEMPLATE_FOLDERS_ROUTE = "/prompt_craft/template_folders"
@@ -221,6 +222,20 @@ async def get_preset_preview(request):
     except Exception:
         return web.json_response({"ok": False, "error": "Invalid id"}, status=400)
     path = db.resolve_preset_preview_file(preset_id)
+    if not path:
+        return web.json_response({"ok": False, "error": "Not found"}, status=404)
+    return web.FileResponse(path)
+
+
+async def get_preset_preview_by_path(request):
+    """Serve preview by library key: category/.../pairTitle."""
+    raw = (request.match_info.get("path") or "").strip().replace("\\", "/")
+    parts = [part for part in raw.split("/") if part.strip()]
+    if not parts:
+        return web.json_response({"ok": False, "error": "Not found"}, status=404)
+    title = parts[-1]
+    category = "/".join(parts[:-1])
+    path = db.resolve_preset_preview_by_pair(category, title)
     if not path:
         return web.json_response({"ok": False, "error": "Not found"}, status=404)
     return web.FileResponse(path)
@@ -793,6 +808,8 @@ if PRESETS_ROUTE not in _existing:
 if PRESET_PREVIEW_ROUTE not in _existing:
     PromptServer.instance.routes.post(PRESET_PREVIEW_ROUTE)(set_preset_preview)
     PromptServer.instance.routes.delete(PRESET_PREVIEW_ROUTE)(clear_preset_preview)
+if PRESET_PREVIEW_BY_PATH_ROUTE not in _existing:
+    PromptServer.instance.routes.get(PRESET_PREVIEW_BY_PATH_ROUTE)(get_preset_preview_by_path)
 if PRESET_PREVIEW_FILE_ROUTE not in _existing:
     PromptServer.instance.routes.get(PRESET_PREVIEW_FILE_ROUTE)(get_preset_preview)
 if CATEGORIES_ROUTE not in _existing:

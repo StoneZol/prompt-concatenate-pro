@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import threading
 from typing import Dict, List, Optional, Tuple
@@ -31,15 +32,42 @@ def _previews_dir() -> str:
 
 _PREVIEW_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 _PREVIEW_MAX_BYTES = 2 * 1024 * 1024
+_FS_BAD = re.compile(r'[<>:"|?*\x00-\x1f]')
+_FS_SEG_MAX = 80
 
 
-def _preview_rel_for_id(preset_id: int, ext: str = ".jpg") -> str:
+def _normalize_preview_ext(ext: str = ".jpg") -> str:
     ext = (ext or ".jpg").lower()
     if not ext.startswith("."):
         ext = f".{ext}"
     if ext not in _PREVIEW_EXTS:
-        ext = ".jpg"
-    return f"previews/{int(preset_id)}{ext}"
+        return ".jpg"
+    return ext
+
+
+def _safe_fs_segment(raw: str) -> str:
+    text = _FS_BAD.sub("_", str(raw or "").strip()).strip(" .")
+    text = text.replace("\\", "_").replace("/", "_")
+    if not text:
+        return "_"
+    if len(text) > _FS_SEG_MAX:
+        text = text[:_FS_SEG_MAX].rstrip(" .") or "_"
+    return text
+
+
+def _preview_rel_for_pair(category: str, title: str, ext: str = ".jpg") -> str:
+    """Disk key: previews/{shelf}/{…}/{pairTitle}.jpg — mirrors library path."""
+    ext = _normalize_preview_ext(ext)
+    shelf = _normalize_shelf_path(category)
+    parts = [_safe_fs_segment(part) for part in shelf.split(SHELF_SEP) if part.strip()]
+    leaf = _safe_fs_segment(title)
+    parts.append(leaf)
+    return "previews/" + "/".join(parts) + ext
+
+
+def _preview_rel_for_id(preset_id: int, ext: str = ".jpg") -> str:
+    """Legacy id-based file (kept for old rows until rewrite/relocate)."""
+    return f"previews/{int(preset_id)}{_normalize_preview_ext(ext)}"
 
 
 def _preview_abs(rel: str) -> Optional[str]:
@@ -65,8 +93,47 @@ def _unlink_preview_file(rel: str) -> None:
     try:
         if os.path.isfile(path):
             os.remove(path)
+        # Drop empty parent dirs under previews/.
+        parent = os.path.dirname(path)
+        root = os.path.realpath(_previews_dir())
+        while parent and os.path.commonpath([root, parent]) == root and parent != root:
+            try:
+                os.rmdir(parent)
+            except OSError:
+                break
+            parent = os.path.dirname(parent)
     except OSError:
         pass
+
+
+def _relocate_preview_file(old_rel: str, new_rel: str) -> str:
+    """Move preview on disk when pair/shelf is renamed. Returns rel that should be stored."""
+    new_rel = (new_rel or "").strip().replace("\\", "/")
+    old_rel = (old_rel or "").strip().replace("\\", "/")
+    if not new_rel:
+        return ""
+    if old_rel == new_rel:
+        path = _preview_abs(new_rel)
+        return new_rel if path and os.path.isfile(path) else old_rel
+    new_abs = _preview_abs(new_rel)
+    if not new_abs:
+        return old_rel
+    old_abs = _preview_abs(old_rel) if old_rel else None
+    if old_abs and os.path.isfile(old_abs):
+        os.makedirs(os.path.dirname(new_abs), exist_ok=True)
+        if os.path.realpath(old_abs) != os.path.realpath(new_abs):
+            try:
+                os.replace(old_abs, new_abs)
+            except OSError:
+                import shutil
+
+                shutil.move(old_abs, new_abs)
+            _unlink_preview_file(old_rel)  # cleans empty dirs; file already moved
+            # If replace left nothing at old path, unlink is no-op for file.
+        return new_rel
+    if os.path.isfile(new_abs):
+        return new_rel
+    return old_rel
 
 
 def _ext_from_mime(mime: str) -> str:
@@ -1438,28 +1505,43 @@ def update_preset(
                     if old_preview:
                         _unlink_preview_file(old_preview["preview_path"] or "")
 
-            conn.execute(
-                """
-                UPDATE presets
-                SET category_id = ?, title = ?, description = ?, positive = ?, negative = ?,
-                    updated_at = datetime('now')
-                WHERE id = ?
-                """,
-                (category_id, next_title, next_desc, next_pos, next_neg, int(preset_id)),
-            )
             preview_row = conn.execute(
                 "SELECT preview_path FROM presets WHERE id = ?",
                 (int(preset_id),),
             ).fetchone()
-            preview_path = (preview_row["preview_path"] or "").strip() if preview_row else ""
+            old_preview = (preview_row["preview_path"] or "").strip() if preview_row else ""
+            next_preview = old_preview
+            if old_preview:
+                ext = os.path.splitext(old_preview)[1] or ".jpg"
+                want = _preview_rel_for_pair(shelf, next_title, ext)
+                if want != old_preview:
+                    next_preview = _relocate_preview_file(old_preview, want) or want
+
+            conn.execute(
+                """
+                UPDATE presets
+                SET category_id = ?, title = ?, description = ?, positive = ?, negative = ?,
+                    preview_path = ?, updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (
+                    category_id,
+                    next_title,
+                    next_desc,
+                    next_pos,
+                    next_neg,
+                    next_preview,
+                    int(preset_id),
+                ),
+            )
             conn.commit()
             result = {
                 "ok": True,
                 "id": int(preset_id),
                 "title": next_title,
                 "category": shelf,
-                "previewPath": preview_path,
-                "hasPreview": _preset_has_preview(preview_path),
+                "previewPath": next_preview,
+                "hasPreview": _preset_has_preview(next_preview),
             }
             saved_pos = next_pos
             saved_neg = next_neg
@@ -1501,25 +1583,29 @@ def set_preset_preview(preset_id: int, data: bytes, mime: str = "image/jpeg") ->
     if len(raw) > _PREVIEW_MAX_BYTES:
         return {"ok": False, "error": "Image too large (max 2MB)"}
     ext = _ext_from_mime(mime)
-    rel = _preview_rel_for_id(preset_id, ext)
-    abs_path = _preview_abs(rel)
-    if not abs_path:
-        return {"ok": False, "error": "Invalid preview path"}
 
     with _lock:
         conn = _connect()
         try:
             row = conn.execute(
-                "SELECT preview_path FROM presets WHERE id = ?",
+                """
+                SELECT presets.preview_path, presets.title, categories.name AS category
+                FROM presets
+                JOIN categories ON categories.id = presets.category_id
+                WHERE presets.id = ?
+                """,
                 (int(preset_id),),
             ).fetchone()
             if not row:
                 return {"ok": False, "error": "Not found"}
             old_rel = (row["preview_path"] or "").strip()
+            rel = _preview_rel_for_pair(row["category"] or "", row["title"] or "", ext)
+            abs_path = _preview_abs(rel)
+            if not abs_path:
+                return {"ok": False, "error": "Invalid preview path"}
             os.makedirs(os.path.dirname(abs_path), exist_ok=True)
             with open(abs_path, "wb") as handle:
                 handle.write(raw)
-            # Drop previous file if extension changed.
             if old_rel and old_rel != rel:
                 _unlink_preview_file(old_rel)
             conn.execute(
@@ -1531,10 +1617,16 @@ def set_preset_preview(preset_id: int, data: bytes, mime: str = "image/jpeg") ->
                 (rel, int(preset_id)),
             )
             conn.commit()
+            key_shelf = _normalize_shelf_path(row["category"] or "")
+            key_title = (row["title"] or "").strip()
+            preview_key = (
+                f"{key_shelf}{SHELF_SEP}{key_title}" if key_shelf and key_title else key_title or key_shelf
+            )
             return {
                 "ok": True,
                 "id": int(preset_id),
                 "previewPath": rel,
+                "previewKey": preview_key,
                 "hasPreview": True,
             }
         except Exception:
@@ -1591,6 +1683,38 @@ def resolve_preset_preview_file(preset_id: int) -> Optional[str]:
             conn.close()
 
 
+def resolve_preset_preview_by_pair(category: str, title: str) -> Optional[str]:
+    """Resolve preview file from library path: shelf + pair title."""
+    shelf = _normalize_shelf_path(category)
+    name = (title or "").strip()
+    if not name:
+        return None
+    with _lock:
+        conn = _connect()
+        try:
+            row = conn.execute(
+                """
+                SELECT presets.preview_path
+                FROM presets
+                JOIN categories ON categories.id = presets.category_id
+                WHERE categories.name = ? COLLATE NOCASE
+                  AND presets.title = ? COLLATE NOCASE
+                """,
+                (shelf, name),
+            ).fetchone()
+            if row:
+                path = _preview_abs(row["preview_path"] or "")
+                if path and os.path.isfile(path):
+                    return path
+            for ext in _PREVIEW_EXTS:
+                path = _preview_abs(_preview_rel_for_pair(shelf, name, ext))
+                if path and os.path.isfile(path):
+                    return path
+            return None
+        finally:
+            conn.close()
+
+
 def rename_category(name: str, new_name: str) -> Dict:
     """Rename / move a collection path together with its sub-collections."""
     old = _normalize_shelf_path(name)
@@ -1631,6 +1755,26 @@ def rename_category(name: str, new_name: str) -> Dict:
                     "UPDATE categories SET name = ? WHERE id = ?",
                     (target, category_id),
                 )
+            # Keep preview files aligned with shelf/pair names.
+            for category_id, target in renames:
+                preset_rows = conn.execute(
+                    "SELECT id, title, preview_path FROM presets WHERE category_id = ?",
+                    (category_id,),
+                ).fetchall()
+                for preset_row in preset_rows:
+                    old_rel = (preset_row["preview_path"] or "").strip()
+                    if not old_rel:
+                        continue
+                    ext = os.path.splitext(old_rel)[1] or ".jpg"
+                    want = _preview_rel_for_pair(target, preset_row["title"] or "", ext)
+                    if want == old_rel:
+                        continue
+                    next_rel = _relocate_preview_file(old_rel, want) or want
+                    if next_rel != old_rel:
+                        conn.execute(
+                            "UPDATE presets SET preview_path = ? WHERE id = ?",
+                            (next_rel, int(preset_row["id"])),
+                        )
             conn.commit()
             return {"ok": True, "name": new}
         except Exception:
