@@ -1,14 +1,14 @@
 import { CHEVRON_ICON_SVG, LOAD_ICON_SVG } from "./icons.js";
 import { openConfirmPopup, openPopup } from "./popup.js";
 import { listLayouts } from "./api.js";
-import { matchesLayoutPreset } from "./search.js";
+import { fillWithQueryHighlight, matchesLayoutPreset } from "./search.js";
 import { displaySlotName } from "./external.js";
 import { normalizeShelfPath, shelfLeaf, shelfSegments } from "./shelf_paths.js";
 
 const DESC_PREVIEW_CHARS = 60;
 const UNCATEGORISED = "Uncategorised";
 
-function makePresetCard(layout, { onLoad }) {
+function makePresetCard(layout, { onLoad, query = "" }) {
   const card = document.createElement("div");
   card.className = "pc-preset-item";
 
@@ -17,7 +17,7 @@ function makePresetCard(layout, { onLoad }) {
 
   const name = document.createElement("div");
   name.className = "pc-preset-name";
-  name.textContent = layout.name || "Untitled";
+  fillWithQueryHighlight(name, layout.name || "Untitled", query);
 
   const loadBtn = document.createElement("button");
   loadBtn.type = "button";
@@ -122,7 +122,7 @@ function sortedChildren(node) {
   });
 }
 
-function makeFolder({ title, layouts, expanded, onLoad, children = [], count, tooltip }) {
+function makeFolder({ title, layouts, expanded, onLoad, children = [], count, tooltip, query = "" }) {
   const folder = document.createElement("div");
   folder.className = "pc-preset-folder";
   if (!expanded) folder.classList.add("collapsed");
@@ -137,7 +137,7 @@ function makeFolder({ title, layouts, expanded, onLoad, children = [], count, to
 
   const label = document.createElement("span");
   label.className = "pc-preset-folder-name";
-  label.textContent = title;
+  fillWithQueryHighlight(label, title, query);
   if (tooltip) label.title = tooltip;
 
   const countEl = document.createElement("span");
@@ -152,7 +152,7 @@ function makeFolder({ title, layouts, expanded, onLoad, children = [], count, to
   body.className = "pc-preset-folder-body";
   for (const child of children) body.appendChild(child);
   for (const layout of layouts) {
-    body.appendChild(makePresetCard(layout, { onLoad }));
+    body.appendChild(makePresetCard(layout, { onLoad, query }));
   }
 
   head.addEventListener("click", (e) => {
@@ -189,6 +189,7 @@ function paintPresetList(list, layouts, query, onLoad) {
     return makeFolder({
       title: isUncat ? node.path : shelfLeaf(node.path),
       tooltip: isUncat ? undefined : node.path,
+      query: q,
       layouts: node.items,
       count: treeTotal(node),
       children: sortedChildren(node).map(renderNode),

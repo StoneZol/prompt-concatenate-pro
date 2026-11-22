@@ -1,6 +1,6 @@
 import { CHEVRON_ICON_SVG } from "./icons.js";
 import { openPopup } from "./popup.js";
-import { matchesPromptPreset } from "./search.js";
+import { fillWithQueryHighlight, matchesPromptPreset } from "./search.js";
 import { normalizeShelfPath, shelfLeaf, shelfSegments } from "./shelf_paths.js";
 
 const UNCATEGORISED = "Uncategorised";
@@ -74,6 +74,7 @@ function makeFolder({
   selectedName,
   onPick,
   close,
+  query = "",
 }) {
   const folder = document.createElement("div");
   folder.className = "pc-preset-folder";
@@ -89,7 +90,7 @@ function makeFolder({
 
   const label = document.createElement("span");
   label.className = "pc-preset-folder-name";
-  label.textContent = title;
+  fillWithQueryHighlight(label, title, query);
   if (tooltip) label.title = tooltip;
 
   const countEl = document.createElement("span");
@@ -110,7 +111,7 @@ function makeFolder({
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "pc-pick-item";
-    btn.textContent = item.name;
+    fillWithQueryHighlight(btn, item.name, query);
     if (
       groupLabel(item.group).toLowerCase() === selectedGroup &&
       item.name.toLowerCase() === selectedName
@@ -202,6 +203,7 @@ export function openExistingNamePicker({
           return makeFolder({
             title: isUncat ? node.path : shelfLeaf(node.path),
             tooltip: isUncat ? undefined : node.path,
+            query: q,
             items: node.items,
             count: treeTotal(node),
             children: sortedChildren(node, currentGroup).map(renderNode),
