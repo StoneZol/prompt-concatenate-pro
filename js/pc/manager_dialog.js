@@ -55,6 +55,7 @@ import { mountAutocompletePanel } from "./autocomplete_manager.js";
 import { openCivitaiLoadPopup } from "./civitai_load.js";
 import { baseShelfName, nextDuplicateName } from "./titles.js";
 import {
+  formatLoadedPairChip,
   isInShelfTree,
   normalizeShelfPath,
   openShelfPicker,
@@ -1206,8 +1207,15 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
           } else {
             const loadedLabel = document.createElement("span");
             loadedLabel.className = "pc-loaded-label";
-            loadedLabel.textContent = loadedName;
-            loadedLabel.title = `Loaded: ${loadedName}`;
+            const loadedShelf = (slot.loadedCategory || "").trim();
+            loadedLabel.textContent = formatLoadedPairChip(
+              loadedShelf,
+              loadedName,
+              baseShelfName(slot.title),
+            );
+            loadedLabel.title = loadedShelf
+              ? `Loaded: ${loadedShelf} / ${loadedName}`
+              : `Loaded: ${loadedName}`;
 
             const notesBtn = document.createElement("button");
             notesBtn.type = "button";

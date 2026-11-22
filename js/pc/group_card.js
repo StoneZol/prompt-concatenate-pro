@@ -6,6 +6,8 @@ import { bindPromptAutocomplete } from "./autocomplete.js";
 import { EXTERNAL_TITLE, isExternalGroup } from "./external.js";
 import { confirmClearPair } from "./pair_load.js";
 import { getUiPref } from "./prefs.js";
+import { formatLoadedPairChip } from "./shelf_paths.js";
+import { baseShelfName } from "./titles.js";
 
 function isEnabled(group) {
   return group.enabled !== false;
@@ -449,8 +451,12 @@ export function makeGroupCard(group, { index = 0, onChange, onRemove, onPrompt, 
         return;
       }
       loadedRow.hidden = false;
-      loadedLabel.textContent = name;
       const shelf = (group.loadedCategory || "").trim();
+      loadedLabel.textContent = formatLoadedPairChip(
+        shelf,
+        name,
+        baseShelfName(group.title),
+      );
       loadedLabel.title = shelf ? `Loaded: ${shelf} / ${name}` : `Loaded: ${name}`;
       previewBtn.hidden = !Boolean(group.loadedHasPreview && group.loadedPresetId);
       notesBtn.hidden = !notes;
