@@ -1529,6 +1529,21 @@ const CSS = `
   height: 26px;
 }
 
+.pc-ac-mgr-row .pc-ac-mgr-icon-btn {
+  width: 28px;
+  min-width: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pc-ac-mgr-row .pc-ac-mgr-icon-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
 .pc-ac-replace-list {
   max-height: 220px;
   overflow: auto;
