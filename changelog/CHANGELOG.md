@@ -6,17 +6,7 @@ Format: newest first.
 
 ---
 
-## [2.4.0] — 2026-11-22
-
-### Pair preview images
-
-- Attach a reference image to a saved pair (character / scene / light / …)
-- Paste from clipboard on **Save pair** and **Edit prompt** — small thumb in the dialog; paste again to replace; Clear removes it
-- Files live under `db/previews/` next to SQLite; the pair stores only a relative path (rename keeps the image)
-- Preview resolves by shelf + title (`previews/{shelf}/{title}.jpg`) so reload after F5 stays in sync
-- Deleting a pair (or its collection) removes the preview file
-- Hover preview icon: **Load pair** (beside the name), **Loaded ·** chip with shelf context (after Loaded, before the name), Library manager prompt rows
-- Hover tip styles load on boot (visible before the first popup); larger contain thumb in save / edit dialogs
+## [2.5.0] — 2026-11-23
 
 ### Autocomplete: ranking + multi-word chain
 
@@ -45,6 +35,27 @@ Format: newest first.
 - Nothing loaded → **› Browse** opens a folder picker (empty parents with templates below are allowed), then starts from the first template
 - Browse root is remembered on the node: load/save inside the scope keeps it; a template outside raises the root
 - Each step **replaces** the node’s pairs (External stays); confirms when the node already has pairs unless **Skip pair overwrite confirms** is on
+- Same-name templates in nested folders match by **folder + name** (and id), not name alone
+
+### Template preview images
+
+- Same as pair previews: paste a reference image on **Save template** / **Edit template**; Clear removes it
+- Files under `db/previews/templates/…`; rename / delete keeps or drops the file with the template
+- Hover preview icon: **Load template**, Loaded template chip, Library manager · Templates rows
+
+---
+
+## [2.4.0] — 2026-11-22
+
+### Pair preview images
+
+- Attach a reference image to a saved pair (character / scene / light / …)
+- Paste from clipboard on **Save pair** and **Edit prompt** — small thumb in the dialog; paste again to replace; Clear removes it
+- Files live under `db/previews/` next to SQLite; the pair stores only a relative path (rename keeps the image)
+- Preview resolves by shelf + title (`previews/{shelf}/{title}.jpg`) so reload after F5 stays in sync
+- Deleting a pair (or its collection) removes the preview file
+- Hover preview icon: **Load pair** (beside the name), **Loaded ·** chip with shelf context (after Loaded, before the name), Library manager prompt rows
+- Hover tip styles load on boot (visible before the first popup); larger contain thumb in save / edit dialogs
 
 ---
 

@@ -17,7 +17,12 @@ import { bindInfoTip, hidePromptTip } from "./preview_tip.js";
 import { confirmClearPair, confirmReplacePair, openLoadPairPopup } from "./pair_load.js";
 import { openSavePairPopup } from "./pair_save.js";
 import { openExistingNamePicker } from "./save_name_picker.js";
-import { makePairPreviewBtn, mountPreviewEditor, presetPreviewUrl } from "./pair_preview.js";
+import {
+  makePairPreviewBtn,
+  mountPreviewEditor,
+  presetPreviewUrl,
+  templatePreviewUrl,
+} from "./pair_preview.js";
 import { joinFields } from "./join.js";
 import {
   deleteCategory,
@@ -934,6 +939,14 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
       desc.rows = 2;
       desc.value = template.description || "";
 
+      const previewHost = document.createElement("div");
+      const previewEditor = mountPreviewEditor(previewHost, {
+        kind: "template",
+        initialUrl: template.hasPreview
+          ? templatePreviewUrl(template, "edit")
+          : "",
+      });
+
       const addSlotBtn = document.createElement("button");
       addSlotBtn.type = "button";
       addSlotBtn.className = "pc-popup-btn";
@@ -1371,6 +1384,13 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
             errorEl.textContent = result.error || "Save failed";
             return;
           }
+          if (previewEditor.hasPending()) {
+            const previewResult = await previewEditor.uploadAfterSave(template.id);
+            if (!previewResult?.ok) {
+              errorEl.textContent = previewResult?.error || "Preview save failed";
+              return;
+            }
+          }
           close();
           onSaved?.();
         } catch (err) {
@@ -1424,7 +1444,7 @@ function openEditTemplatePopup({ anchor, template, folders, onSaved }) {
 
       const fixed = document.createElement("div");
       fixed.className = "pc-popup-fixed";
-      fixed.append(nameRow, folderRow, desc, addSlotBtn);
+      fixed.append(nameRow, folderRow, desc, previewHost, addSlotBtn);
 
       const footer = document.createElement("div");
       footer.className = "pc-popup-footer";
@@ -1541,6 +1561,7 @@ function paintTemplatesTab(listEl, { templates, folders, showEmpty, query, openM
           name: template.name || "Untitled",
           meta,
           query: q,
+          previewUrl: template.hasPreview ? templatePreviewUrl(template) : "",
           onEdit: (btn) =>
             openEditTemplatePopup({
               anchor: btn,

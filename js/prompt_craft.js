@@ -81,6 +81,8 @@ import {
 } from "./pc/preview_tip.js";
 import {
     clearLoadedPreviewMeta,
+    makePairPreviewBtn,
+    templatePreviewUrl,
     writeLoadedPreviewMeta,
 } from "./pc/pair_preview.js";
 import {
@@ -132,6 +134,7 @@ function normalizeLoadedRef(raw) {
         title,
         folder: (raw.folder || "").trim(),
         description: (raw.description || "").trim(),
+        hasPreview: Boolean(raw.hasPreview),
         ...(Number.isFinite(id) && id > 0 ? { id } : {}),
     };
 }
@@ -544,6 +547,22 @@ app.registerExtension({
             loadedTemplateLabel.className =
                 "pc-loaded-label pc-loaded-template";
 
+            const loadedTemplatePreviewBtn = makePairPreviewBtn(
+                () =>
+                    loadedTemplate?.hasPreview
+                        ? templatePreviewUrl(
+                              {
+                                  id: loadedTemplate?.id,
+                                  folder: loadedTemplate?.folder,
+                                  name: loadedTemplate?.title,
+                              },
+                              loadedTemplate?.id || "",
+                          )
+                        : "",
+                { className: "pc-pair-preview-btn" },
+            );
+            loadedTemplatePreviewBtn.hidden = true;
+
             const loadedTemplateCountEl =
                 document.createElement("span");
             loadedTemplateCountEl.className =
@@ -554,6 +573,7 @@ app.registerExtension({
                 document.createElement("span");
             loadedTemplateInfo.className = "pc-loaded-info";
             loadedTemplateInfo.append(
+                loadedTemplatePreviewBtn,
                 loadedTemplateLabel,
                 loadedTemplateCountEl,
             );
@@ -738,6 +758,8 @@ app.registerExtension({
                 loadedTemplateClearBtn.hidden = !loaded;
                 loadedTemplateNotesBtn.hidden =
                     !loaded || !notes;
+                loadedTemplatePreviewBtn.hidden =
+                    !loaded || !Boolean(loadedTemplate?.hasPreview);
 
                 if (!loaded) {
                     templateCountToken += 1;
@@ -2103,6 +2125,7 @@ app.registerExtension({
                     title: template.name,
                     folder: template.folder,
                     description: template.description,
+                    hasPreview: Boolean(template.hasPreview),
                 });
                 reconcileTemplateBrowseShelf(
                     template.folder,
