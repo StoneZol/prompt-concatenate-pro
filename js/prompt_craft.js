@@ -2,6 +2,7 @@ import { app } from "../../../scripts/app.js";
 import { loadConfig } from "./pc/config.js";
 import { injectStyles } from "./pc/styles.js";
 import {
+  CHEVRON_ICON_SVG,
   CLOSE_ICON_SVG,
   LOAD_ICON_SVG,
   PLUS_ICON_SVG,
@@ -27,7 +28,13 @@ import { confirmReplacePair, openLoadPairPopup } from "./pc/pair_load.js";
 import { openCivitaiLoadPopup } from "./pc/civitai_load.js";
 import { openManagerPopup } from "./pc/manager_dialog.js";
 import { openSettingsPopup } from "./pc/settings_dialog.js";
-import { listCategories, listLayouts, listPresets, listTemplates } from "./pc/api.js";
+import {
+  listCategories,
+  listLayouts,
+  listPresets,
+  listTemplateFolders,
+  listTemplates,
+} from "./pc/api.js";
 import {
   isInShelfTree,
   normalizeShelfPath,
@@ -93,6 +100,12 @@ function normalizeLoadedRef(raw) {
   };
 }
 
+const TEMPLATE_UNCATEGORISED = "Uncategorised";
+
+function templateFolderLabel(folder) {
+  return normalizeShelfPath(folder) || TEMPLATE_UNCATEGORISED;
+}
+
 function normalizeGroup(raw) {
   if (!raw || typeof raw !== "object") return null;
   if (isExternalGroup(raw) || isExternalSlotName(raw.id) || isExternalSlotName(raw.title)) {
@@ -151,6 +164,7 @@ function parseBlocksState(raw) {
         groups: normalizeGroups(data),
         loadedStack: null,
         loadedTemplate: null,
+        templateBrowseShelf: "",
         embedClipMeta: false,
       };
     }
@@ -159,6 +173,7 @@ function parseBlocksState(raw) {
         groups: normalizeGroups(Array.isArray(data.groups) ? data.groups : []),
         loadedStack: normalizeLoadedRef(data.loadedStack),
         loadedTemplate: normalizeLoadedRef(data.loadedTemplate),
+        templateBrowseShelf: normalizeShelfPath(data.templateBrowseShelf),
         embedClipMeta: Boolean(data.nodePrefs?.embedClipMeta),
       };
     }
@@ -169,6 +184,7 @@ function parseBlocksState(raw) {
     groups: [],
     loadedStack: null,
     loadedTemplate: null,
+    templateBrowseShelf: "",
     embedClipMeta: false,
   };
 }
@@ -246,6 +262,7 @@ app.registerExtension({
       let groups = initialState.groups;
       let loadedStack = initialState.loadedStack;
       let loadedTemplate = initialState.loadedTemplate;
+      let templateBrowseShelf = initialState.templateBrowseShelf || "";
       let embedClipMeta = initialState.embedClipMeta;
       const cards = new Map();
       let uiWidget = null;
@@ -369,6 +386,52 @@ app.registerExtension({
       const loadedTemplateLabel = document.createElement("span");
       loadedTemplateLabel.className = "pc-loaded-label pc-loaded-template";
 
+      const loadedTemplateCountEl = document.createElement("span");
+      loadedTemplateCountEl.className = "pc-loaded-count";
+      loadedTemplateCountEl.hidden = true;
+
+      const loadedTemplateInfo = document.createElement("span");
+      loadedTemplateInfo.className = "pc-loaded-info";
+      loadedTemplateInfo.append(loadedTemplateLabel, loadedTemplateCountEl);
+
+      function makeTemplateBrowseBtn(className, title, dir, html) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = className;
+        btn.title = title;
+        btn.innerHTML = html;
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          hidePromptTip();
+          browseTemplate(btn, dir);
+        });
+        return btn;
+      }
+
+      const loadedTemplatePrevBtn = makeTemplateBrowseBtn(
+        "pc-loaded-browse prev",
+        "Previous template in folder",
+        -1,
+        CHEVRON_ICON_SVG,
+      );
+      const loadedTemplateNextBtn = makeTemplateBrowseBtn(
+        "pc-loaded-browse next",
+        "Next template in folder",
+        1,
+        CHEVRON_ICON_SVG,
+      );
+      const loadedTemplateStartBtn = makeTemplateBrowseBtn(
+        "pc-loaded-browse-start",
+        "Pick a folder and browse its saved templates",
+        1,
+        `${CHEVRON_ICON_SVG}<span>Browse</span>`,
+      );
+
+      const loadedTemplateBrowseNav = document.createElement("span");
+      loadedTemplateBrowseNav.className = "pc-loaded-nav";
+      loadedTemplateBrowseNav.append(loadedTemplatePrevBtn, loadedTemplateNextBtn);
+      loadedTemplateBrowseNav.hidden = true;
+
       const loadedTemplateNotesBtn = document.createElement("button");
       loadedTemplateNotesBtn.type = "button";
       loadedTemplateNotesBtn.className = "pc-loaded-notes";
@@ -393,7 +456,9 @@ app.registerExtension({
       loadedTemplateClearBtn.innerHTML = CLOSE_ICON_SVG;
 
       loadedTemplateRow.append(
-        loadedTemplateLabel,
+        loadedTemplateBrowseNav,
+        loadedTemplateInfo,
+        loadedTemplateStartBtn,
         loadedTemplateNotesBtn,
         loadedTemplateResetBtn,
         loadedTemplateClearBtn,
@@ -436,22 +501,55 @@ app.registerExtension({
         loadedStackNotesBtn.hidden = !notes;
       }
 
+      let templateCountToken = 0;
+
       function paintLoadedTemplate() {
+        const browseOn = Boolean(getUiPref("templateBrowse")) && Boolean(getUiPref("templatesEnabled"));
         const name = (loadedTemplate?.title || "").trim();
         const folder = (loadedTemplate?.folder || "").trim();
         const notes = (loadedTemplate?.description || "").trim();
-        if (!name) {
-          loadedTemplateRow.hidden = true;
+        const loaded = Boolean(name);
+
+        loadedTemplateBrowseNav.hidden = true;
+        loadedTemplateCountEl.hidden = true;
+        loadedTemplateStartBtn.hidden = !browseOn || loaded;
+        loadedTemplateInfo.hidden = !loaded;
+        loadedTemplateResetBtn.hidden = !loaded;
+        loadedTemplateClearBtn.hidden = !loaded;
+        loadedTemplateNotesBtn.hidden = !loaded || !notes;
+
+        if (!loaded) {
+          templateCountToken += 1;
           loadedTemplateLabel.textContent = "";
-          loadedTemplateNotesBtn.hidden = true;
+          loadedTemplateRow.hidden = !browseOn;
           return;
         }
+
         loadedTemplateRow.hidden = false;
         loadedTemplateLabel.textContent = folder ? `${name} · ${folder}` : name;
         loadedTemplateLabel.title = folder
           ? `Loaded template: ${name} (${folder})`
           : `Loaded template: ${name}`;
-        loadedTemplateNotesBtn.hidden = !notes;
+
+        if (!browseOn) return;
+        const token = ++templateCountToken;
+        Promise.resolve(browseTemplateCount())
+          .then((info) => {
+            if (token !== templateCountToken || (loadedTemplate?.title || "").trim() !== name) {
+              return;
+            }
+            if (!info || info.total < 2) return;
+            loadedTemplateCountEl.textContent =
+              info.index >= 0 ? `${info.index + 1}/${info.total}` : `${info.total}`;
+            const scope = `${info.shelf} (+ sub-folders)`;
+            loadedTemplateCountEl.title =
+              info.index >= 0
+                ? `Template ${info.index + 1} of ${info.total} in ${scope}`
+                : `${info.total} templates in ${scope}`;
+            loadedTemplateCountEl.hidden = false;
+            loadedTemplateBrowseNav.hidden = false;
+          })
+          .catch(() => {});
       }
 
       function setLoadedStack(next) {
@@ -479,12 +577,14 @@ app.registerExtension({
       function persist() {
         if (!dataWidget) return;
         const safeGroups = groups.map(serializeGroupForPersist);
-        const needsObject = loadedStack || loadedTemplate || embedClipMeta;
+        const shelf = normalizeShelfPath(templateBrowseShelf);
+        const needsObject = loadedStack || loadedTemplate || shelf || embedClipMeta;
         const payload = needsObject
           ? {
               groups: safeGroups,
               ...(loadedStack ? { loadedStack } : {}),
               ...(loadedTemplate ? { loadedTemplate } : {}),
+              ...(shelf ? { templateBrowseShelf: shelf } : {}),
               ...(embedClipMeta ? { nodePrefs: { embedClipMeta: true } } : {}),
             }
           : safeGroups;
@@ -631,9 +731,11 @@ app.registerExtension({
         syncWidth();
         const presetsOn = !presetBlock.section.hidden;
         const templatesOn = !templateBlock.section.hidden;
+        const templateChipVisible =
+          Boolean(loadedTemplate?.title) || Boolean(getUiPref("templateBrowse"));
         const headerExtra =
           (presetsOn && loadedStack?.title ? LOADED_CHIP_ROW_HEIGHT : 0) +
-          (templatesOn && loadedTemplate?.title ? LOADED_CHIP_ROW_HEIGHT : 0) -
+          (templatesOn && templateChipVisible ? LOADED_CHIP_ROW_HEIGHT : 0) -
           (presetsOn ? 0 : LIB_SECTION_HEIGHT) -
           (templatesOn ? 0 : LIB_SECTION_HEIGHT);
         const chromeHeight =
@@ -1080,6 +1182,134 @@ app.registerExtension({
         hideDataWidget(dataWidget);
       }
 
+      function reconcileTemplateBrowseShelf(folder) {
+        const cat = templateFolderLabel(folder);
+        const root = normalizeShelfPath(templateBrowseShelf);
+        if (root && isInShelfTree(cat, root)) return;
+        templateBrowseShelf = cat;
+      }
+
+      function templateBrowseScope() {
+        const pinned = normalizeShelfPath(templateBrowseShelf);
+        if (pinned) return pinned;
+        const title = (loadedTemplate?.title || "").trim();
+        if (title) return templateFolderLabel(loadedTemplate?.folder);
+        return "";
+      }
+
+      function templatesInBrowseScope(list, shelf) {
+        const root = normalizeShelfPath(shelf) || TEMPLATE_UNCATEGORISED;
+        return (list || []).filter((template) =>
+          isInShelfTree(templateFolderLabel(template.folder), root),
+        );
+      }
+
+      function templateBrowseIndex(list) {
+        const key = (loadedTemplate?.title || "").trim().toLowerCase();
+        if (!key) return -1;
+        const folder = templateFolderLabel(loadedTemplate?.folder).toLowerCase();
+        return list.findIndex((template) => {
+          if ((template.name || "").trim().toLowerCase() !== key) return false;
+          return templateFolderLabel(template.folder).toLowerCase() === folder;
+        });
+      }
+
+      async function browseTemplateCount() {
+        const shelf = templateBrowseScope();
+        if (!shelf) return null;
+        const result = await listTemplates();
+        if (!result.ok) return null;
+        const list = templatesInBrowseScope(result.templates, shelf);
+        return { shelf, index: templateBrowseIndex(list), total: list.length };
+      }
+
+      function browseTemplateNotice(anchor, message) {
+        openConfirmPopup({
+          anchor,
+          title: "Browse templates",
+          message,
+          confirmLabel: "OK",
+          showCancel: false,
+          danger: false,
+        });
+      }
+
+      function nodeHasPairs() {
+        return groups.some((group) => !isExternalGroup(group));
+      }
+
+      async function browseTemplateFlip(anchor, dir, shelf) {
+        const result = await listTemplates();
+        if (!result.ok) {
+          browseTemplateNotice(anchor, result.error || "Failed to load templates");
+          return;
+        }
+        const list = templatesInBrowseScope(result.templates, shelf);
+        if (!list.length) {
+          browseTemplateNotice(anchor, `No saved templates in ${shelf} or its sub-folders.`);
+          return;
+        }
+        const current = templateBrowseIndex(list);
+        let nextIndex;
+        if (current < 0) nextIndex = dir < 0 ? list.length - 1 : 0;
+        else nextIndex = (current + dir + list.length) % list.length;
+        if (nextIndex === current) return;
+
+        const template = list[nextIndex];
+        const apply = () => applyTemplate(template, "replace");
+        if (nodeHasPairs()) {
+          confirmReplaceTemplate({ anchor, onConfirm: apply });
+          return;
+        }
+        apply();
+      }
+
+      async function browseTemplate(anchor, dir) {
+        const loaded = (loadedTemplate?.title || "").trim();
+        if (!loaded) {
+          const [foldersRes, templatesRes] = await Promise.all([
+            listTemplateFolders(),
+            listTemplates(),
+          ]);
+          if (!foldersRes.ok) {
+            browseTemplateNotice(anchor, foldersRes.error || "Failed to load folders");
+            return;
+          }
+          if (!templatesRes.ok) {
+            browseTemplateNotice(anchor, templatesRes.error || "Failed to load templates");
+            return;
+          }
+          const folders = [...(foldersRes.folders || [])];
+          const uncat = (templatesRes.templates || []).filter(
+            (template) => !normalizeShelfPath(template.folder),
+          ).length;
+          if (uncat > 0) {
+            folders.push({ name: TEMPLATE_UNCATEGORISED, count: uncat });
+          }
+          openShelfPicker({
+            anchor,
+            title: "Browse folder",
+            categories: folders,
+            current: normalizeShelfPath(templateBrowseShelf) || TEMPLATE_UNCATEGORISED,
+            onlyWithPairs: true,
+            pairScope: "tree",
+            onPick: (path) => {
+              templateBrowseShelf = normalizeShelfPath(path) || TEMPLATE_UNCATEGORISED;
+              persist();
+              browseTemplateFlip(anchor, dir, templateBrowseShelf);
+            },
+          });
+          return;
+        }
+
+        const shelf = templateBrowseScope();
+        if (!shelf) {
+          browseTemplateNotice(anchor, "No browse folder set.");
+          return;
+        }
+        await browseTemplateFlip(anchor, dir, shelf);
+      }
+
       function applyTemplate(template, mode = "merge") {
         collectFromShadows();
         let next;
@@ -1100,6 +1330,7 @@ app.registerExtension({
           folder: template.folder,
           description: template.description,
         });
+        reconcileTemplateBrowseShelf(template.folder);
         rebuildFromGroups(next);
       }
 
@@ -1326,6 +1557,7 @@ app.registerExtension({
           loadedTemplate,
           onSaved: (saved) => {
             setLoadedTemplate(saved);
+            reconcileTemplateBrowseShelf(saved?.folder);
             persist();
             fillDom();
           },
@@ -1391,6 +1623,7 @@ app.registerExtension({
         groups = state.groups;
         loadedStack = state.loadedStack;
         loadedTemplate = state.loadedTemplate;
+        templateBrowseShelf = state.templateBrowseShelf || "";
         embedClipMeta = state.embedClipMeta;
         paintLoadedStack();
         paintLoadedTemplate();
@@ -1444,6 +1677,7 @@ app.registerExtension({
 
       function onUiPrefsChanged() {
         applyLibraryVisibility();
+        paintLoadedTemplate();
         renderCards();
         fillDom();
       }

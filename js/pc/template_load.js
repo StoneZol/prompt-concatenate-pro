@@ -1,6 +1,7 @@
 import { CHEVRON_ICON_SVG, LOAD_ICON_SVG, PLUS_ICON_SVG } from "./icons.js";
 import { openConfirmPopup, openPopup } from "./popup.js";
 import { listTemplates } from "./api.js";
+import { getUiPref } from "./prefs.js";
 import { fillWithQueryHighlight, matchesTemplatePreset } from "./search.js";
 import { normalizeShelfPath, shelfLeaf, shelfSegments } from "./shelf_paths.js";
 
@@ -274,6 +275,10 @@ export function openLoadTemplatePopup({ anchor, onPick }) {
 }
 
 export function confirmReplaceTemplate({ anchor, onConfirm }) {
+  if (getUiPref("skipPairReplaceConfirm")) {
+    onConfirm?.();
+    return;
+  }
   openConfirmPopup({
     anchor,
     title: "Load template",

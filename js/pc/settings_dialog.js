@@ -75,6 +75,18 @@ const PAIR_BROWSE_HELP = {
     "Replacing prompts asks for confirmation unless Skip pair overwrite confirms is on.",
 };
 
+const TEMPLATE_BROWSE_HELP = {
+  title: "Template browse",
+  text:
+    "Off by default. Saved in SQLite (all nodes).\n\n" +
+    "Adds ‹ › on the Loaded template chip: flip to the previous / next saved template " +
+    "under the browse folder, including sub-folders. Each step replaces the node’s pairs " +
+    "(External stays). Nothing loaded → Browse opens a folder picker, then starts from the first template.\n\n" +
+    "Arrows and the counter hide when fewer than two templates are in scope.\n\n" +
+    "Replace asks for confirmation when the node already has pairs, " +
+    "unless Skip pair overwrite confirms is on.",
+};
+
 const CIVITAI_TOOLKIT_HELP = {
   title: "Civitai Toolkit LoRA import",
   text:
@@ -266,6 +278,16 @@ export async function openSettingsPopup({ anchor, nodeSettings, onUiChange } = {
           label: "Pair browse",
           prefKey: "pairBrowse",
           help: PAIR_BROWSE_HELP,
+          onToggle() {
+            onUiChange?.();
+          },
+        }).el,
+      );
+      list.appendChild(
+        makeSettingRow({
+          label: "Template browse",
+          prefKey: "templateBrowse",
+          help: TEMPLATE_BROWSE_HELP,
           onToggle() {
             onUiChange?.();
           },

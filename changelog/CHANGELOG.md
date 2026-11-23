@@ -38,6 +38,14 @@ Format: newest first.
   - Load preset / Load pair / Load template
   - Save · **Existing** name picker
 
+### Template browse (optional)
+
+- Settings · SQLite: **Template browse** (off by default) — flip through saved templates on the node’s Loaded template chip
+- **‹ ›** step to the previous / next template under the browse folder, **including sub-folders**; counter **n/total** when two or more are in scope
+- Nothing loaded → **› Browse** opens a folder picker (empty parents with templates below are allowed), then starts from the first template
+- Browse root is remembered on the node: load/save inside the scope keeps it; a template outside raises the root
+- Each step **replaces** the node’s pairs (External stays); confirms when the node already has pairs unless **Skip pair overwrite confirms** is on
+
 ---
 
 ## [2.3.0] — 2026-11-21
