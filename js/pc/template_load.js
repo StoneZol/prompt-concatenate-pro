@@ -26,18 +26,18 @@ function makeTemplateCard(template, { onLoad, query = "" }) {
   const head = document.createElement("div");
   head.className = "pc-preset-head";
 
-  const name = document.createElement("div");
-  name.className = "pc-preset-name";
-  fillWithQueryHighlight(name, template.name || "Untitled", query);
-
   const coverBtn = makePairPreviewBtn(
     () =>
-      template.hasPreview
-        ? templatePreviewUrl(template, template.updated_at || "")
+      template.hasPreview || template.previewPath
+        ? templatePreviewUrl(template, template.updated_at || Date.now())
         : "",
     { className: "pc-pair-preview-btn" },
   );
-  coverBtn.hidden = !template.hasPreview;
+  coverBtn.hidden = !(template.hasPreview || template.previewPath);
+
+  const name = document.createElement("div");
+  name.className = "pc-preset-name";
+  fillWithQueryHighlight(name, template.name || "Untitled", query);
 
   const loadBtn = document.createElement("button");
   loadBtn.type = "button";
@@ -59,7 +59,7 @@ function makeTemplateCard(template, { onLoad, query = "" }) {
     onLoad?.(template, "merge");
   });
 
-  head.append(name, coverBtn, loadBtn, mergeBtn);
+  head.append(coverBtn, name, loadBtn, mergeBtn);
 
   const slots = document.createElement("div");
   slots.className = "pc-preset-slots";
