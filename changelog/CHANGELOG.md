@@ -6,6 +6,25 @@ Format: newest first.
 
 ---
 
+## [2.5.0] — 2026-11-23
+
+### Template browse (optional)
+
+- Settings · SQLite: **Template browse** (off by default) — flip through saved templates on the node’s Loaded template chip
+- **‹ ›** step to the previous / next template under the browse folder, **including sub-folders**; counter **n/total** when two or more are in scope
+- Nothing loaded → **› Browse** opens a folder picker (empty parents with templates below are allowed), then starts from the first template
+- Browse root is remembered on the node: load/save inside the scope keeps it; a template outside raises the root
+- Each step **replaces** the node’s pairs (External stays); confirms when the node already has pairs unless **Skip pair overwrite confirms** is on
+- Same-name templates in nested folders match by **folder + name** (and id), not name alone
+
+### Template preview images
+
+- Same as pair previews: paste a reference image on **Save template** / **Edit template**; Clear removes it
+- Files under `db/previews/templates/…`; rename / delete keeps or drops the file with the template
+- Hover preview icon: Loaded template chip, Library manager · Templates rows, **Load template** cards (before the name)
+
+---
+
 ## [2.4.0] — 2026-11-22
 
 ### Pair preview images

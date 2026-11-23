@@ -20,6 +20,9 @@ PRESETS_ROUTE = "/prompt_craft/presets"
 PRESET_PREVIEW_ROUTE = "/prompt_craft/preset_preview"
 PRESET_PREVIEW_FILE_ROUTE = "/prompt_craft/preset_preview/{preset_id}"
 PRESET_PREVIEW_BY_PATH_ROUTE = "/prompt_craft/preset_preview/by/{path:.+}"
+TEMPLATE_PREVIEW_ROUTE = "/prompt_craft/template_preview"
+TEMPLATE_PREVIEW_FILE_ROUTE = "/prompt_craft/template_preview/{template_id}"
+TEMPLATE_PREVIEW_BY_PATH_ROUTE = "/prompt_craft/template_preview/by/{path:.+}"
 CATEGORIES_ROUTE = "/prompt_craft/categories"
 TEMPLATES_ROUTE = "/prompt_craft/templates"
 TEMPLATE_FOLDERS_ROUTE = "/prompt_craft/template_folders"
@@ -274,6 +277,70 @@ async def clear_preset_preview(request):
         return web.json_response({"ok": False, "error": "Missing id"}, status=400)
     try:
         result = db.clear_preset_preview(int(preset_id))
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    status = 200 if result.get("ok") else 404 if result.get("error") == "Not found" else 400
+    return web.json_response(result, status=status)
+
+
+async def get_template_preview(request):
+    try:
+        template_id = int(request.match_info.get("template_id") or "0")
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid id"}, status=400)
+    path = db.resolve_template_preview_file(template_id)
+    if not path:
+        return web.json_response({"ok": False, "error": "Not found"}, status=404)
+    return web.FileResponse(path)
+
+
+async def get_template_preview_by_path(request):
+    """Serve preview by library key: folder/.../templateName."""
+    raw = (request.match_info.get("path") or "").strip().replace("\\", "/")
+    parts = [part for part in raw.split("/") if part.strip()]
+    if not parts:
+        return web.json_response({"ok": False, "error": "Not found"}, status=404)
+    title = parts[-1]
+    folder = "/".join(parts[:-1])
+    path = db.resolve_template_preview_by_path(folder, title)
+    if not path:
+        return web.json_response({"ok": False, "error": "Not found"}, status=404)
+    return web.FileResponse(path)
+
+
+async def set_template_preview(request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+    if not isinstance(payload, dict) or not payload.get("id"):
+        return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
+
+    raw_b64 = payload.get("data") or ""
+    if isinstance(raw_b64, str) and raw_b64.startswith("data:") and "," in raw_b64:
+        raw_b64 = raw_b64.split(",", 1)[1]
+    try:
+        data = base64.b64decode(raw_b64)
+    except Exception:
+        return web.json_response({"ok": False, "error": "Invalid image data"}, status=400)
+    try:
+        result = db.set_template_preview(
+            int(payload["id"]),
+            data,
+            mime=payload.get("mime") or "image/jpeg",
+        )
+    except Exception as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+    status = 200 if result.get("ok") else 404 if result.get("error") == "Not found" else 400
+    return web.json_response(result, status=status)
+
+
+async def clear_template_preview(request):
+    template_id = request.rel_url.query.get("id")
+    if not template_id:
+        return web.json_response({"ok": False, "error": "Missing id"}, status=400)
+    try:
+        result = db.clear_template_preview(int(template_id))
     except Exception as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=500)
     status = 200 if result.get("ok") else 404 if result.get("error") == "Not found" else 400
@@ -821,6 +888,13 @@ if TEMPLATES_ROUTE not in _existing:
     PromptServer.instance.routes.get(TEMPLATES_ROUTE)(list_templates)
     PromptServer.instance.routes.patch(TEMPLATES_ROUTE)(update_template)
     PromptServer.instance.routes.delete(TEMPLATES_ROUTE)(delete_template)
+if TEMPLATE_PREVIEW_ROUTE not in _existing:
+    PromptServer.instance.routes.post(TEMPLATE_PREVIEW_ROUTE)(set_template_preview)
+    PromptServer.instance.routes.delete(TEMPLATE_PREVIEW_ROUTE)(clear_template_preview)
+if TEMPLATE_PREVIEW_BY_PATH_ROUTE not in _existing:
+    PromptServer.instance.routes.get(TEMPLATE_PREVIEW_BY_PATH_ROUTE)(get_template_preview_by_path)
+if TEMPLATE_PREVIEW_FILE_ROUTE not in _existing:
+    PromptServer.instance.routes.get(TEMPLATE_PREVIEW_FILE_ROUTE)(get_template_preview)
 if TEMPLATE_FOLDERS_ROUTE not in _existing:
     PromptServer.instance.routes.get(TEMPLATE_FOLDERS_ROUTE)(list_template_folders)
     PromptServer.instance.routes.patch(TEMPLATE_FOLDERS_ROUTE)(update_template_folder)

@@ -2,6 +2,7 @@ import { openConfirmPopup, openPopup } from "./popup.js";
 import { listTemplateFolders, listTemplates, saveTemplate } from "./api.js";
 import { serializeTemplateSlots } from "./template_apply.js";
 import { openExistingNamePicker } from "./save_name_picker.js";
+import { mountPreviewEditor, templatePreviewUrl } from "./pair_preview.js";
 import { openShelfPicker, splitShelfName, wrapShelfInput } from "./shelf_paths.js";
 
 const UNCATEGORISED = "Uncategorised";
@@ -84,6 +85,23 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
       let folders = [];
       let picker = null;
       let existingPicker = null;
+      let existingTemplateId = Number(loadedTemplate?.id || 0);
+
+      const previewHost = document.createElement("div");
+      let previewEditor = mountPreviewEditor(previewHost, {
+        kind: "template",
+        initialUrl:
+          loadedTemplate?.hasPreview && (existingTemplateId || loadedTemplate?.title)
+            ? templatePreviewUrl(
+                {
+                  id: existingTemplateId,
+                  folder: loadedTemplate?.folder,
+                  name: loadedTemplate?.title,
+                },
+                "1",
+              )
+            : "",
+      });
 
       function resetOverwrite() {
         if (!overwrite) return;
@@ -117,17 +135,28 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
             const result = await listTemplates();
             if (!result.ok) throw new Error(result.error || "Failed to load templates");
             return (result.templates || []).map((template) => ({
+              id: template.id,
               name: template.name || "",
               group: template.folder || "",
               description: template.description || "",
+              hasPreview: Boolean(template.hasPreview),
             }));
           },
           onPick: (item) => {
             title.value = item.name;
             folder.value = item.group;
+            existingTemplateId = Number(item.id || 0);
             if (!desc.value.trim()) desc.value = item.description || "";
             title.classList.remove("invalid");
             armOverwrite(`Will overwrite in ${item.group || UNCATEGORISED}: ${item.name}`);
+            previewHost.replaceChildren();
+            previewEditor = mountPreviewEditor(previewHost, {
+              kind: "template",
+              initialUrl:
+                item.hasPreview && existingTemplateId
+                  ? templatePreviewUrl(existingTemplateId, String(Date.now()))
+                  : "",
+            });
           },
           onClose: () => {
             existingPicker = null;
@@ -189,10 +218,22 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
             errorEl.textContent = result.error || "Save failed";
             return;
           }
+          const templateId = Number(result.id || existingTemplateId || 0);
+          let hasPreview = Boolean(result.hasPreview);
+          if (templateId && previewEditor.hasPending()) {
+            const previewResult = await previewEditor.uploadAfterSave(templateId);
+            if (!previewResult?.ok) {
+              errorEl.textContent = previewResult?.error || "Preview save failed";
+              return;
+            }
+            hasPreview = Boolean(previewResult.hasPreview);
+          }
           onSaved?.({
+            id: templateId || 0,
             title: result.name || name,
             folder: result.folder || split.folder,
             description: desc.value.trim(),
+            hasPreview,
           });
           close();
         } catch (err) {
@@ -229,7 +270,7 @@ export function openSaveTemplatePopup({ anchor, groups, loadedTemplate, onSaved 
       });
 
       actions.appendChild(confirm);
-      body.append(hint, nameRow, folderRow, desc, errorEl, actions);
+      body.append(hint, nameRow, folderRow, desc, previewHost, errorEl, actions);
       requestAnimationFrame(() => title.focus());
 
       listTemplateFolders()

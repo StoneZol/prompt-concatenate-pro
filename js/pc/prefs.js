@@ -23,6 +23,8 @@ const DEFAULTS = {
   templatesEnabled: true,
   /** Prev / next arrows on pairs — flip through saved pairs under the browse folder (incl. sub-folders). */
   pairBrowse: false,
+  /** Prev / next on the Loaded template chip — flip through templates under the browse folder. */
+  templateBrowse: false,
   /** Last changelog version the user dismissed (What's new). */
   lastSeenChangelog: "",
 };

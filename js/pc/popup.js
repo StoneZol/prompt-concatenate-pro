@@ -1609,6 +1609,31 @@ const CSS = `
   flex: 0 0 28px;
   width: 28px;
   height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--descrip-text, #888);
+  cursor: pointer;
+}
+
+.pc-preset-head .pc-pair-preview-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.pc-preset-head .pc-pair-preview-btn:hover {
+  color: var(--input-text, #ddd);
+  background: var(--comfy-menu-bg, #1e1e1e);
+  border-color: var(--border-color, #444);
+}
+
+.pc-preset-head .pc-pair-preview-btn[hidden] {
+  display: none !important;
 }
 
 .pc-preset-peek {

@@ -1,6 +1,8 @@
 import { CHEVRON_ICON_SVG, LOAD_ICON_SVG, PLUS_ICON_SVG } from "./icons.js";
 import { openConfirmPopup, openPopup } from "./popup.js";
 import { listTemplates } from "./api.js";
+import { getUiPref } from "./prefs.js";
+import { makePairPreviewBtn, templatePreviewUrl } from "./pair_preview.js";
 import { fillWithQueryHighlight, matchesTemplatePreset } from "./search.js";
 import { normalizeShelfPath, shelfLeaf, shelfSegments } from "./shelf_paths.js";
 
@@ -23,6 +25,15 @@ function makeTemplateCard(template, { onLoad, query = "" }) {
 
   const head = document.createElement("div");
   head.className = "pc-preset-head";
+
+  const coverBtn = makePairPreviewBtn(
+    () =>
+      template.hasPreview || template.previewPath
+        ? templatePreviewUrl(template, template.updated_at || Date.now())
+        : "",
+    { className: "pc-pair-preview-btn" },
+  );
+  coverBtn.hidden = !(template.hasPreview || template.previewPath);
 
   const name = document.createElement("div");
   name.className = "pc-preset-name";
@@ -48,7 +59,7 @@ function makeTemplateCard(template, { onLoad, query = "" }) {
     onLoad?.(template, "merge");
   });
 
-  head.append(name, loadBtn, mergeBtn);
+  head.append(coverBtn, name, loadBtn, mergeBtn);
 
   const slots = document.createElement("div");
   slots.className = "pc-preset-slots";
@@ -274,6 +285,10 @@ export function openLoadTemplatePopup({ anchor, onPick }) {
 }
 
 export function confirmReplaceTemplate({ anchor, onConfirm }) {
+  if (getUiPref("skipPairReplaceConfirm")) {
+    onConfirm?.();
+    return;
+  }
   openConfirmPopup({
     anchor,
     title: "Load template",

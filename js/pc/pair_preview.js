@@ -1,5 +1,10 @@
 import { IMAGE_ICON_SVG } from "./icons.js";
-import { clearPresetPreview, setPresetPreview } from "./api.js";
+import {
+  clearPresetPreview,
+  clearTemplatePreview,
+  setPresetPreview,
+  setTemplatePreview,
+} from "./api.js";
 import { injectPopupStyles } from "./popup.js";
 import { normalizeShelfPath, SHELF_SEP } from "./shelf_paths.js";
 
@@ -37,6 +42,23 @@ export function presetPreviewUrl(presetOrId, bust = "") {
   }
   const id = Number(presetOrId || 0);
   return id ? withBust(`/prompt_craft/preset_preview/${id}`, bust) : "";
+}
+
+/** Prefer folder/name path; fall back to numeric id. */
+export function templatePreviewUrl(templateOrId, bust = "") {
+  if (templateOrId && typeof templateOrId === "object") {
+    const key = pairPreviewKey(templateOrId.folder, templateOrId.name || templateOrId.title);
+    if (key) {
+      return withBust(
+        `/prompt_craft/template_preview/by/${key.split(SHELF_SEP).map(encodeURIComponent).join("/")}`,
+        bust,
+      );
+    }
+    const id = Number(templateOrId.id || 0);
+    return id ? withBust(`/prompt_craft/template_preview/${id}`, bust) : "";
+  }
+  const id = Number(templateOrId || 0);
+  return id ? withBust(`/prompt_craft/template_preview/${id}`, bust) : "";
 }
 
 /**
@@ -196,9 +218,25 @@ function blobToDataUrl(blob) {
 
 /**
  * Save/Edit UI: small thumb + Paste / Clear.
- * Holds pending blob until uploadAfterSave(presetId).
+ * Holds pending blob until uploadAfterSave(id).
+ * `kind: "template"` uploads to template_preview routes.
  */
-export function mountPreviewEditor(host, { initialUrl = "", widthCap = true } = {}) {
+export function mountPreviewEditor(
+  host,
+  {
+    initialUrl = "",
+    widthCap = true,
+    kind = "pair",
+    statusReady = "",
+  } = {},
+) {
+  const isTemplate = kind === "template";
+  const setPreview = isTemplate ? setTemplatePreview : setPresetPreview;
+  const clearPreview = isTemplate ? clearTemplatePreview : clearPresetPreview;
+  const readyText =
+    statusReady ||
+    (isTemplate ? "Preview ready — saved with the template" : "Preview ready — saved with the pair");
+
   const root = document.createElement("div");
   root.className = "pc-pair-preview-edit" + (widthCap ? " capped" : "");
 
@@ -298,7 +336,7 @@ export function mountPreviewEditor(host, { initialUrl = "", widthCap = true } = 
     try {
       const blob = await readClipboardImageBlob();
       await ingestBlob(blob);
-      status.textContent = "Preview ready — saved with the pair";
+      status.textContent = readyText;
     } catch (err) {
       status.textContent = err?.message || "Paste failed";
     } finally {
@@ -323,7 +361,7 @@ export function mountPreviewEditor(host, { initialUrl = "", widthCap = true } = 
       e.stopPropagation();
       try {
         await ingestBlob(item.getAsFile());
-        status.textContent = "Preview ready — saved with the pair";
+        status.textContent = readyText;
       } catch (err) {
         status.textContent = err?.message || "Paste failed";
       }
@@ -333,15 +371,15 @@ export function mountPreviewEditor(host, { initialUrl = "", widthCap = true } = 
 
   return {
     root,
-    async uploadAfterSave(presetId) {
-      const id = Number(presetId || 0);
+    async uploadAfterSave(entityId) {
+      const id = Number(entityId || 0);
       if (!id) return { ok: true };
       if (pendingBlob) {
         const dataUrl = await blobToDataUrl(pendingBlob);
-        return setPresetPreview({ id, data: dataUrl, mime: "image/jpeg" });
+        return setPreview({ id, data: dataUrl, mime: "image/jpeg" });
       }
       if (clearExisting) {
-        return clearPresetPreview(id);
+        return clearPreview(id);
       }
       return { ok: true };
     },

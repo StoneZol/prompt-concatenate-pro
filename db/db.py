@@ -65,6 +65,16 @@ def _preview_rel_for_pair(category: str, title: str, ext: str = ".jpg") -> str:
     return "previews/" + "/".join(parts) + ext
 
 
+def _preview_rel_for_template(folder: str, name: str, ext: str = ".jpg") -> str:
+    """Disk key: previews/templates/{folder}/{…}/{name}.jpg — namespaced from pairs."""
+    ext = _normalize_preview_ext(ext)
+    shelf = _normalize_shelf_path(folder)
+    parts = ["templates"]
+    parts.extend(_safe_fs_segment(part) for part in shelf.split(SHELF_SEP) if part.strip())
+    parts.append(_safe_fs_segment(name))
+    return "previews/" + "/".join(parts) + ext
+
+
 def _preview_rel_for_id(preset_id: int, ext: str = ".jpg") -> str:
     """Legacy id-based file (kept for old rows until rewrite/relocate)."""
     return f"previews/{int(preset_id)}{_normalize_preview_ext(ext)}"
@@ -239,6 +249,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
     if _table_columns(conn, "presets") and "preview_path" not in _table_columns(conn, "presets"):
         conn.execute(
             "ALTER TABLE presets ADD COLUMN preview_path TEXT NOT NULL DEFAULT ''"
+        )
+    if _table_columns(conn, "templates") and "preview_path" not in _table_columns(conn, "templates"):
+        conn.execute(
+            "ALTER TABLE templates ADD COLUMN preview_path TEXT NOT NULL DEFAULT ''"
         )
     _migrate_category_paths(conn)
     _migrate_folder_paths(conn)
@@ -1175,14 +1189,25 @@ def _parse_template_slots(raw) -> List[Dict]:
     return slots
 
 
+def _template_has_preview(rel: str) -> bool:
+    path = _preview_abs(rel)
+    return bool(path and os.path.isfile(path))
+
+
 def _template_row(row: sqlite3.Row) -> Dict:
-    folder = row["folder"] if "folder" in row.keys() else None
+    keys = row.keys()
+    folder = row["folder"] if "folder" in keys else None
+    preview = ""
+    if "preview_path" in keys:
+        preview = (row["preview_path"] or "").strip()
     return {
         "id": int(row["id"]),
         "name": row["name"],
         "description": row["description"] or "",
         "slots": _parse_template_slots(row["slots"]),
         "folder": folder or "",
+        "previewPath": preview,
+        "hasPreview": _template_has_preview(preview),
     }
 
 
@@ -1231,22 +1256,29 @@ def save_template(
             payload = json.dumps(slot_rows, ensure_ascii=False)
             note = (description or "").strip()
             if existing:
+                template_id = int(existing["id"])
                 conn.execute(
                     """
                     UPDATE templates
                     SET description = ?, slots = ?, folder_id = ?, updated_at = datetime('now')
                     WHERE id = ?
                     """,
-                    (note, payload, folder_id, int(existing["id"])),
+                    (note, payload, folder_id, template_id),
                 )
             else:
-                conn.execute(
+                cur = conn.execute(
                     """
                     INSERT INTO templates (name, description, slots, folder_id)
                     VALUES (?, ?, ?, ?)
                     """,
                     (title, note, payload, folder_id),
                 )
+                template_id = int(cur.lastrowid)
+            preview_row = conn.execute(
+                "SELECT preview_path FROM templates WHERE id = ?",
+                (template_id,),
+            ).fetchone()
+            preview_path = (preview_row["preview_path"] or "").strip() if preview_row else ""
             conn.commit()
         except Exception:
             conn.rollback()
@@ -1257,10 +1289,13 @@ def save_template(
     _ingest_template_slots(slot_rows)
     return {
         "ok": True,
+        "id": template_id,
         "name": title,
         "slots": slot_rows,
         "folder": folder_name,
         "description": note,
+        "previewPath": preview_path,
+        "hasPreview": _template_has_preview(preview_path),
     }
 
 
@@ -1275,6 +1310,7 @@ def list_templates() -> Dict:
                     templates.name,
                     templates.description,
                     templates.slots,
+                    templates.preview_path,
                     template_folders.name AS folder
                 FROM templates
                 LEFT JOIN template_folders ON template_folders.id = templates.folder_id
@@ -1377,12 +1413,31 @@ def update_template(
                     ],
                 }
             if existing and overwrite:
+                old_preview = conn.execute(
+                    "SELECT preview_path FROM templates WHERE id = ?",
+                    (int(existing["id"]),),
+                ).fetchone()
                 conn.execute("DELETE FROM templates WHERE id = ?", (int(existing["id"]),))
+                if old_preview:
+                    _unlink_preview_file(old_preview["preview_path"] or "")
+
+            preview_row = conn.execute(
+                "SELECT preview_path FROM templates WHERE id = ?",
+                (int(template_id),),
+            ).fetchone()
+            old_preview = (preview_row["preview_path"] or "").strip() if preview_row else ""
+            next_preview = old_preview
+            if old_preview:
+                ext = os.path.splitext(old_preview)[1] or ".jpg"
+                want = _preview_rel_for_template(next_folder, next_name, ext)
+                if want != old_preview:
+                    next_preview = _relocate_preview_file(old_preview, want) or want
 
             conn.execute(
                 """
                 UPDATE templates
-                SET name = ?, description = ?, folder_id = ?, slots = ?, updated_at = datetime('now')
+                SET name = ?, description = ?, folder_id = ?, slots = ?,
+                    preview_path = ?, updated_at = datetime('now')
                 WHERE id = ?
                 """,
                 (
@@ -1390,6 +1445,7 @@ def update_template(
                     next_desc,
                     next_folder_id,
                     json.dumps(next_slots, ensure_ascii=False),
+                    next_preview,
                     int(template_id),
                 ),
             )
@@ -1409,6 +1465,8 @@ def update_template(
         "folder": next_folder,
         "slots": next_slots,
         "description": next_desc,
+        "previewPath": next_preview,
+        "hasPreview": _template_has_preview(next_preview),
     }
 
 
@@ -1416,21 +1474,99 @@ def delete_template(template_id: int) -> Dict:
     with _lock:
         conn = _connect()
         try:
-            cur = conn.execute("DELETE FROM templates WHERE id = ?", (int(template_id),))
-            conn.commit()
-            if cur.rowcount == 0:
+            row = conn.execute(
+                "SELECT preview_path FROM templates WHERE id = ?",
+                (int(template_id),),
+            ).fetchone()
+            if not row:
                 return {"ok": False, "error": "Not found"}
+            preview_path = row["preview_path"] or ""
+            conn.execute("DELETE FROM templates WHERE id = ?", (int(template_id),))
+            conn.commit()
+            _unlink_preview_file(preview_path)
             return {"ok": True}
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
 
 
 def rename_template_folder(name: str, new_name: str) -> Dict:
-    return _rename_folder_tree("template_folders", name, new_name)
+    result = _rename_folder_tree("template_folders", name, new_name)
+    if not result.get("ok"):
+        return result
+    new = _normalize_folder_name(new_name)
+    with _lock:
+        conn = _connect()
+        try:
+            conn.execute("BEGIN")
+            rows = conn.execute("SELECT id, name FROM template_folders").fetchall()
+            for folder_row in rows:
+                folder_name = folder_row["name"] or ""
+                if not _in_shelf_tree(folder_name, new):
+                    continue
+                for item in conn.execute(
+                    "SELECT id, name, preview_path FROM templates WHERE folder_id = ?",
+                    (int(folder_row["id"]),),
+                ).fetchall():
+                    old_rel = (item["preview_path"] or "").strip()
+                    if not old_rel:
+                        continue
+                    ext = os.path.splitext(old_rel)[1] or ".jpg"
+                    want = _preview_rel_for_template(folder_name, item["name"] or "", ext)
+                    if want == old_rel:
+                        continue
+                    next_rel = _relocate_preview_file(old_rel, want) or want
+                    if next_rel != old_rel:
+                        conn.execute(
+                            "UPDATE templates SET preview_path = ? WHERE id = ?",
+                            (next_rel, int(item["id"])),
+                        )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+    return result
 
 
 def delete_template_folder(name: str) -> Dict:
-    return _delete_folder_tree("template_folders", "templates", name)
+    result = _delete_folder_tree("template_folders", "templates", name)
+    if not result.get("ok"):
+        return result
+    # Items moved to Uncategorised — keep preview files aligned with empty folder.
+    with _lock:
+        conn = _connect()
+        try:
+            conn.execute("BEGIN")
+            for item in conn.execute(
+                """
+                SELECT id, name, preview_path FROM templates
+                WHERE folder_id IS NULL AND preview_path != ''
+                """
+            ).fetchall():
+                old_rel = (item["preview_path"] or "").strip()
+                if not old_rel:
+                    continue
+                ext = os.path.splitext(old_rel)[1] or ".jpg"
+                want = _preview_rel_for_template("", item["name"] or "", ext)
+                if want == old_rel:
+                    continue
+                next_rel = _relocate_preview_file(old_rel, want) or want
+                if next_rel != old_rel:
+                    conn.execute(
+                        "UPDATE templates SET preview_path = ? WHERE id = ?",
+                        (next_rel, int(item["id"])),
+                    )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+    return result
 
 
 def update_preset(
@@ -1715,6 +1851,156 @@ def resolve_preset_preview_by_pair(category: str, title: str) -> Optional[str]:
             conn.close()
 
 
+def set_template_preview(template_id: int, data: bytes, mime: str = "image/jpeg") -> Dict:
+    raw = data or b""
+    if not raw:
+        return {"ok": False, "error": "Empty image"}
+    if len(raw) > _PREVIEW_MAX_BYTES:
+        return {"ok": False, "error": "Image too large (max 2MB)"}
+    ext = _ext_from_mime(mime)
+
+    with _lock:
+        conn = _connect()
+        try:
+            row = conn.execute(
+                """
+                SELECT templates.preview_path, templates.name, template_folders.name AS folder
+                FROM templates
+                LEFT JOIN template_folders ON template_folders.id = templates.folder_id
+                WHERE templates.id = ?
+                """,
+                (int(template_id),),
+            ).fetchone()
+            if not row:
+                return {"ok": False, "error": "Not found"}
+            old_rel = (row["preview_path"] or "").strip()
+            folder = row["folder"] or ""
+            name = row["name"] or ""
+            rel = _preview_rel_for_template(folder, name, ext)
+            abs_path = _preview_abs(rel)
+            if not abs_path:
+                return {"ok": False, "error": "Invalid preview path"}
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+            with open(abs_path, "wb") as handle:
+                handle.write(raw)
+            if old_rel and old_rel != rel:
+                _unlink_preview_file(old_rel)
+            conn.execute(
+                """
+                UPDATE templates
+                SET preview_path = ?, updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (rel, int(template_id)),
+            )
+            conn.commit()
+            key_shelf = _normalize_shelf_path(folder)
+            key_title = (name or "").strip()
+            preview_key = (
+                f"{key_shelf}{SHELF_SEP}{key_title}" if key_shelf and key_title else key_title or key_shelf
+            )
+            return {
+                "ok": True,
+                "id": int(template_id),
+                "previewPath": rel,
+                "previewKey": preview_key,
+                "hasPreview": True,
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def clear_template_preview(template_id: int) -> Dict:
+    with _lock:
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT preview_path FROM templates WHERE id = ?",
+                (int(template_id),),
+            ).fetchone()
+            if not row:
+                return {"ok": False, "error": "Not found"}
+            old_rel = (row["preview_path"] or "").strip()
+            conn.execute(
+                """
+                UPDATE templates
+                SET preview_path = '', updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (int(template_id),),
+            )
+            conn.commit()
+            _unlink_preview_file(old_rel)
+            return {"ok": True, "id": int(template_id), "previewPath": "", "hasPreview": False}
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def resolve_template_preview_file(template_id: int) -> Optional[str]:
+    with _lock:
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT preview_path FROM templates WHERE id = ?",
+                (int(template_id),),
+            ).fetchone()
+            if not row:
+                return None
+            path = _preview_abs(row["preview_path"] or "")
+            if path and os.path.isfile(path):
+                return path
+            return None
+        finally:
+            conn.close()
+
+
+def resolve_template_preview_by_path(folder: str, name: str) -> Optional[str]:
+    """Resolve preview from template folder + name."""
+    shelf = _normalize_shelf_path(folder)
+    title = (name or "").strip()
+    if not title:
+        return None
+    with _lock:
+        conn = _connect()
+        try:
+            if shelf:
+                row = conn.execute(
+                    """
+                    SELECT templates.preview_path
+                    FROM templates
+                    JOIN template_folders ON template_folders.id = templates.folder_id
+                    WHERE template_folders.name = ? COLLATE NOCASE
+                      AND templates.name = ? COLLATE NOCASE
+                    """,
+                    (shelf, title),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    SELECT preview_path FROM templates
+                    WHERE folder_id IS NULL AND name = ? COLLATE NOCASE
+                    """,
+                    (title,),
+                ).fetchone()
+            if row:
+                path = _preview_abs(row["preview_path"] or "")
+                if path and os.path.isfile(path):
+                    return path
+            for ext in _PREVIEW_EXTS:
+                path = _preview_abs(_preview_rel_for_template(shelf, title, ext))
+                if path and os.path.isfile(path):
+                    return path
+            return None
+        finally:
+            conn.close()
+
+
 def rename_category(name: str, new_name: str) -> Dict:
     """Rename / move a collection path together with its sub-collections."""
     old = _normalize_shelf_path(name)
@@ -1832,6 +2118,7 @@ UI_PREF_KEYS = (
     "presetsEnabled",
     "templatesEnabled",
     "pairBrowse",
+    "templateBrowse",
     "lastSeenChangelog",
 )
 UI_PREF_DEFAULTS = {
@@ -1845,6 +2132,7 @@ UI_PREF_DEFAULTS = {
     "presetsEnabled": True,
     "templatesEnabled": True,
     "pairBrowse": False,
+    "templateBrowse": False,
     "lastSeenChangelog": "",
 }
 _MANAGER_TAB_VALUES = frozenset({"presets", "prompts", "templates", "suggest"})
